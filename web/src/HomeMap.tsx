@@ -82,7 +82,7 @@ const hatch = (veil: string, ink: string) => {
   c.width = c.height = 32;
   const x = c.getContext("2d") as CanvasRenderingContext2D;
   x.fillStyle = veil; x.fillRect(0, 0, 32, 32);
-  x.strokeStyle = ink; x.lineWidth = 6;
+  x.strokeStyle = ink; x.lineWidth = 9;
   for (const o of [-32, 0, 32]) { x.beginPath(); x.moveTo(o - 4, 36); x.lineTo(o + 36, -4); x.stroke(); }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
