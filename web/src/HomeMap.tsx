@@ -6,16 +6,18 @@ import { Poly, Site, usedSurfaces } from "./api";
 import { P2, P3, centre, inside, normal, toLngLat, toLocal } from "./geometry";
 import { Home as HomeIcon, Info, Locate, Minus, Needle, Plus } from "./icons";
 import { mapStyle } from "./mapStyle";
+import { Piece, box, pieceId, stitch } from "./stitch";
 import { Button, IconButton } from "./ui";
 
 const BLOCKS = "buildings-3d"; // the base map's blocks, used only when zoomed out
 const HOMES = "homes"; // the same buildings, one feature each
-const HOMES_FROM_ZOOM = 15;
+const HOMES_FROM_ZOOM = 14; // the tiles carry buildings from here
+const CLOSE_ZOOM = 15; // close enough to pick a house and not lose it
+const MAX_HOMES = 40000; // forget what was panned past, so a long trip does not pile up
 const PANEL_W = 424; // room the left panel takes on a wide screen
 const PITCH = 50; // steeper tilts make a drag near the horizon cover hundreds of metres
 const ADDRESS_REACH_M = 25; // an address point can sit on the pavement, in front of the house
 const SHADE_LOOK_M = 70;
-const OUTLINE_REACH_M = 450;
 const AERIAL = "https://geoservices.bayern.de/od/wms/dop/v1/dop40?service=WMS&version=1.3.0&request=GetMap&layers=by_dop40c&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=512&height=512&format=image/jpeg";
 const COLORS = { roof: "#3A6FA8", off: "#33363F", wall: "#1F3A5C", ground: "#2F6B4F", panel: "#0A1222", edge: "#8A95A8", ownEdge: "#BFD8F5", hover: "#2F5E94", otherRoof: "#3A3D47", otherWall: "#23252C" };
 // One light from the south, so the sides of a roof read apart.
@@ -29,25 +31,34 @@ type Props = {
 };
 
 /** One building: the tiles can merge several into one feature, so a feature is not a building. */
-type Home = { pid: string; rings: P2[][]; height: number; base: number; shell: boolean; group?: string };
+type Home = Piece & { group?: string };
 type Geometry = { type: string; coordinates: unknown };
 
-function collect(m: maplibregl.Map, homes: Map<string, Home>) {
+function collect(m: maplibregl.Map, pieces: Map<string, Piece>, homes: Map<string, Home>) {
   let added = 0;
   for (const f of m.querySourceFeatures("openmaptiles", { sourceLayer: "building" })) {
     const g = f.geometry as Geometry;
     const polygons = g.type === "Polygon" ? [g.coordinates as P2[][]] : g.type === "MultiPolygon" ? (g.coordinates as P2[][][]) : [];
+    const height = Number(f.properties.render_height) || 6, base = Number(f.properties.render_min_height) || 0;
     for (const rings of polygons) {
-      const c = centre(rings[0]), pid = `${f.id}:${c[0].toFixed(5)}:${c[1].toFixed(5)}`;
-      if (homes.has(pid)) continue;
-      homes.set(pid, { pid, rings, height: Number(f.properties.render_height) || 6, base: Number(f.properties.render_min_height) || 0, shell: !!f.properties.hide_3d });
+      const pid = pieceId(rings, height, base); // from the shape: neighbouring tiles repeat a building under other ids
+      if (pieces.has(pid)) continue;
+      pieces.set(pid, { pid, rings, height, base, shell: !!f.properties.hide_3d });
       added++;
     }
   }
   if (!added) return false;
+  homes.clear();
+  for (const h of stitch([...pieces.values()])) homes.set(h.pid, h);
   // A building mapped in parts has an outline that is not drawn. Its parts belong together.
   const all = [...homes.values()], shells = all.filter((h) => h.shell);
-  for (const s of shells) for (const h of all) if (!h.shell && !h.group && inside(centre(h.rings[0]), s.rings[0])) h.group = s.pid;
+  const parts = all.filter((h) => !h.shell).map((h) => ({ h, at: centre(h.rings[0]) }));
+  for (const s of shells) {
+    const [w, south, e, north] = box(s);
+    for (const { h, at } of parts) if (!h.group && at[0] >= w && at[0] <= e && at[1] >= south && at[1] <= north && inside(at, s.rings[0])) h.group = s.pid;
+  }
+  // Here and nowhere else: what is collected is not collected twice, so a caller that skipped this would leave the map empty.
+  (m.getSource(HOMES) as maplibregl.GeoJSONSource).setData(asData(homes));
   return true;
 }
 
@@ -110,6 +121,16 @@ function panels(list: P3[][]) {
   return mesh(points, faces, COLORS.panel);
 }
 
+/** Removing an object from a scene does not free its GPU buffers. */
+function empty(g: THREE.Group) {
+  g.traverse((o) => {
+    const x = o as THREE.Mesh;
+    x.geometry?.dispose();
+    (x.material as THREE.Material | undefined)?.dispose();
+  });
+  g.clear();
+}
+
 function lines(points: number[], color: string, opacity = 0.8) {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
@@ -118,14 +139,13 @@ function lines(points: number[], color: string, opacity = 0.8) {
 const edgesOf = (polys: Poly[]) => polys.flatMap(({ ring }) => ring.flatMap((p, i) => { const q = ring[(i + 1) % ring.length]; return [...p, ...q]; }));
 
 /** Roof edges and corners of the buildings around the view. */
-function outlines(homes: Map<string, Home>, origin: P2, centerAt: P2, skip: Set<string>) {
-  const mid = toLocal(origin, centerAt), points: number[] = [];
+function outlines(homes: Map<string, Home>, origin: P2, skip: Set<string>) {
+  const points: number[] = [];
   for (const h of homes.values()) {
     if (h.shell || skip.has(h.pid)) continue;
     const top = h.height + 0.08;
     for (const ring of h.rings) {
       const local = ring.map((p) => toLocal(origin, p));
-      if (Math.hypot(local[0][0] - mid[0], local[0][1] - mid[1]) > OUTLINE_REACH_M) break;
       for (let i = 0; i + 1 < local.length; i++) {
         const [a, b] = [local[i], local[i + 1]];
         points.push(a[0], a[1], top, b[0], b[1], top, a[0], a[1], h.base, a[0], a[1], top);
@@ -140,6 +160,7 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
   const map = useRef<maplibregl.Map | null>(null);
   const group = useRef(new THREE.Group());
   const edges = useRef(new THREE.Group());
+  const pieces = useRef(new Map<string, Piece>());
   const homes = useRef(new Map<string, Home>());
   const origin = useRef<P2 | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
@@ -188,7 +209,7 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
     const m = map.current;
     if (!m || !ready.current) return;
     const g = group.current;
-    g.clear();
+    empty(g);
     markers.current.forEach((x) => x.remove());
     markers.current = [];
     origin.current = site?.origin ?? origin.current;
@@ -250,7 +271,7 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
     scene.add(group.current, edges.current);
     m.on("load", () => {
       const paint = (name: "fill-extrusion-color" | "fill-extrusion-opacity") => m.getPaintProperty(BLOCKS, name);
-      m.setLayerZoomRange(BLOCKS, 14, HOMES_FROM_ZOOM);
+      m.setLayoutProperty(BLOCKS, "visibility", "none");
       m.addSource(HOMES, { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "pid" });
       m.addLayer({
         id: HOMES, type: "fill-extrusion", source: HOMES, minzoom: HOMES_FROM_ZOOM,
@@ -283,20 +304,28 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
       m.addSource("aerial", { type: "raster", tiles: [AERIAL], tileSize: 512 });
       m.addLayer({ id: "aerial", type: "raster", source: "aerial", layout: { visibility: "none" } }, HOMES);
 
+      // Edges cover exactly what the solid layer shows: the same buildings, from the same zoom.
+      let drawn = "";
       refreshEdges.current = () => {
-        edges.current.clear();
-        if (m.getZoom() < HOMES_FROM_ZOOM) return;
         const c = m.getCenter();
         origin.current ??= [c.lng, c.lat];
-        edges.current.add(outlines(homes.current, origin.current, [c.lng, c.lat], new Set(owned.current)));
+        const now = `${pieces.current.size}|${owned.current.join()}|${origin.current}`; // a joined piece leaves the count of homes as it was
+        if (now === drawn) return;
+        drawn = now;
+        empty(edges.current);
+        edges.current.add(outlines(homes.current, origin.current, new Set(owned.current)));
         m.triggerRepaint();
       };
+      const showEdges = () => { edges.current.visible = m.getZoom() >= HOMES_FROM_ZOOM; };
+      m.on("zoom", showEdges);
+      showEdges();
       // Tiles arrive one by one, so split what has arrived into single buildings, a moment after the last one.
       let timer = 0;
       const update = () => {
         clearTimeout(timer);
         timer = window.setTimeout(() => {
-          if (collect(m, homes.current)) (m.getSource(HOMES) as maplibregl.GeoJSONSource).setData(asData(homes.current));
+          if (pieces.current.size > MAX_HOMES) { pieces.current.clear(); homes.current.clear(); }
+          collect(m, pieces.current, homes.current);
           syncHomes.current();
         }, 120);
       };
@@ -316,7 +345,7 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
       const { onBuilding: pick, onPoint: point, drawing: draws } = live.current;
       if (draws) { point?.([e.lngLat.lng, e.lngLat.lat]); return; }
       if (!pick) return;
-      if (m.getZoom() < HOMES_FROM_ZOOM) { m.flyTo({ center: e.lngLat, zoom: 18.2, pitch: PITCH, duration: 1200 }); return; }
+      if (m.getZoom() < CLOSE_ZOOM) { m.flyTo({ center: e.lngLat, zoom: 18.2, pitch: PITCH, duration: 1200 }); return; }
       const hit = under(e.point);
       if (hit) pick(resolve(homes.current, hit));
     });
@@ -357,7 +386,7 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
     if (!site) { framed.current = false; map.current?.setMinZoom(null); return; }
     if (framed.current || !map.current) return;
     framed.current = true;
-    map.current.setMinZoom(HOMES_FROM_ZOOM);
+    map.current.setMinZoom(CLOSE_ZOOM);
     frame(900);
   }, [site]);
   useEffect(() => {
@@ -369,7 +398,7 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
     const wait = setInterval(() => {
       if (++tries > 40) clearInterval(wait);
       if (m.isMoving() || !m.areTilesLoaded() || m.getZoom() < 17) return;
-      collect(m, homes.current);
+      if (collect(m, pieces.current, homes.current)) syncHomes.current();
       const hit = homeAt(homes.current, focus);
       if (!hit && tries < 12) return;
       clearInterval(wait);
