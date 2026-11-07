@@ -19,7 +19,6 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - Map stays smooth on fast moves: buildings load off the page, per square, and unloaded places blink blue (D48)
 - Map starts at the browser location. A typed address selects its building by itself. Clicking works without a search. Hover shows what a click picks
 
-- Homes: touching parts with the same house number, or without an address, count as one home (`lod2.group`)
 - `/api/design` for the planner, with skipped homeowner answers allowed. PVGIS answers retry and stay on disk
 - Planner desk: request list, Design, Roof with fitted modules, Facts, Energy, Checks (`web/src/Planner.tsx`)
 
@@ -34,7 +33,8 @@ Living document. Update it whenever the phase, blockers or next steps change.
 2. Check the engine fixes in `reports/`: 2 m² per panel, price in sizing, roof area as limit. They change scored numbers
 3. Check the own-electricity share and saving before a planner quotes them
 4. Decide where expert comparison and results go
-5. Pitch deck and demo recording, with `docs/demo-script.md` rewritten for this flow
+5. Planner view plan proposed in `reports/Planner planı.md`, awaiting the user's answers to its five questions
+6. Pitch deck and demo recording, with `docs/demo-script.md` rewritten for this flow
 
 ## Parked
 
