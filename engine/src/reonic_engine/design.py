@@ -210,6 +210,21 @@ class Engine:
         }
 
 
+def rough(d):
+    """The homeowner's draft: what the system is, with sizes as the range experts chose for similar homes, never past the roof."""
+    s, top = d["similar"], d["pv"]["max_modules"]
+    roof = top * ASSUMED_KWP_PER_MODULE if top else float("inf")
+    kwp = d["pv"]["kwp"]
+    sizes = [v for v in [*s["battery_common"], d["battery"]["kwh"]] if v]
+    has_battery = d["battery"]["kwh"] > 0
+    return {
+        "pv": {"low": round(min(s["kwp_low"], kwp, roof), 1), "high": round(min(max(s["kwp_high"], kwp), roof), 1)},
+        "battery": {"yes": has_battery, "low": min(sizes) if has_battery else None, "high": max(sizes) if has_battery else None},
+        "wallbox": d["wallbox"]["included"], "heatpump": d["heatpump"]["included"],
+        "reasons": d["reasons"], "warnings": d["warnings"],
+    }
+
+
 def engine_predictor(train, test, catalog):
     """Same interface as models.PREDICTORS, for scoring."""
     e = Engine().fit(train, train)  # project rows carry the same size columns as options

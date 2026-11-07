@@ -3,7 +3,7 @@
 Living document. Update it whenever the phase, blockers or next steps change.
 
 **Last updated:** 2026-11-07, evening
-**Phase:** Step 1 of the product: find and select a home in Munich (D45). The map is limited to the region, with a yellow line around it. Later steps were removed and return one by one. They are in git at tag `before-munich-focus`.
+**Phase:** Homeowner flow and planner desk work end to end in Munich. The homeowner answers one topic per page and gets a rough draft (D62). The planner opens that request, with every fact marked by source, and decides. Uncommitted until the user asks.
 **Deadline:** Sunday 8 November 2026, 15:00
 
 ## Done
@@ -19,6 +19,10 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - Map stays smooth on fast moves: buildings load off the page, per square, and unloaded places blink blue (D48)
 - Map starts at the browser location. A typed address selects its building by itself. Clicking works without a search. Hover shows what a click picks
 
+- Homes: touching parts with the same house number, or without an address, count as one home (`lod2.group`)
+- `/api/draft` for the homeowner, `/api/design` for the planner, both with skipped answers allowed. PVGIS answers retry and stay on disk
+- Planner desk: request list, Design, Roof with fitted modules, Facts, Energy, Checks (`web/src/Planner.tsx`)
+
 ## Not done
 
 - Pitch deck, demo recording, final test-set run: not started
@@ -26,10 +30,11 @@ Living document. Update it whenever the phase, blockers or next steps change.
 
 ## Next steps
 
-1. Confirm step 1 works well in the browser
-2. Agree the next step with the user, then bring it back from the tag
-3. Decide where expert comparison and results go
-4. Pitch deck and demo recording
+1. User tries the full flow in the browser
+2. Check the engine fixes in `reports/`: 2 m² per panel, price in sizing, roof area as limit. They change scored numbers
+3. Check the own-electricity share and saving before showing them to homeowners
+4. Decide where expert comparison and results go
+5. Pitch deck and demo recording, with `docs/demo-script.md` rewritten for this flow
 
 ## Parked
 

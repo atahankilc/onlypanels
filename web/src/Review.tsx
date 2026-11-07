@@ -1,29 +1,36 @@
-import { Answers, Selected, View, meanSun, polyOf, surfaceKey, surfaceName } from "./api";
+import { useEffect, useRef, useState } from "react";
+import { Answers, Draft, Selected, View, draftFor, homesIn, meanSun, polyOf, surfaceKey, surfaceName } from "./api";
 import { Face, letter } from "./HomeMap";
-import { Back } from "./icons";
-import { Button, Check, Field, IconButton, Input, Segmented, Slider, Steps } from "./ui";
+import { Back, Close } from "./icons";
+import { Button, Check, Field, IconButton, Input, Segmented, Slider } from "./ui";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-export type Stage = "roof" | "power" | "heat" | "car" | "check";
-const ORDER: Stage[] = ["roof", "power", "heat", "car", "check"];
-const TITLES: Record<Stage, string> = { roof: "Where should panels go?", power: "Your electricity", heat: "Your heating", car: "Your car", check: "Is this right?" };
-const HEATING = [["Gas", "Gas"], ["Oil", "Oil"], ["OtherNonRenewable", "Other fossil"], ["Heatpump", "Heat pump"], ["unknown", "Not sure"]] as const;
+const BANDS = [["Under 3,000 kWh", 2500], ["3,000 to 4,000 kWh", 3500], ["4,000 to 5,000 kWh", 4500], ["5,000 to 7,000 kWh", 6000], ["Over 7,000 kWh", 8500]] as const;
+// Stromspiegel 2025, single-family house, from secondary sources. One person is our own guess. Shown to the planner as assumed.
+const BY_PEOPLE = [["1", 2000], ["2", 2700], ["3", 3500], ["4", 3800], ["5 or more", 4500]] as const;
+const HEATING = [["Gas", "Gas"], ["Oil", "Oil"], ["Heatpump", "Heat pump"], ["OtherNonRenewable", "Something else"], ["unknown", "Not sure"]] as const;
 const FOSSIL = ["Gas", "Oil", "OtherNonRenewable"];
-const heatName = (v: string | null) => HEATING.find(([k]) => k === v)?.[1] ?? "Not answered";
 const number = (v: string) => (v === "" ? null : Number(v));
+
+export type Stage = "roof" | "solar" | "panels" | "battery" | "batterysize" | "use" | "exact" | "people" | "heat" | "heatuse" | "hp" | "car" | "km" | "draft" | "sent";
+/** The pages this household needs, in order. Answers open and close the follow-up pages. */
+const pagesFor = (a: Answers): Stage[] => [
+  "roof", "solar", ...(a.has_solar ? ["panels" as const] : []), "battery", ...(a.has_storage ? ["batterysize" as const] : []),
+  "use", ...(a.use_source === "exact" ? ["exact" as const] : []), ...(a.use_source === "people" ? ["people" as const] : []),
+  "heat", ...(FOSSIL.includes(a.heating ?? "") ? ["heatuse" as const, "hp" as const] : []), "car", ...(a.ev ? ["km" as const] : []), "draft",
+];
 
 type Props = {
   stage: Stage; setStage: (s: Stage) => void; answers: Answers; setAnswers: (a: Answers) => void;
   buildings: Selected[]; goTo: (id: string) => void; face: Face | null; setFace: (f: Face | null) => void;
-  view: View; setView: (v: View) => void; chosen: string[]; toggle: (key: string) => void; reset: () => void; back: () => void;
+  view: View; setView: (v: View) => void; chosen: string[]; toggle: (key: string) => void; reset: () => void; back: () => void; changed: boolean; installed: string[]; toggleInstalled: (key: string) => void; retrySun: () => void;
 };
 
-export default function Review({ stage, setStage, answers: a, setAnswers, buildings, goTo, face, setFace, view, setView, chosen, toggle, reset, back }: Props) {
+export default function Review({ stage, setStage, answers: a, setAnswers, buildings, goTo, face, setFace, view, setView, chosen, toggle, reset, back, changed, installed, toggleInstalled, retrySun }: Props) {
   const all = buildings.flatMap((b) => (b.sun?.surfaces ?? []).map((s) => ({ b, s, key: surfaceKey(b, s) })));
   const picked = all.filter((x) => chosen.includes(x.key));
-  const sum = (kind: string) => picked.filter((x) => x.s.kind === kind).reduce((a, x) => a + x.s.m2, 0);
-  const roofs = sum("roof"), walls = sum("wall");
+  const marked = all.filter((x) => installed.includes(x.key)); // a removed building takes its marks with it
+  const roofs = picked.filter((x) => x.s.kind === "roof").reduce((sum, x) => sum + x.s.m2, 0);
   const loading = buildings.some((b) => b.sun === undefined), failed = buildings.some((b) => b.sun === null);
   const at = view.moment ?? { month: 6, hour: 12 };
   const suns = buildings.find((b) => b.sun)?.sun?.suns ?? [];
@@ -33,25 +40,57 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
     const list = hoursIn(month);
     setView({ ...view, moment: { month, hour: list.length ? Math.min(Math.max(hour, list[0]), list[list.length - 1]) : hour } });
   };
-
   const mode = view.layer === "photo" ? "photo" : view.moment ? "moment" : "year";
   const show = (m: typeof mode) => setView({ layer: m === "photo" ? "photo" : "sun", moment: m === "moment" ? at : null });
 
-  const set = (change: Partial<Answers>) => setAnswers({ ...a, ...change });
-  const at_ = ORDER.indexOf(stage);
-  const done: Record<Stage, boolean> = { roof: picked.length > 0, power: !!a.demand_kwh, heat: a.heating !== null, car: a.ev !== null, check: false };
-  done.check = done.roof && done.power && done.heat && done.car;
-  const open = ORDER.slice(0, 4).filter((s) => !done[s]);
+  const pages = pagesFor(a), at_ = Math.max(0, pages.indexOf(stage));
+  const go = (next: Stage) => {
+    setFace(null);
+    if (next !== "roof" && view.layer !== "photo") setView({ layer: "photo", moment: null });
+    setStage(next);
+  };
+  /** Answer and move on. The next page comes from the answers as they now stand. */
+  const answer = (change: Partial<Answers>) => {
+    const after = { ...a, ...change }, list = pagesFor(after);
+    setAnswers(after);
+    go(list[list.indexOf(stage) + 1]);
+  };
+  const next = () => go(pages[at_ + 1]);
+  const previous = () => (at_ ? go(pages[at_ - 1]) : back());
 
-  const roofStep = <>
-      <div className="sum">
-        {loading ? <p className="muted">Working out the sun on your buildings…</p> : <>
-          <p className="bignum">{Math.round(roofs)} m²<small>of roof chosen</small></p>
-          <p className="small muted">The whole measured roof, not the usable area. Windows, chimneys and edges are not known yet.</p>
-          {walls > 0 && <p className="small request">Plus {Math.round(walls)} m² of wall as a request.</p>}
-        </>}
-        {failed && <p className="error small">Sun data could not be loaded for every building.</p>}
-      </div>
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    panel.current?.scrollTo(0, 0);
+    if (matchMedia("(pointer: fine)").matches) panel.current?.querySelector<HTMLInputElement>(".answers input")?.focus();
+  }, [stage]);
+  const enter = (e: React.KeyboardEvent) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT" && (e.target as HTMLInputElement).type === "number") next(); };
+
+  const yesNo = (key: "has_solar" | "has_storage", extra: Partial<Answers> = {}) => <div className="answers">
+    <Button size="lg" wide aria-pressed={a[key] === true} onClick={() => answer({ [key]: true })}>Yes</Button>
+    <Button size="lg" wide aria-pressed={a[key] === false} onClick={() => answer({ [key]: false, ...extra })}>No</Button>
+  </div>;
+  const page = (title: string, line: string | null, body: React.ReactNode, optional = false) => <>
+    <p className="count">Question {at_ + 1} of {pages.length - 1}</p>
+    <h1>{title}</h1>
+    {line && <p className="muted">{line}</p>}
+    {body}
+    <div className="quizfoot">
+      <button type="button" className="textlink" onClick={previous}>Back</button>
+      {optional && <button type="button" className="textlink" onClick={next}>Skip</button>}
+    </div>
+  </>;
+  const numberPage = (title: string, line: string | null, label: string, value: number | null, set: (v: number | null) => void, placeholder?: string) => page(title, line, <div className="answers">
+    <Field label={label}><Input type="number" min={0} placeholder={placeholder} value={value ?? ""} onChange={(e) => set(number(e.target.value))} /></Field>
+    <Button variant="solid" size="lg" wide disabled={!value} onClick={next}>Next</Button>
+  </div>, true);
+
+  if (stage === "roof") return (
+    <aside className="panel tall quiz" key="roof" ref={panel}>
+      <p className="count">Question 1 of {pages.length - 1}</p>
+      <h1>Your surfaces</h1>
+      {loading ? <p className="muted">Working out the sun…</p> : <p className="muted">{Math.round(roofs)} m² of roof chosen. Click a surface to change it.</p>}
+      {failed && <p className="error small">Sun data is missing for a building. <button type="button" className="again" onClick={retrySun}>Try again</button></p>}
+      {!loading && !failed && all.length === 0 && <p className="error small">No surface is big enough here. Go back and pick another building.</p>}
       <div className="sunbar">
         <Segmented wide label="Show on the map" value={mode} onChange={show} options={[{ value: "photo", label: "Photo" }, { value: "year", label: "Yearly sun" }, { value: "moment", label: "Sun by time" }]} />
         {view.moment && view.layer === "sun" && <div className="sunrow">
@@ -60,79 +99,107 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
         </div>}
         {view.layer === "sun" && <div className="legend" role="img" aria-label="Blue is least sun, red is most"><i /><span>Less sun</span><span>More sun</span></div>}
       </div>
-      <p className="hint">All roofs are in. <b>Click a surface to take it out or add it.</b> Walls are only a request: your installer decides if they work.</p>
-      {buildings.map((b, i) => {
-        const mine = all.filter((x) => x.b === b).sort((x, y) => meanSun(y.s) - meanSun(x.s));
-        const row = ({ s, key }: (typeof mine)[number]) => {
+      {homesIn(buildings).map((g, i) => {
+        const mine = all.filter((x) => x.b.home === g.home).sort((x, y) => meanSun(y.s) - meanSun(x.s));
+        const row = ({ b, s, key }: (typeof mine)[number]) => {
           const me = { building: b.id, poly: polyOf(b, s) };
+          if (installed.includes(key)) return <li key={key}><div className="taken"><b>{surfaceName(s)}</b><small>Already has panels</small></div></li>;
           return <li key={key} className={face?.building === b.id && face.poly === me.poly ? "on" : ""} onMouseEnter={() => setFace(me)} onMouseLeave={() => setFace(null)}>
             <Check checked={chosen.includes(key)} onChange={() => toggle(key)}><b>{surfaceName(s)}</b><small>{Math.round(s.m2)} m² · {Math.round(meanSun(s)).toLocaleString("en")} kWh/m² sun a year</small></Check>
           </li>;
         };
-        const wallList = mine.filter((x) => x.s.kind === "wall");
-        return <section key={b.id}>
-          <button type="button" className="row" onClick={() => goTo(b.id)}><span className="tag">{letter(i)}</span><span className="name">{b.label}</span></button>
+        const walls = mine.filter((x) => x.s.kind === "wall");
+        return <section key={g.home}>
+          <button type="button" className="row" onClick={() => goTo(g.home)}><span className="tag">{letter(i)}</span><span className="name">{g.label}</span></button>
           <ul className="chosen">{mine.filter((x) => x.s.kind === "roof").map(row)}</ul>
-          {wallList.length > 0 && <details><summary>Ask about walls ({wallList.length})</summary><ul className="chosen">{wallList.map(row)}</ul></details>}
+          {walls.length > 0 && <details><summary>Ask about walls ({walls.length})</summary><p className="small muted">Your installer decides if they work.</p><ul className="chosen">{walls.map(row)}</ul></details>}
         </section>;
       })}
-      <div className="panelfoot"><Button wide onClick={reset}>Back to all roofs</Button></div>
-      <p className="source small muted">Buildings and aerial photo: Bayerische Vermessungsverwaltung. Yearly sunlight: PVGIS, European Commission. Sun position and shadows are calculated from these, without trees.</p>
-  </>;
+      {changed && <button type="button" className="textlink" onClick={reset}>Back to all roofs</button>}
+      <div className="stick"><Button size="lg" onClick={back}>Back</Button><Button variant="solid" size="lg" wide disabled={loading} onClick={next}>Next</Button></div>
+      <p className="source small muted">Bayerische Vermessungsverwaltung, PVGIS (European Commission). Shadows from nearby buildings, without trees.</p>
+    </aside>
+  );
+
+  if (stage === "draft") return <DraftPage answers={a} buildings={buildings} chosen={chosen} back={previous} send={() => go("sent")} />;
+
+  if (stage === "sent") return (
+    <aside className="panel tall quiz" key="sent" ref={panel}>
+      <p className="count">Sent</p>
+      <h1>An installer is on it</h1>
+      <p className="muted">They check your roof and your real use, then send you an offer.</p>
+    </aside>
+  );
 
   return (
-    <aside className="panel tall">
-      <header className="panelbar"><IconButton label="Back to selecting" onClick={back}><Back /></IconButton><b>{TITLES[stage]}</b></header>
-      <Steps label="Steps" value={stage} onChange={setStage} steps={[
-        { value: "roof", label: "Roof", done: done.roof }, { value: "power", label: "Power", done: done.power }, { value: "heat", label: "Heating", done: done.heat },
-        { value: "car", label: "Car", done: done.car }, { value: "check", label: "Check", done: done.check },
-      ]} />
+    <aside className="panel tall quiz" key={stage} ref={panel} onKeyDown={enter}>
+      {stage === "solar" && page("Is there solar here already?", null, yesNo("has_solar", { solar_kwp: null, solar_year: null }))}
 
-      {stage === "roof" && roofStep}
+      {stage === "panels" && page("Where are the panels?", "Click those surfaces on the map.", <div className="answers">
+        {marked.length > 0 && <ul className="chosen">{marked.map(({ b, s, key }) => <li key={key} className={face?.building === b.id && face.poly === polyOf(b, s) ? "on" : ""} onMouseEnter={() => setFace({ building: b.id, poly: polyOf(b, s) })} onMouseLeave={() => setFace(null)}>
+          <div><b>{surfaceName(s)}</b><small>{letter(homesIn(buildings).findIndex((g) => g.home === b.home))} · {Math.round(s.m2)} m²</small></div>
+          <IconButton label={`Remove ${surfaceName(s)}`} onClick={() => { setFace(null); toggleInstalled(key); }}><Close /></IconButton>
+        </li>)}</ul>}
+        <div className="pair">
+          <Field label="Size (kWp)"><Input type="number" min={0} step={0.1} value={a.solar_kwp ?? ""} onChange={(e) => setAnswers({ ...a, solar_kwp: number(e.target.value) })} /></Field>
+          <Field label="Year"><Input type="number" min={1990} max={2026} value={a.solar_year ?? ""} onChange={(e) => setAnswers({ ...a, solar_year: number(e.target.value) })} /></Field>
+        </div>
+        <Button variant="solid" size="lg" wide disabled={!marked.length} onClick={next}>Next</Button>
+      </div>, true)}
 
-      {stage === "power" && <div className="ask">
-        <p className="muted">This sets how big the system should be.{buildings.length > 1 ? " Answer for all chosen buildings together." : ""}</p>
-        <Field label="Electricity you use in a year (kWh)" hint="It is on your yearly bill.">
-          <Input type="number" min={500} step={100} placeholder="Your yearly use" value={a.demand_kwh ?? ""} onChange={(e) => set({ demand_kwh: number(e.target.value) })} />
-        </Field>
-        <Field label="What you pay per kWh (cent)" hint="32 ct is only a starting value. Yours is on the bill.">
-          <Input type="number" min={1} step={0.5} value={a.price_ct_kwh} onChange={(e) => set({ price_ct_kwh: Number(e.target.value) })} />
-        </Field>
-        <h3>Already on the building</h3>
-        <Check checked={a.has_solar} onChange={(has_solar) => set({ has_solar })}>Solar panels</Check>
-        <Check checked={a.has_storage} onChange={(has_storage) => set({ has_storage })}>A battery</Check>
-      </div>}
+      {stage === "battery" && page("Is there a home battery?", null, yesNo("has_storage", { battery_kwh: null }))}
+      {stage === "batterysize" && numberPage("How big is the battery?", null, "Size (kWh)", a.battery_kwh, (battery_kwh) => setAnswers({ ...a, battery_kwh }))}
 
-      {stage === "heat" && <div className="ask">
-        <p className="muted">This tells us if a heat pump is worth looking at.</p>
-        <h3>How do you heat today?</h3>
-        <div className="pills">{HEATING.map(([value, label]) => <Button key={value} aria-pressed={a.heating === value} onClick={() => set({ heating: value })}>{label}</Button>)}</div>
-        {FOSSIL.includes(a.heating ?? "") && <Field label="Heat you use in a year (kWh)" hint="Optional. Without it we cannot judge a heat pump.">
-          <Input type="number" min={0} step={500} placeholder="From your gas or oil bill" value={a.heat_kwh ?? ""} onChange={(e) => set({ heat_kwh: number(e.target.value) })} />
-        </Field>}
-      </div>}
+      {stage === "use" && page("How much electricity do you use a year?", "A rough answer is enough.", <div className="answers">
+        {BANDS.map(([label, kwh]) => <Button key={label} size="lg" wide aria-pressed={a.use_source === "band" && a.demand_kwh === kwh} onClick={() => answer({ demand_kwh: kwh, use_source: "band" })}>{label}</Button>)}
+        <div className="pair">
+          <Button size="lg" wide aria-pressed={a.use_source === "exact"} onClick={() => answer({ use_source: "exact" })}>I know it</Button>
+          <Button size="lg" wide aria-pressed={a.use_source === "people"} onClick={() => answer({ use_source: "people" })}>No idea</Button>
+        </div>
+      </div>)}
+      {stage === "exact" && numberPage("What is your yearly use?", "It is on your bill.", "kWh a year", a.demand_kwh, (demand_kwh) => setAnswers({ ...a, demand_kwh }))}
+      {stage === "people" && page("How many people live here?", "We use an average for now.", <div className="answers">
+        {BY_PEOPLE.map(([label, kwh]) => <Button key={label} size="lg" wide aria-pressed={a.demand_kwh === kwh} onClick={() => answer({ demand_kwh: kwh })}>{label}</Button>)}
+      </div>)}
 
-      {stage === "car" && <div className="ask">
-        <p className="muted">A car adds a lot of electricity use, and it decides on a wallbox.</p>
-        <h3>Do you have, or plan to buy, an electric car?</h3>
-        <div className="pills"><Button aria-pressed={a.ev === true} onClick={() => set({ ev: true })}>Yes</Button><Button aria-pressed={a.ev === false} onClick={() => set({ ev: false })}>No</Button></div>
-        {a.ev && <Field label="Kilometres a year" hint="A rough number is fine."><Input type="number" min={0} step={1000} value={a.ev_km} onChange={(e) => set({ ev_km: Number(e.target.value) })} /></Field>}
-      </div>}
+      {stage === "heat" && page("How do you heat your home?", null, <div className="answers">
+        {HEATING.map(([value, label]) => <Button key={value} size="lg" wide aria-pressed={a.heating === value} onClick={() => answer({ heating: value })}>{label}</Button>)}
+      </div>)}
+      {stage === "heatuse" && numberPage("How much heat do you use a year?", "It is on your gas or oil bill.", "kWh a year", a.heat_kwh, (heat_kwh) => setAnswers({ ...a, heat_kwh }))}
+      {stage === "hp" && page("Should we look at a heat pump?", null, <div className="answers">
+        <Button size="lg" wide aria-pressed={a.wants_hp === true} onClick={() => answer({ wants_hp: true })}>Yes</Button>
+        <Button size="lg" wide aria-pressed={a.wants_hp === false} onClick={() => answer({ wants_hp: false })}>No</Button>
+      </div>)}
 
-      {stage === "check" && <div className="ask">
-        <dl className="review">
-          <dt>Roof</dt><dd>{Math.round(roofs)} m² chosen{walls > 0 ? `, ${Math.round(walls)} m² of wall as a request` : ""}</dd><Button onClick={() => setStage("roof")}>Change</Button>
-          <dt>Electricity</dt><dd>{a.demand_kwh ? `${a.demand_kwh.toLocaleString("en")} kWh a year at ${a.price_ct_kwh} ct` : "Not answered"}{a.has_solar ? ", has solar" : ""}{a.has_storage ? ", has a battery" : ""}</dd><Button onClick={() => setStage("power")}>Change</Button>
-          <dt>Heating</dt><dd>{heatName(a.heating)}{a.heat_kwh ? `, ${a.heat_kwh.toLocaleString("en")} kWh a year` : ""}</dd><Button onClick={() => setStage("heat")}>Change</Button>
-          <dt>Car</dt><dd>{a.ev === null ? "Not answered" : a.ev ? `Electric, ${a.ev_km.toLocaleString("en")} km a year` : "No electric car"}</dd><Button onClick={() => setStage("car")}>Change</Button>
-        </dl>
-        <p className={open.length ? "request" : "muted"}>{open.length ? `Still open: ${open.map((s) => TITLES[s].replace("Your ", "").toLowerCase()).join(", ")}.` : "That is everything for a first design."}</p>
-      </div>}
+      {stage === "car" && page("Do you drive an electric car?", null, <div className="answers">
+        <Button size="lg" wide aria-pressed={a.ev === true && !a.ev_planned} onClick={() => answer({ ev: true, ev_planned: false })}>Yes</Button>
+        <Button size="lg" wide aria-pressed={a.ev === true && a.ev_planned} onClick={() => answer({ ev: true, ev_planned: true })}>Not yet, but soon</Button>
+        <Button size="lg" wide aria-pressed={a.ev === false} onClick={() => answer({ ev: false, ev_planned: false })}>No</Button>
+      </div>)}
+      {stage === "km" && numberPage("How far do you drive a year?", null, "Kilometres a year", a.ev_km, (ev_km) => setAnswers({ ...a, ev_km }), "11,300 if you skip")}
+    </aside>
+  );
+}
 
-      {stage !== "check" && <div className="stepnav">
-        {at_ > 0 && <Button size="lg" onClick={() => setStage(ORDER[at_ - 1])}>Back</Button>}
-        <Button variant="solid" size="lg" wide onClick={() => setStage(ORDER[at_ + 1])}>Next</Button>
-      </div>}
+/** What the system is, in ranges, with the reason. No share or saving until those numbers are checked. */
+function DraftPage({ answers: a, buildings, chosen, back, send }: { answers: Answers; buildings: Selected[]; chosen: string[]; back: () => void; send: () => void }) {
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { let live = true; draftFor(a, buildings, chosen).then((d) => { if (live) setDraft(d); }).catch(() => live && setFailed(true)); return () => { live = false; }; }, []);
+  const rows = draft ? [
+    ["Solar", `${draft.pv.low} to ${draft.pv.high} kWp`, "From your use and what experts chose for similar homes."],
+    ["Battery", a.has_storage ? "You have one" : draft.battery.yes ? `${draft.battery.low} to ${draft.battery.high} kWh` : "Not needed for now", a.has_storage ? "We plan around it." : "From the solar size and similar homes."],
+    ["Car charging", draft.wallbox ? "Included" : "Not included", a.ev ? "For your electric car." : "No electric car."],
+    ["Heat pump", a.heating === "Heatpump" ? "You have one" : a.wants_hp ? "Worth a look" : "Not for now", a.wants_hp ? "Your installer checks your home first." : ""],
+  ] : [];
+  return (
+    <aside className="panel tall quiz" key="draft">
+      <p className="count">Your first draft</p>
+      <h1>{failed ? "We could not make a draft" : draft ? "This could suit your home" : "Making your draft…"}</h1>
+      {failed && <p className="muted">Please try again in a moment.</p>}
+      {draft && <dl className="plain">{rows.map(([name, value, why]) => <div key={name}><dt>{name}<small>{why}</small></dt><dd>{value}</dd></div>)}</dl>}
+      {draft && <p className="small muted">A rough first look. Your installer checks everything before an offer.{a.use_source !== "band" && a.use_source !== "exact" || a.demand_kwh === null ? " Your electricity use is an average for now." : ""}</p>}
+      <div className="stick"><Button size="lg" onClick={back}>Back</Button>{draft && <Button variant="solid" size="lg" wide onClick={send}>Ask an installer to check this</Button>}</div>
     </aside>
   );
 }

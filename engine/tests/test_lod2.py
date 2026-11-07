@@ -75,3 +75,43 @@ def test_build_leaves_out_buildings_past_the_region_but_keeps_their_surfaces(tmp
     lod2.build("800_5334")
     assert json.loads(lod2.path("800_5334", "homes").read_text())["features"] == []
     assert lod2.building("800_5334", "far") is not None
+
+
+def block(name, x, address=None, width=10, y=0):
+    ring = [(x, y, 0), (x + width, y, 0), (x + width, y + 10, 0), (x, y + 10, 0)]
+    return {"id": name, "address": address, "ground": [{"ring": ring, "holes": []}]}
+
+
+def test_parts_of_one_number_are_one_home():
+    home = lod2.group([block("a", 0, "Weg 1"), block("b", 10, "Weg 1a")])
+    assert home["a"] == home["b"]
+
+
+def test_different_numbers_stay_apart():
+    home = lod2.group([block("a", 0, "Weg 1"), block("b", 10, "Weg 3")])
+    assert home["a"] != home["b"]
+
+
+def test_a_row_of_letters_stays_apart():
+    home = lod2.group([block("a", 0, "Weg 1a"), block("b", 10, "Weg 1b"), block("c", 20, "Weg 1c")])
+    assert len(set(home.values())) == 3
+
+
+def test_a_part_without_address_joins_its_house():
+    home = lod2.group([block("a", 0, "Weg 1"), block("g", 10, None, width=4), block("s", 14, None, width=2)])
+    assert home["g"] == home["a"] and home["s"] == home["a"]
+
+
+def test_a_part_without_address_goes_to_the_longer_wall():
+    home = lod2.group([block("a", 0, "Weg 1", width=8), block("b", 8, "Weg 3"), block("g", 6, None, width=8, y=10)])
+    assert home["g"] == home["b"] != home["a"]
+
+
+def test_a_large_block_without_address_does_not_join_a_small_house():
+    home = lod2.group([block("a", 0, "Weg 1", width=4), block("hall", 4, None, width=40)])
+    assert home["hall"] != home["a"]
+
+
+def test_apart_is_apart():
+    home = lod2.group([block("a", 0, "Weg 1"), block("b", 12, "Weg 1a")])
+    assert home["a"] != home["b"]

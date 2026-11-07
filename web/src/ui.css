@@ -60,12 +60,3 @@
 .slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8px; border: 0; border-radius: 50%; background: var(--hud-solid); box-shadow: var(--hud-shadow); }
 .slider::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: var(--hud-solid); }
 
-.steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; margin: 0; padding: 10px 12px; list-style: none; border-bottom: 1px solid var(--hud-line); }
-.steps li { margin: 0; max-width: none; min-width: 0; }
-.steps button { display: grid; justify-items: center; gap: 4px; width: 100%; padding: 6px 0; border: 0; border-radius: 12px; background: none; color: var(--hud-ink-2); font: 500 12px var(--font-ui); cursor: pointer; transition: background-color 0.15s, color 0.15s; }
-.steps i { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--hud-fill); font: 600 11px var(--font-mono); font-style: normal; }
-.steps svg { width: 14px; height: 14px; }
-.steps .done i { background: var(--hud-fill-2); color: var(--hud-ink); }
-.steps .on { color: var(--hud-ink); font-weight: 600; }
-.steps .on i { background: var(--hud-solid); color: var(--hud-solid-ink); }
-@media (hover: hover) { .steps button:not(.on):hover { background: var(--hud-fill); } }

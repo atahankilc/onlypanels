@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Answers, NO_ANSWERS, Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, allRoofs, sunOf } from "./api";
+import { Answers, NO_ANSWERS, Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, chosenKeys, homeParts, homesIn, NO_CHOICE, Choice, sunOf } from "./api";
 import { P2, P3, toLocal } from "./geometry";
+import { Handoff } from "./plan";
 import HomeMap, { Face, Picked, Step, letter } from "./HomeMap";
 import { Close, Photo, Search } from "./icons";
 import Review, { Stage } from "./Review";
@@ -14,7 +15,7 @@ function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real 
   return { roofs: polys(answer.roofs), walls: polys(answer.walls) };
 }
 
-export default function FindHome({ dark }: { dark: boolean }) {
+export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: Handoff) => void }) {
   const [q, setQ] = useState("");
   const [places, setPlaces] = useState<Place[] | null>(null);
   const [active, setActive] = useState(0);
@@ -31,8 +32,9 @@ export default function FindHome({ dark }: { dark: boolean }) {
   const [look, setLook] = useState<{ id: string } | null>(null);
   const [view, setView] = useState<View>({ layer: "photo", moment: null });
   const [stage, setStage] = useState<Stage>("roof");
+  useEffect(() => { if (stage === "sent") onSend({ buildings, answers, choice }); }, [stage]); // what the homeowner produced goes to the planner
   const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
-  const [picks, setPicks] = useState<string[] | null>(null); // null: every roof, until the user changes something
+  const [choice, setChoice] = useState<Choice>(NO_CHOICE);
   const typed = useRef("");
   const asked = useRef("");
 
@@ -66,33 +68,39 @@ export default function FindHome({ dark }: { dark: boolean }) {
 
   const patch = (id: string, change: Partial<Selected>) => setBuildings((list) => list.map((b) => (b.id === id ? { ...b, ...change } : b)));
   // The row under the pointer goes with it and never reports the pointer leaving, so its highlight is cleared here.
-  const remove = (id: string) => { setNear(null); setBuildings((list) => list.filter((b) => b.id !== id)); };
-  const chosen = picks ?? allRoofs(buildings);
-  const toggleSurface = (key: string) => setPicks(chosen.includes(key) ? chosen.filter((k) => k !== key) : [...chosen, key]);
+  const remove = (home: string) => { setNear(null); setBuildings((list) => list.filter((b) => b.home !== home)); };
+  const chosen = chosenKeys(buildings, choice);
+  const flip = (list: string[], key: string) => (list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
+  const toggleSurface = (key: string) => setChoice((c) => (key.includes("|roof") ? { ...c, dropped: flip(c.dropped, key) } : { ...c, added: flip(c.added, key) }));
+  const toggleInstalled = (key: string) => setChoice((c) => ({ ...c, installed: flip(c.installed, key) }));
+  const retrySun = () => buildings.filter((b) => b.sun === null).forEach((b) => { patch(b.id, { sun: undefined }); sunOf(b.square, b.id).then((sun) => patch(b.id, { sun })).catch(() => patch(b.id, { sun: null })); });
 
   /** A click selects a building, a second click lets it go. Its roof loads quietly for the next step. */
   const toggle = (hit: Picked) => {
-    if (buildings.some((b) => b.id === hit.id)) { remove(hit.id); return; }
-    const { id, square, at: origin } = hit;
-    setBuildings((list) => [...list, { id, square, label: "Building", origin, real: null, measuring: true }]);
-    placeAt(origin[1], origin[0]).then((p) => patch(id, { label: short(p.label) })).catch(() => undefined);
-    // Everything the next step shows is fetched now, so Continue can move at once.
-    sunOf(square, id).then((sun) => patch(id, { sun })).catch(() => patch(id, { sun: null }));
-    measured(square, id).then((m) => patch(id, { measuring: false, real: toReal(m, origin) })).catch(() => patch(id, { measuring: false }));
+    if (buildings.some((b) => b.home === hit.home)) { remove(hit.home); return; }
+    const { home, square } = hit;
+    const addPart = (id: string, origin: P2) => {
+      setBuildings((list) => (list.some((b) => b.id === id) ? list : [...list, { id, home, square, label: list.find((b) => b.home === home)?.label ?? "Building", origin, real: null, measuring: true }]));
+      sunOf(square, id).then((sun) => patch(id, { sun })).catch(() => patch(id, { sun: null }));
+      measured(square, id).then((m) => patch(id, { measuring: false, real: toReal(m, origin) })).catch(() => patch(id, { measuring: false }));
+    };
+    addPart(hit.id, hit.at);
+    homeParts(square, home).then((parts) => parts.filter((p) => p.id !== hit.id).forEach((p) => addPart(p.id, p.at))).catch(() => undefined);
+    placeAt(hit.at[1], hit.at[0]).then((p) => setBuildings((list) => list.map((b) => (b.home === home ? { ...b, label: short(p.label) } : b)))).catch(() => undefined);
   };
 
   // Move on as soon as the measured models are in.
   const measuring = buildings.some((b) => b.measuring || b.sun === undefined);
   useEffect(() => {
     if (!waiting || measuring) return;
-    setWaiting(false); setOpen(buildings[0]?.id ?? null); setStep("review");
+    setWaiting(false); setOpen(buildings[0]?.home ?? null); setStep("review");
   }, [waiting, measuring]);
   const goTo = (id: string) => { setOpen(id); setLook({ id }); };
 
   return (
     <main className={`stage ${step}`}>
       <HomeMap dark={dark} buildings={buildings} step={step} focus={focus} aerial={aerial} onPick={step === "pick" ? toggle : undefined}
-        open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={view} chosen={step === "review" ? chosen : []} onToggle={toggleSurface} editing={stage === "roof"} />
+        open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={view} chosen={step === "review" ? chosen : []} onToggle={stage === "panels" ? toggleInstalled : toggleSurface} editing={stage === "roof" || stage === "panels"} installed={step === "review" ? choice.installed : []} />
       {step === "pick" && <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</Button>}
       {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
@@ -115,14 +123,14 @@ export default function FindHome({ dark }: { dark: boolean }) {
 
       {step === "pick" && buildings.length > 0 && <aside className="panel">
         <h2>Selected buildings</h2>
-        <ul className="picked">{buildings.map((b, i) => <li key={b.id} onMouseEnter={() => setNear(b.id)} onMouseLeave={() => setNear(null)}>
-          <button type="button" className="row" onClick={() => goTo(b.id)}><span className="tag">{letter(i)}</span><span className="name">{b.label}</span></button>
-          <IconButton label={`Remove ${b.label}`} onClick={() => remove(b.id)}><Close /></IconButton>
+        <ul className="picked">{homesIn(buildings).map((b, i) => <li key={b.home} onMouseEnter={() => setNear(b.home)} onMouseLeave={() => setNear(null)}>
+          <button type="button" className="row" onClick={() => goTo(b.home)}><span className="tag">{letter(i)}</span><span className="name">{b.label}</span></button>
+          <IconButton label={`Remove ${b.label}`} onClick={() => remove(b.home)}><Close /></IconButton>
         </li>)}</ul>
         <div className="panelfoot"><Button variant="solid" size="lg" wide disabled={waiting} onClick={() => setWaiting(true)}>{waiting ? "Getting your roofs ready…" : "Continue"}</Button></div>
       </aside>}
 
-      {step === "review" && <Review stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} goTo={goTo} face={face} setFace={setFace} view={view} setView={setView} chosen={chosen} toggle={toggleSurface} reset={() => setPicks(null)} back={() => { setFace(null); setStep("pick"); }} />}
+      {step === "review" && <Review stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} goTo={goTo} face={face} setFace={setFace} view={view} setView={setView} chosen={chosen} toggle={toggleSurface} changed={choice.dropped.length + choice.added.length > 0} reset={() => setChoice({ ...choice, dropped: [], added: [] })} installed={choice.installed} toggleInstalled={toggleInstalled} retrySun={retrySun} back={() => { setFace(null); setStep("pick"); }} />}
     </main>
   );
 }

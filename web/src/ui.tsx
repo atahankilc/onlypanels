@@ -1,7 +1,7 @@
 // The only place controls are defined. Screens compose these and never style a button or field themselves.
 // Two sizes: lg (44) floats on the map or is the main action, md (36) sits in a panel.
 // Three surfaces: solid (the one main action), fill (in a panel), glass (on the map). Plain is for inside a stack.
-import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import "./ui.css";
 
 type Size = "md" | "lg";
@@ -33,18 +33,7 @@ export function Field({ label, value, hint, children }: { label: ReactNode; valu
 }
 
 export const Input = ({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) => <input className={cx("control", className)} {...rest} />;
-
-type Step<T> = { value: T; label: string; done: boolean };
-/** Where the user is, and what is answered. Any step can be opened. */
-export function Steps<T extends string>({ label, value, steps, onChange }: { label: string; value: T; steps: Step<T>[]; onChange: (v: T) => void }) {
-  return (
-    <ol className="steps" aria-label={label}>
-      {steps.map((s, i) => <li key={s.value}><button type="button" aria-current={s.value === value ? "step" : undefined} className={cx(s.value === value && "on", s.done && "done")} onClick={() => onChange(s.value)}>
-        <i>{s.done ? <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" /></svg> : i + 1}</i>{s.label}
-      </button></li>)}
-    </ol>
-  );
-}
+export const Select = ({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) => <select className={cx("control", className)} {...rest} />;
 
 export function Check({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode }) {
   return (

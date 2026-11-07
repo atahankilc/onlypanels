@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import * as THREE from "three";
-import { Poly, Selected, SunSurface, View, polyOf, surfaceKey, Square, homesUrl, squareEdges, squaresIn } from "./api";
+import { Poly, Selected, SunSurface, View, homesIn, polyOf, surfaceKey, Square, homesUrl, squareEdges, squaresIn } from "./api";
+import { fit } from "./panels";
 import { P2, P3, centre, inside, normal, toLngLat, toLocal } from "./geometry";
 import { Info, Locate, Minus, Needle, Plus } from "./icons";
 import { BUILDINGS_3D_FILTER, mapStyle } from "./mapStyle";
@@ -21,6 +22,7 @@ const KEEP_SQUARES = 16; // the farthest beyond this leave the map, so a long se
 const MOVE_CHECK_MS = 300, PULSE_MS = 1100;
 const EDGES_FROM_ZOOM = 16, EDGES_FULL_ZOOM = 17; // from afar houses cannot be told apart anyway, so no lines to draw
 const EDGE_OPACITY = 0.8;
+export const SUN_LOW = 500, SUN_HIGH = 1400; // kWh per m² a year
 const PANEL_W = 424; // room the panel takes on a wide screen
 const PITCH = 50; // steeper tilts make a drag near the horizon cover hundreds of metres
 const SITE = "site-fade"; // around the chosen buildings the map fades into plain ground
@@ -32,7 +34,7 @@ const COLORS = { roof: "#3A6FA8", wall: "#1F3A5C", edge: "#8A95A8", ownEdge: "#B
 const lit = (hex: string, n: P3) => new THREE.Color(hex).multiplyScalar(0.95 - 0.35 * n[1]).getHex();
 const wide = () => matchMedia("(min-width: 821px)").matches;
 
-export type Picked = { id: string; square: string; at: P2 };
+export type Picked = { id: string; home: string; square: string; at: P2 };
 export type Step = "pick" | "review";
 export type Face = { building: string; poly: number };
 export const letter = (i: number) => String.fromCharCode(65 + i);
@@ -40,7 +42,8 @@ type Props = {
   buildings: Selected[]; step: Step; focus: P2 | null; aerial: boolean; onPick?: (b: Picked) => void;
   open: string | null; near: string | null; face: Face | null; look: { id: string } | null;
   onFace: (f: Face | null) => void; onOpen: (id: string) => void;
-  view: View; chosen: string[]; onToggle: (key: string) => void; dark: boolean; editing: boolean;
+  view: View; chosen: string[]; onToggle: (key: string) => void; dark: boolean; editing: boolean; installed: string[];
+  panels?: Record<string, number>; panelW?: number; turn?: number; onReady?: () => void; // the planner's desk
 };
 
 // What changes with the theme on the map itself. Everything else comes from the base style.
@@ -61,6 +64,18 @@ const MOVE_MS = 900; // the map rising into its window: --move in styles.css
 // Same curve as --glide, so camera, window and fade are one movement.
 const glide = (t: number) => (t < 0.5 ? 8 * t ** 4 : 1 - (-2 * t + 2) ** 4 / 2);
 const STRIPE_M = 2.4;
+// Surfaces that already carry panels: a grid of dark modules.
+const modules = (() => {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const x = c.getContext("2d") as CanvasRenderingContext2D;
+  x.fillStyle = "#101A33"; x.fillRect(0, 0, 64, 64);
+  x.strokeStyle = "#B8C4DA"; x.lineWidth = 2;
+  for (const v of [1, 32]) { x.beginPath(); x.moveTo(v, 0); x.lineTo(v, 64); x.moveTo(0, v); x.lineTo(64, v); x.stroke(); }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
 const stripes = (() => {
   const c = document.createElement("canvas");
   c.width = c.height = 32;
@@ -227,7 +242,7 @@ const edgeFade = (zoom: number) => {
 type OnMap = { scene: THREE.Scene; at: P2; done: boolean };
 type Spot = { id: string; square: string };
 
-export default function HomeMap({ buildings, step, focus, aerial, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, dark, editing }: Props) {
+export default function HomeMap({ buildings, step, focus, aerial, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, dark, editing, installed, panels, panelW, turn, onReady }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const models = useRef<{ scene: THREE.Scene; at: P2; id: string; polys: Poly[]; surfaces: { s: SunSurface; poly: number }[]; skins: ReturnType<typeof skinOf>[]; ghosts: THREE.Mesh }[]>([]); // one per building, each around its own origin
@@ -246,8 +261,8 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   const [bearing, setBearing] = useState(0);
   const spot = useRef<maplibregl.Marker | null>(null);
   const pins = useRef<maplibregl.Marker[]>([]);
-  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, dark, editing });
-  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, dark, editing };
+  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, dark, editing, panels, panelW, turn, onReady });
+  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, dark, editing, panels, panelW, turn, onReady };
 
   const locateMe = () => navigator.geolocation?.getCurrentPosition((p) => {
     const m = map.current, at: P2 = [p.coords.longitude, p.coords.latitude];
@@ -320,22 +335,53 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     });
     paintTiles();
     paintGhosts();
+    paintPanels();
   };
+
+  /** The modules the design places, on the surfaces it placed them, lowest rows first. */
+  const paintPanels = () => {
+    models.current.forEach((x) => {
+      const b = live.current.buildings.find((y) => y.id === x.id), g = x.scene.children[0] as THREE.Group | undefined;
+      if (!b || !g) return;
+      const old = g.getObjectByName("modules");
+      if (old) { g.remove(old); empty(old as THREE.Group); }
+      const out = new THREE.Group(); out.name = "modules";
+      const points: P3[] = [], faces: number[] = [], edges: number[] = [];
+      for (const { s, poly } of x.surfaces) {
+        const count = live.current.panels?.[surfaceKey(b, s)] ?? 0;
+        if (!count || s.kind !== "roof") continue;
+        for (const q of fit(x.polys[poly], s.n).slice(0, count)) {
+          const k = points.length; points.push(...q); faces.push(k, k + 1, k + 2, k, k + 2, k + 3);
+          q.forEach((p, i) => edges.push(...p, ...q[(i + 1) % 4]));
+        }
+      }
+      if (points.length) {
+        out.add(mesh(points, faces, "#0B1A36"));
+        out.add(lines(edges, "#9FB8DC", 0.75));
+        out.traverse((o) => { const mat = (o as THREE.Mesh).material as THREE.Material | undefined; if (mat) { mat.userData.opacity = o instanceof THREE.LineSegments ? 0.75 : 1; mat.transparent = shown.current < 1; mat.opacity = shown.current * mat.userData.opacity; } });
+      }
+      g.add(out);
+    });
+    map.current?.triggerRepaint();
+  };
+
 
   const paintGhosts = () => models.current.forEach((x) => (x.ghosts.material as THREE.MeshBasicMaterial).color.set(TONES[live.current.dark ? "dark" : "light"].ghost));
 
   // Chosen surfaces carry a colour. Everything else shows what it really is, so the eye goes to the choice.
   const paintTiles = () => {
     const picked = new Set(chosen), hot = face;
-    const values = models.current.flatMap((m) => m.skins.flatMap((k) => k.s.year));
-    const sorted = [...values].sort((a, b) => a - b), low = sorted[Math.floor(sorted.length * 0.05)] ?? 0, high = sorted[Math.floor(sorted.length * 0.98)] ?? 1;
+    const low = SUN_LOW, high = SUN_HIGH; // one fixed scale, so a surface keeps its colour whatever else is selected
     const dim = new THREE.Color("#0F1013"), mark = new THREE.Color("#FFFFFF");
     models.current.forEach((m) => {
       const b = live.current.buildings.find((x) => x.id === m.id);
       if (!b?.sun) return;
       const suns = b.sun.suns, moment = view.moment ? suns.findIndex((x) => x.month === view.moment?.month && x.hour === view.moment.hour) : -1;
       for (const { s: x, pixels, source, texture, cover } of m.skins) {
-        cover.visible = !picked.has(surfaceKey(b, x)); // only what is not chosen is marked; chosen surfaces look as they are
+        const has = installed.includes(surfaceKey(b, x));
+        cover.visible = has || !picked.has(surfaceKey(b, x)); // only what is not chosen is marked; chosen surfaces look as they are
+        const look = cover.material as THREE.MeshBasicMaterial;
+        if (look.map !== (has ? modules : stripes)) { look.map = has ? modules : stripes; look.needsUpdate = true; }
         const over = hot?.building === b.id && hot.poly === polyOf(b, x), read = seenBits(x, suns.length);
         const rgba = x.year.map((value, i) => {
           let c = dim, alpha = 0;
@@ -372,9 +418,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       tag.addEventListener("click", (e) => { e.stopPropagation(); click(); });
       pins.current.push(new maplibregl.Marker({ element: tag }).setLngLat(at).addTo(m));
     };
-    buildings.forEach((b, i) => {
-      pin(letter(i), b.origin, (heights.current.get(b.id) ?? 8) + 1, () => onOpen(b.id));
-    });
+    homesIn(buildings).forEach((g, i) => pin(letter(i), g.parts[0].origin, Math.max(8, ...g.parts.map((b) => heights.current.get(b.id) ?? 0)) + 1, () => onOpen(g.home)));
     liftPins.current();
   };
 
@@ -397,7 +441,8 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     m.on("move", () => liftPins.current());
     m.on("rotate", () => { if (needle.current) needle.current.style.rotate = `${-m.getBearing()}deg`; setBearing(m.getBearing()); });
 
-    m.once("load", locateMe);
+    m.once("load", () => { if (!live.current.onReady) locateMe(); });
+    m.once("idle", () => live.current.onReady?.());
     let renderer: THREE.WebGLRenderer;
     const camera = new THREE.Camera();
     let pulse = 0;
@@ -586,8 +631,8 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       const layers = [...squares.current.keys()].map(homesOf);
       const hit = layers.length ? m.queryRenderedFeatures(p, { layers })[0] : undefined;
       if (!hit) return undefined;
-      const { id, h, lon, lat } = hit.properties;
-      return { id: String(id), square: squareOf(hit.source), at: [lon, lat] as P2, height: Number(h) };
+      const { id, h, lon, lat, home } = hit.properties;
+      return { id: String(id), home: String(home ?? id), square: squareOf(hit.source), at: [lon, lat] as P2, height: Number(h) };
     };
     m.on("click", (e) => {
       if (live.current.step === "review") {
@@ -624,7 +669,8 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
         if (!live.current.onPick) { hover([]); m.getCanvas().style.cursor = ""; return; }
         const hit = under(e.point);
         m.getCanvas().style.cursor = hit ? "pointer" : "";
-        hover(hit ? [hit] : []);
+        // A home can be several parts: all of them light up together.
+        hover(hit ? [hit, ...m.querySourceFeatures(homesOf(hit.square), { filter: ["==", ["get", "home"], hit.home] }).map((f) => ({ id: String(f.id), square: hit.square })).filter((f, i, all) => f.id !== hit.id && all.findIndex((x) => x.id === f.id) === i)] : []);
       });
     });
     m.on("mouseout", () => hover([]));
@@ -664,8 +710,11 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       image.src = photo.url;
     }
   }, [buildings]);
+  // The search dot helps find the area; once buildings are chosen it only sits in the way.
+  useEffect(() => { const dot = spot.current?.getElement(); if (dot) dot.style.display = step === "review" ? "none" : ""; }, [step]);
   useEffect(placePins, [buildings, step, open]);
-  useEffect(paintTiles, [view, chosen, face]);
+  useEffect(paintTiles, [view, chosen, face, installed]);
+  useEffect(() => { paintPanels(); }, [panels]);
   // Models are built when their sun arrives, so tiles appear without leaving the screen.
   const sunReady = buildings.filter((b) => b.sun).length;
   useEffect(() => { if (step === "review" && shown.current === 1) { buildModels(); setShown(1); } }, [sunReady]);
@@ -673,20 +722,20 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   useEffect(() => {
     const m = map.current;
     if (!m || !ready.current || !near) return;
-    const b = live.current.buildings.find((x) => x.id === near);
-    if (!b) return;
-    mark(b, "near", true);
-    return () => mark(b, "near", false);
+    const parts = live.current.buildings.filter((x) => x.home === near);
+    if (!parts.length) return;
+    parts.forEach((b) => mark(b, "near", true));
+    return () => parts.forEach((b) => mark(b, "near", false));
   }, [near]);
   useEffect(() => { if (look) frame(700, look.id); }, [look]);
 
   const frame = (duration: number, only?: string) => {
-    const m = map.current, list = live.current.buildings.filter((b) => !only || b.id === only);
+    const m = map.current, list = live.current.buildings.filter((b) => !only || b.home === only);
     if (!m || !list.length) return;
     const points = list.flatMap((b) => [b.origin, ...(b.real?.roofs ?? []).flatMap((r) => r.ring.map((p) => toLngLat(b.origin, [p[0], p[1]])))]);
     const area = points.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(points[0], points[0]));
     // The map stays full size behind its window, so the room is measured from the screen's edges.
-    m.fitBounds(area, { padding: wide() ? { top: 90, left: PANEL_W + 70, right: 90, bottom: 120 } : { top: 110, left: 30, right: 30, bottom: innerHeight * 0.5 }, maxZoom: 19.5, pitch: PITCH, bearing: m.getBearing(), duration, easing: glide });
+    m.fitBounds(area, { padding: wide() ? live.current.panelW ? { top: 130, left: live.current.panelW + 110, right: 130, bottom: 130 } : { top: 90, left: PANEL_W + 70, right: 90, bottom: 120 } : { top: 110, left: 30, right: 30, bottom: innerHeight * 0.5 }, maxZoom: live.current.panelW ? 20.4 : 19.5, pitch: PITCH, bearing: live.current.turn ?? m.getBearing(), duration, easing: glide });
   };
 
   // Between the steps the map's blocks fade out while the measured buildings fade in, as the camera settles on them.

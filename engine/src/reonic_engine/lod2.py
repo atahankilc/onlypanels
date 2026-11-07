@@ -9,21 +9,25 @@ as they are: `homes` for the map, `edges` for its lines, `solids` for one buildi
 import json
 import math
 import os
+import re
 import struct
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from array import array
+from functools import lru_cache
 from pathlib import Path
 
+import numpy as np
 from pyproj import Transformer
 
 from .site import REGION
 
 CACHE = Path(__file__).resolve().parents[3] / "data" / "cache" / "lod2"
 SOURCE = "https://download1.bayernwolke.de/a/lod2/citygml/{}.gml"
-BUILT = CACHE / "built-v1"  # a new format gets a new name, so old files are never read as new ones
+BUILT = CACHE / "built-v2"  # a new format gets a new name, so old files are never read as new ones
 TILE_M = 2000
+TOUCH_M, SAMPLE_M, MIN_SHARED_M = 0.3, 0.5, 1.0  # two parts touch when at least this much wall runs this close
 EARTH_RADIUS_M = 6371008.8  # the map's own value: the lines must land exactly on its solids
 GML, BLDG = "{http://www.opengis.net/gml}", "{http://www.opengis.net/citygml/building/1.0}"
 TO_UTM = Transformer.from_crs(4326, 25832, always_xy=True)
@@ -53,7 +57,8 @@ def parse(source):
             continue
         parts = {name: [p for s in element.iter(f"{BLDG}{name}Surface") for p in _polygons(s)] for name in ("Ground", "Roof", "Wall")}
         if parts["Ground"] and parts["Roof"]:
-            buildings.append({"id": element.get(f"{GML}id"), "ground": parts["Ground"], "roofs": parts["Roof"], "walls": parts["Wall"],
+            address = next((e.text.strip() for e in element.iter() if e.tag.endswith("ThoroughfareName") and e.text), None)
+            buildings.append({"id": element.get(f"{GML}id"), "address": address, "ground": parts["Ground"], "roofs": parts["Roof"], "walls": parts["Wall"],
                               "floor": min(p[2] for g in parts["Ground"] for p in g["ring"])})
         element.clear()
     return buildings
@@ -106,15 +111,110 @@ def _in_region(lon, lat):
     return west <= lon <= east and south <= lat <= north
 
 
+def _area(ring):
+    x, y = np.array([p[0] for p in ring]), np.array([p[1] for p in ring])
+    return abs(float(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))) / 2
+
+
+def _along(ring):
+    """Points every half metre around a ring, and the ring's segments."""
+    a = np.array([p[:2] for p in ring])
+    b = np.roll(a, -1, axis=0)
+    points = [a[i] + (b[i] - a[i]) * t for i in range(len(a)) for t in np.arange(0, 1, SAMPLE_M / max(float(np.hypot(*(b[i] - a[i]))), SAMPLE_M))]
+    return np.array(points), a, b
+
+
+def _shared(one, other):
+    """Metres of one outline that run along the other."""
+    points, (a, b) = one[0], other[1:]
+    d = b - a
+    t = np.clip(((points[:, None] - a) * d).sum(2) / np.maximum((d * d).sum(1), 1e-9), 0, 1)
+    gap = np.hypot(*np.moveaxis(points[:, None] - a - t[..., None] * d, 2, 0)).min(1)
+    return float((gap <= TOUCH_M).sum()) * SAMPLE_M
+
+
+def _touching(buildings):
+    """Which buildings stand against each other, as {(i, j): metres shared}, i before j."""
+    rings = [b["ground"][0]["ring"] for b in buildings]
+    box = [(min(p[0] for p in r), max(p[0] for p in r), min(p[1] for p in r), max(p[1] for p in r)) for r in rings]
+    shapes, found = {}, {}
+    order = sorted(range(len(rings)), key=lambda i: box[i][0])
+    for k, i in enumerate(order):
+        for j in order[k + 1:]:
+            if box[j][0] > box[i][1] + TOUCH_M:
+                break
+            if box[j][2] <= box[i][3] + TOUCH_M and box[i][2] <= box[j][3] + TOUCH_M:
+                one, other = (shapes.setdefault(n, _along(rings[n])) for n in (i, j))
+                metres = max(_shared(one, other), _shared(other, one))
+                if metres >= MIN_SHARED_M:
+                    found[min(i, j), max(i, j)] = metres
+    return found
+
+
+def group(buildings):
+    """Which home each building belongs to: {building id: home id}. The measured data keeps a house's parts as separate buildings.
+
+    Parts join when they touch and carry the same house number, letters aside. Three or more letters on one number
+    are a row of houses, so those stay apart. A part without an address joins the neighbour it shares the longest
+    wall with, unless it is bigger than that neighbour. Different numbers never join.
+    """
+    touching = _touching(buildings)
+    head = list(range(len(buildings)))
+
+    def find(i):
+        while head[i] != i:
+            head[i] = head[head[i]]
+            i = head[i]
+        return i
+
+    def join(pairs):
+        for i, j in pairs:
+            head[find(j)] = find(i)
+
+    address = [b.get("address") for b in buildings]
+    base = [a and re.sub(r"\s*[a-zA-Z]$", "", a) for a in address]
+    join(p for p in touching if address[p[0]] and address[p[0]] == address[p[1]])
+    kept = list(head)
+    near = [p for p in touching if base[p[0]] and base[p[0]] == base[p[1]]]
+    join(near)
+    numbers = {}
+    for i, a in enumerate(address):
+        if a:
+            numbers.setdefault(find(i), set()).add(a)
+    join_later = [p for p in near if len(numbers[find(p[0])]) < 3]
+    head[:] = kept
+    join(join_later)
+
+    size = [_area(b["ground"][0]["ring"]) for b in buildings]
+    walls = {}
+    for (i, j), metres in touching.items():
+        walls.setdefault(i, []).append((metres, j))
+        walls.setdefault(j, []).append((metres, i))
+    placed = {i for i, a in enumerate(address) if a}
+    for _ in range(3):  # a shed against a garage against a house
+        area = {}
+        for i in placed:
+            area[find(i)] = area.get(find(i), 0) + size[i]
+        for i in [i for i in walls if i not in placed]:
+            hosts = sorted(((m, j) for m, j in walls[i] if j in placed and size[i] <= area[find(j)]), reverse=True)
+            if hosts:
+                join([(hosts[0][1], i)])
+                placed.add(i)
+    members = {}
+    for i in range(len(buildings)):
+        members.setdefault(find(i), []).append(i)
+    return {buildings[i]["id"]: buildings[max(m, key=lambda n: (bool(address[n]), size[n]))]["id"] for m in members.values() for i in m}
+
+
 def _homes(buildings):
-    """What the map needs of each building in the region: footprint, measured height and where it stands."""
-    homes = []
+    """What the map needs of each building in the region: footprint, measured height, where it stands and whose it is."""
+    homes, home = [], group(buildings)
     for b in buildings:
         polys = [[_ring(g["ring"]), *[_ring(h) for h in g["holes"]]] for g in b["ground"]]
         first = polys[0][0]
         if _in_region(*first[0]):
             homes.append({"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": polys},
-                          "properties": {"id": b["id"], "h": round(max(p[2] for r in b["roofs"] for p in r["ring"]) - b["floor"], 1),
+                          "properties": {"id": b["id"], "home": home[b["id"]], "h": round(max(p[2] for r in b["roofs"] for p in r["ring"]) - b["floor"], 1),
                                          "lon": round(sum(p[0] for p in first) / len(first), 7),
                                          "lat": round(sum(p[1] for p in first) / len(first), 7)}})
     return homes
@@ -169,6 +269,20 @@ def build(name):
     _write(path(name, "solids"), "".join(solids).encode())
     _write(path(name, "homes"), json.dumps({"type": "FeatureCollection", "features": homes}, separators=(",", ":")).encode())
     _write(path(name, "edges"), edges(homes, tuple(outline(name)[0])))
+
+
+@lru_cache(maxsize=8)
+def _parts(name):
+    found = {}
+    for f in json.loads(path(name, "homes").read_text())["features"]:
+        p = f["properties"]
+        found.setdefault(p["home"], []).append({"id": p["id"], "at": [p["lon"], p["lat"]]})
+    return found
+
+
+def parts(name, home):
+    """The buildings of one home, for a built square."""
+    return _parts(name).get(home, [])
 
 
 def building(name, building_id):

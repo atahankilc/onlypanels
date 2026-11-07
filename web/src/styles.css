@@ -73,12 +73,8 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 0; font-size: 12.5px; color: var(--hud-ink-2); }
 .legend i { grid-area: 2 / 1 / 3 / -1; height: 6px; border-radius: 999px; background: linear-gradient(90deg, #2C6BED, #18C3C9, #FFE14A, #FF8A1F, #E5261F); }
 .legend span:last-child { text-align: right; }
-.sum { padding: 16px 18px 12px; }
-.sum p { margin: 0; }
 .bignum { display: flex; align-items: baseline; gap: 8px; font: 600 34px/1.1 var(--font-ui); letter-spacing: -0.02em; }
 .bignum small { font: 400 14px var(--font-ui); letter-spacing: 0; color: var(--hud-ink-2); }
-.hint { margin: 0; padding: 12px 18px; max-width: none; border-top: 1px solid var(--hud-line); color: var(--hud-ink-2); }
-.hint b { color: var(--hud-ink); font-weight: 600; }
 .chosen { list-style: none; margin: 8px -8px 0; padding: 0; }
 .chosen li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; margin: 0; padding: 4px 8px; max-width: none; border-radius: 14px; }
 .chosen li.on { background: var(--hud-fill-2); }
@@ -87,13 +83,13 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 /* The second step: the map rises into a window on the right, the panel stays on the dark base beside it. */
 /* The map keeps its size: resizing a live map flickers. Only what is visible of it shrinks, while the camera moves in step. */
 .map3d { clip-path: inset(0 0 0 0 round 0); transition: clip-path var(--move) var(--glide); }
-.stage.review .map3d { clip-path: inset(8px 8px 8px 424px round 24px); }
-.stage.review .sunlight { inset: 8px 8px 8px 424px; border-radius: 24px; }
+.stage.review .map3d { clip-path: inset(8px 8px 8px var(--left, 424px) round 24px); }
+.stage.review .sunlight { inset: 8px 8px 8px var(--left, 424px); border-radius: 24px; }
 /* The map as a sheet lying over the base: a shadow on the base behind it, a lit rim on top of it. */
 .sheet, .rim { position: absolute; top: 0; right: 0; bottom: 0; left: 0; border-radius: 0; pointer-events: none; opacity: 0; transition: inset var(--move) var(--glide), border-radius var(--move) var(--glide), opacity var(--move) var(--glide); }
 .sheet { box-shadow: var(--lift); }
 .rim { z-index: 1; border: 1px solid var(--rim); }
-.stage.review .sheet, .stage.review .rim { top: 8px; right: 8px; bottom: 8px; left: 424px; border-radius: 24px; opacity: 1; }
+.stage.review .sheet, .stage.review .rim { top: 8px; right: 8px; bottom: 8px; left: var(--left, 424px); border-radius: 24px; opacity: 1; }
 .mapctl { transition: right var(--move) var(--glide), bottom var(--move) var(--glide); }
 .stage.review .panel { top: 68px; left: 12px; bottom: 12px; max-height: none; border: 0; border-radius: 0; background: none; box-shadow: none; animation: rise 0.6s var(--ease) 0.3s backwards; }
 .stage.review .mapctl { right: 20px; bottom: 20px; }
@@ -107,14 +103,29 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .sunrow { display: flex; gap: 16px; animation: rise 0.3s var(--ease); }
 .sunrow .field { flex: 1; min-width: 0; margin: 0; }
 .source { margin: 0; padding: 12px 18px 16px; }
-.ask { padding: 16px 18px; }
-.ask > p { margin: 0 0 14px; }
-.ask h3 { margin: 16px 0 8px; }
-.pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-.review { display: grid; grid-template-columns: auto 1fr auto; gap: 10px 12px; align-items: center; margin: 0 0 14px; }
-.review dt { color: var(--hud-ink-2); }
-.review dd { margin: 0; }
-.stepnav { position: sticky; bottom: 0; display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--hud-line); background: var(--hud-base); }
+.taken { min-height: 44px; display: grid; align-content: center; opacity: 0.7; }
+.again { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+/* one topic a page: a heading, one line, big answers */
+.stage.review .panel.quiz { display: flex; flex-direction: column; padding: 24px 18px 14px; animation: rise 0.35s var(--ease) backwards; }
+.count { margin: 0 0 12px; font: 500 11px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--hud-ink-2); }
+.quiz h1 { margin-bottom: 8px; font-size: 30px; line-height: 1.12; text-wrap: balance; }
+.quiz > p { max-width: none; }
+.answers { display: grid; gap: 10px; margin-top: 18px; }
+.answers .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.answers .field { margin: 0; }
+.answers .control { height: var(--btn-lg); font-size: 16px; }
+.answers .chosen { margin: 0; }
+.quizfoot { display: flex; justify-content: space-between; margin-top: 14px; }
+.textlink { padding: 8px 4px; border: 0; background: none; color: var(--hud-ink-2); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.quiz .sunbar { padding: 8px 0 10px; }
+.quiz > section { padding: 12px 0; border-top: 1px solid var(--hud-line); }
+.stick { position: sticky; bottom: -14px; display: flex; gap: 8px; margin: 12px -18px 0; padding: 12px 18px; background: var(--hud-base); }
+.quiz .source { padding: 10px 0 0; }
+.plain { display: grid; margin: 14px 0; }
+.plain div { display: flex; justify-content: space-between; gap: 14px; padding: 12px 0; border-top: 1px solid var(--hud-line); }
+.plain dt { color: var(--hud-ink); font-weight: 500; }
+.plain dt small { display: block; font-weight: 400; color: var(--hud-ink-2); }
+.plain dd { margin: 0; font-weight: 600; text-align: right; white-space: nowrap; }
 .panel h3 { margin-bottom: 8px; font: 600 14px var(--font-ui); letter-spacing: 0; text-transform: none; color: var(--hud-ink); }
 .picked { list-style: none; margin: 0; padding: 0 10px 0 18px; max-height: 50dvh; overflow-y: auto; }
 .picked li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; margin: 0; max-width: none; border-top: 1px solid var(--hud-line); }
@@ -162,6 +173,7 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
   .mapctl { bottom: auto; top: 116px; right: 10px; }
   .map-aerial { right: auto; left: 10px; bottom: 90px; }
   .mapnote { display: none; }
+  .logo h1 { display: none; }
   .stage.review .map3d { clip-path: inset(0 0 46dvh 0 round 0 0 24px 24px); }
   .stage.review .sunlight { inset: 0 0 46dvh 0; border-radius: 0 0 24px 24px; }
   .stage.review .sheet, .stage.review .rim { top: 0; right: 0; left: 0; bottom: 46dvh; border-radius: 0 0 24px 24px; }

@@ -7,10 +7,13 @@ Only coordinates leave this machine.
 import base64
 import json
 import math
+import threading
+import time
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 
@@ -18,6 +21,9 @@ from . import lod2
 
 PVGIS = "https://re.jrc.ec.europa.eu/api/v5_3/PVcalc"
 AGENT = "energy-design-desk-demo"
+PVGIS_CACHE = Path(__file__).resolve().parents[3] / "data" / "cache" / "pvgis.json"  # coordinates and yearly sun, nothing about a project
+PVGIS_WAITS = (0, 0.6, 1.5)  # seconds before each try
+_disk = threading.Lock()
 SYSTEM_LOSS_PCT = 14  # PVGIS default
 MIN_SURFACE_M2 = 10  # smaller pieces are drawn, not offered
 MAX_SAMPLES = 9000  # per building, so a huge block stays quick
@@ -152,11 +158,36 @@ def _pvgis(lat, lon, tilt, azimuth):
     return totals["H(i)_y"], totals["E_y"]
 
 
-def _yearly(lat, lon, tilt, azimuth):
+def _remembered():
     try:
-        return _pvgis(round(lat, 3), round(lon, 3), int(round(tilt / 5) * 5), int(round(azimuth / 10) * 10) % 360)
-    except (OSError, KeyError, ValueError):
-        return None
+        return json.loads(PVGIS_CACHE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _yearly(lat, lon, tilt, azimuth):
+    """Yearly sun from PVGIS. Answers stay on disk, so a restart or a bad connection costs nothing for homes already seen."""
+    key = (round(lat, 3), round(lon, 3), int(round(tilt / 5) * 5), int(round(azimuth / 10) * 10) % 360)
+    name = "/".join(map(str, key))
+    with _disk:
+        known = _remembered().get(name)
+    if known:
+        return tuple(known)
+    for wait in PVGIS_WAITS:  # it drops calls when several arrive at once
+        time.sleep(wait)
+        try:
+            found = _pvgis(*key)
+        except (OSError, KeyError, ValueError):
+            continue
+        with _disk:
+            saved = _remembered()
+            saved[name] = found
+            PVGIS_CACHE.parent.mkdir(parents=True, exist_ok=True)
+            part = PVGIS_CACHE.with_suffix(".part")
+            part.write_text(json.dumps(saved))
+            part.replace(PVGIS_CACHE)
+        return found
+    return None
 
 
 @lru_cache(maxsize=32)
@@ -268,4 +299,4 @@ def surfaces(name, building_id):
     for other, h, pts, fade in context(nearby, own):
         lons, lats = lod2.TO_LONLAT.transform(pts[:, 0] + ox, pts[:, 1] + oy)
         around.append({"id": other, "h": h, "ring": [[round(a, 7), round(c, 7), round(float(f), 2)] for a, c, f in zip(lons, lats, fade)]})
-    return {"around": around, "step": round(step, 2), "suns": [{k: s[k] for k in ("month", "hour", "az", "el", "vector")} for s in suns], "surfaces": out, "sunny": bool(any(yearly))}
+    return {"around": around, "step": round(step, 2), "suns": [{k: s[k] for k in ("month", "hour", "az", "el", "vector", "strength")} for s in suns], "surfaces": out, "sunny": bool(any(yearly)), "missing": sum(y is None for y in yearly)}
