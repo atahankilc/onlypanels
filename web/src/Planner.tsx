@@ -306,7 +306,7 @@ function Energy({ d, inputs }: { d: Design; inputs: Inputs }) {
       <div><dt>Share of production used at home</dt><dd>{e.self_use_pct}%</dd></div>
       <div><dt>Saving a year at {inputs.price_ct_kwh} ct</dt><dd>€{e.saving_eur.toLocaleString("en")}</dd></div>
     </dl>
-    <p className="flag">Not checked yet: the two shares and the saving come from assumed hourly profiles. Do not quote them to a customer.</p>
+    <p className="small muted">Estimates: real weather years for Munich, this roof's directions, an assumed household day, battery losses. Checked against HTW Berlin reference values (scripts/check_energy.py).{d.heatpump.included ? " The saving counts electricity only, not the fuel no longer bought." : ""}</p>
     <p className="small muted">Production uses this roof's measured sun and shade. There are no prices in our data, so no system cost or payback.</p>
   </>;
 }

@@ -139,7 +139,7 @@ class Engine:
                 usual = self.habit[i["installer"]]
                 picks.append(("battery_add", "With battery", f"{_num(usual)} kWh, the size this installer sells most.", {**locks, "battery_kwh": usual}))
         if i.get("heating") in FOSSIL and not d["heatpump"]["included"] and o.get("heatpump") is not False:
-            picks.append(("heatpump", "With heat pump", "Replaces the " + i["heating"].lower().replace("othernonrenewable", "fossil") + " heating. Solar and battery re-size around it.", {"heatpump": True}))
+            picks.append(("heatpump", "With heat pump", "Replaces the " + i["heating"].lower().replace("othernonrenewable", "fossil") + " heating. Solar and battery re-size around it. Saving counts electricity only, not the fuel no longer bought.", {"heatpump": True}))
         # Larger solar, as large as experts go for similar homes (9 in 10 chose less), within what the roof holds.
         largest = int(d["similar"]["kwp_high"] // ASSUMED_KWP_PER_MODULE)
         if d["pv"]["max_modules"]:
