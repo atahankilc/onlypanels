@@ -13,6 +13,7 @@ from .models import HP_KWH_PER_KW, HP_SIZES, TREE, _frame, snap
 
 EV_KWH_PER_KM = 0.18
 HEAT_PUMP_COP = 3.5  # the factor used in the data's own defaults
+EV_SIZING = 0.75  # share of a car's use that sizes solar: experts give homes with a wallbox about 1 kWp more (scripts/profile_hp_ev.py)
 KWH_PER_KWP = {"Germany": 950, "Austria": 1050, "Switzerland": 1050, "Netherlands": 900, "Other": 1000}
 # m² of usable area per panel, and yield relative to a typical roof.
 MOUNTS = {
@@ -89,17 +90,20 @@ class Engine:
             battery = np.where((battery > 0) & (np.abs(battery - habit) <= HABIT_KWH), habit, battery)
         return kwp, battery, self.has_battery.predict_proba(xb)[:, 1]
 
-    def near(self, installer, demand_mwh):
-        """Past expert designs at this installer for homes with about this yearly need."""
+    def near(self, installer, demand_mwh, car=False):
+        """Past expert designs at this installer for homes with about this yearly use. With a car, homes that bought a wallbox,
+        because the recorded use does not hold the car and the car flag is rarely set."""
         t = self.train[self.train.installer == installer]
+        if car and t.has_wallbox.sum() >= MIN_SIMILAR:
+            t = t[t.has_wallbox]
         gap = (t.demand_mwh - demand_mwh).abs()
         near = t[gap <= 0.25 * demand_mwh]
         if len(near) < MIN_SIMILAR:
             near = t.loc[gap.nsmallest(MIN_SIMILAR).index]
         return near
 
-    def similar(self, installer, demand_mwh):
-        near = self.near(installer, demand_mwh)
+    def similar(self, installer, demand_mwh, car=False):
+        near = self.near(installer, demand_mwh, car)
         sold = near[near.has_battery].battery_kwh.round(1)
         with_battery = near[near.has_battery].battery_kwh
         return {
@@ -192,12 +196,13 @@ class Engine:
         locked_modules = o.get("modules")
         lock = locked_modules * ASSUMED_KWP_PER_MODULE if locked_modules is not None else None
 
-        free_kwp = self.predict(row, ev_mwh + hp_mwh)[0][0]
-        kwp, battery, p_battery = self.predict(row, ev_mwh + hp_mwh, max_modules, lock)
+        free_kwp = self.predict(row, ev_mwh * EV_SIZING + hp_mwh)[0][0]
+        kwp, battery, p_battery = self.predict(row, ev_mwh * EV_SIZING + hp_mwh, max_modules, lock)
         modules = locked_modules if lock is not None else max(1, round(kwp[0] / ASSUMED_KWP_PER_MODULE))
         kwp_final = modules * ASSUMED_KWP_PER_MODULE
         capped = lock is None and max_modules is not None and free_kwp > max_modules * ASSUMED_KWP_PER_MODULE
-        similar = self.similar(i["installer"], total)
+        like = total - ev_mwh  # need without the car, as past homes recorded it
+        similar = self.similar(i["installer"], like, car=bool(ev_mwh))
 
         if lock is not None:
             reasons.insert(0, {"code": "pv_locked", "modules": modules})
@@ -256,7 +261,7 @@ class Engine:
                             i.get("price_ct_kwh", 32.0), sun=sun_shape(surfaces, placed))  # real weather years, this roof's directions
         reasons.append({"code": "balance", "production": round(production, 1), "ratio": round(production / total, 1)})
 
-        near = self.near(i["installer"], total)
+        near = self.near(i["installer"], like, car=bool(ev_mwh))
         review = _review(near, similar, kwp_final, battery_kwh, total, has_storage, unsure, p_battery[0])
         trace = _trace(
             i=i, o=o, base=base, ev_mwh=ev_mwh, hp_mwh=hp_mwh, total=total, heat_type=heat_type, heat_mwh=heat_mwh,
@@ -364,9 +369,10 @@ def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_
         pv_res = f"{modules} modules, {_num(kwp_final)} kWp."
         by = "engine"
     steps.append({"id": "pv", "title": "Solar size", "kind": "learned", "by": by, "inputs": pv_in,
-                  "how": f"Learned from {similar['learned_from']} past expert designs at this installer. More need never gives a smaller system.",
+                  "how": f"Learned from {similar['learned_from']} past expert designs at this installer. More need never gives a smaller system." +
+                         (f" The car counts at {round(EV_SIZING * 100)}% of its use here: experts give homes with a wallbox about 1 kWp more." if ev_mwh else ""),
                   "result": pv_res,
-                  "context": f"In {similar['n']} similar homes, 8 in 10 experts chose {_num(similar['kwp_low'])}–{_num(similar['kwp_high'])} kWp."})
+                  "context": f"In {similar['n']} similar homes{' with a wallbox' if ev_mwh else ''}, 8 in 10 experts chose {_num(similar['kwp_low'])}–{_num(similar['kwp_high'])} kWp."})
 
     sizes = ", ".join(_num(c) for c in catalog)
     if o.get("battery_kwh") is not None:
@@ -389,7 +395,7 @@ def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_
     if heat_type == "Heatpump":
         hp_res = "The home already has one."
     elif hp_wanted:
-        hp_res = f"{_num(hp_kw)} kW, from {_num((heat_mwh or 15.0) * 1000, 0)} kWh of heat at {HP_KWH_PER_KW:,} full-load hours." + ("" if heat_mwh else " Heat use is a stand-in.")
+        hp_res = f"{_num(hp_kw)} kW, from {_num((heat_mwh or 15.0) * 1000, 0)} kWh of heat at {HP_KWH_PER_KW:,} kWh per kW, as in the heat pumps sold here and the usual rule of thumb." + ("" if heat_mwh else " Heat use is a stand-in.")
     elif heat_type in FOSSIL:
         hp_res = "Not in the design: nobody asked for one. Offered as an alternative."
     else:

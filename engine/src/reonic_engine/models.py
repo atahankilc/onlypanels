@@ -5,7 +5,7 @@ from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostin
 from sklearn.model_selection import GroupKFold, cross_val_predict
 from sklearn.neighbors import KNeighborsRegressor
 
-HP_KWH_PER_KW = 2500
+HP_KWH_PER_KW = 2250  # yearly heat per kW: median of heat pumps sold here (scripts/profile_hp_ev.py), and use × 0.85 ÷ 1,900 h
 HP_SIZES = np.array([5, 7, 10, 12])
 TREE = dict(max_iter=120, learning_rate=0.05, max_leaf_nodes=8, min_samples_leaf=15, random_state=0)
 

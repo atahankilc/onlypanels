@@ -61,7 +61,7 @@ def test_heat_pump_only_when_asked_then_sized_and_raises_demand(engine):
     home = {**HOME, "heating": "Gas", "heat_kwh": 20000}
     assert not engine.design(home)["heatpump"]["included"]
     d = engine.design(home, {"heatpump": True})
-    assert d["heatpump"]["kw"] == 7 and d["energy"]["total_mwh"] > 6
+    assert d["heatpump"]["kw"] == 10 and d["energy"]["total_mwh"] > 6  # 20,000 kWh at 2,250 kWh per kW is 8.9 kW
 
 
 def test_trace_follows_the_steps_and_quotes_the_design(engine):
