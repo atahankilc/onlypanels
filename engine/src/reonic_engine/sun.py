@@ -25,6 +25,8 @@ LOOK_M = 160  # shadows from further away are ignored
 LIFT_M = 0.35  # samples sit just off the surface
 PROBE_M = 1.5  # a wall is free where nothing stands this far in front of it
 MIN_FREE_M2 = 10  # a wall with less open area than this is left out
+CONTEXT_M = 26  # neighbours are shown up to this far from the building, fading out
+CONTEXT_STEP_M = 3  # their outlines get a point this often, so the fade runs along long walls
 CLEARANCE_M = 0.5  # what a ray must clear, so a surface does not shade itself by rounding
 DIFFUSE_SHARE = 0.5  # of yearly sunlight on a surface: assumed, roughly right for central Europe
 MONTH_DAY = [21, 52, 80, 111, 141, 172, 202, 233, 264, 294, 325, 355]  # the 21st of each month, day of the year
@@ -172,6 +174,26 @@ def _surroundings(name, centre_x, centre_y):
     return found
 
 
+def _dense(ring):
+    """A closed ring as points at most CONTEXT_STEP_M apart."""
+    out = []
+    for (ax, ay), (bx, by) in zip(ring, ring[1:] + ring[:1]):
+        parts = max(1, math.ceil(math.hypot(bx - ax, by - ay) / CONTEXT_STEP_M))
+        out += [(ax + (bx - ax) * i / parts, ay + (by - ay) * i / parts) for i in range(parts)]
+    return np.array(out)
+
+
+def context(neighbours, own):
+    """Buildings near `own`, a list of (x, y), as outlines whose fade falls from 1 at the building to 0 at CONTEXT_M."""
+    found = []
+    for other, h, ring in neighbours:
+        pts = _dense(ring)
+        gap = np.sqrt(((pts[:, None, :] - own[None, :, :]) ** 2).sum(2)).min(1)
+        if gap.min() < CONTEXT_M:
+            found.append((other, h, pts, np.clip(1 - gap / CONTEXT_M, 0, 1)))
+    return found
+
+
 def surfaces(name, building_id):
     """Every sizeable surface of a building, sampled: sun over the year and hour by hour. None if there is no such building."""
     b = lod2.building(name, building_id)
@@ -182,10 +204,13 @@ def surfaces(name, building_id):
     ox, oy = lod2.TO_UTM.transform(lon, lat)
     origin = (ox, oy)
     heights = Heights(LOOK_M + 60)
+    nearby = []
     for other, h, polys in _surroundings(name, round(ox, -1), round(oy, -1)):
         if other != building_id:
             for rings in polys:
-                heights.add(_metres([[p[0], p[1], 0] for p in rings[0]], origin), h)
+                ring = _metres([[p[0], p[1], 0] for p in rings[0]], origin)
+                heights.add(ring, h)
+                nearby.append((other, h, [(p[0], p[1]) for p in (ring[:-1] if ring[0] == ring[-1] else ring)]))
     for roof in b["roofs"]:
         heights.add(_metres(roof["ring"], origin), None)
 
@@ -238,4 +263,9 @@ def surfaces(name, building_id):
         s["year"] = (base * (DIFFUSE_SHARE + (1 - DIFFUSE_SHARE) * s.pop("share"))).round().astype(int).tolist()
         s["at"] = [round(float(v), 7 if i % 3 < 2 else 2) for i, v in enumerate(s["at"].ravel())]
         s["seen"] = base64.b64encode(np.packbits(s["seen"], axis=1).tobytes()).decode()
-    return {"step": round(step, 2), "suns": [{k: s[k] for k in ("month", "hour", "az", "el", "vector")} for s in suns], "surfaces": out, "sunny": bool(any(yearly))}
+    own = np.concatenate([_dense([(p[0], p[1]) for p in _metres(r["ring"], origin)]) for r in b["roofs"]])
+    around = []
+    for other, h, pts, fade in context(nearby, own):
+        lons, lats = lod2.TO_LONLAT.transform(pts[:, 0] + ox, pts[:, 1] + oy)
+        around.append({"id": other, "h": h, "ring": [[round(a, 7), round(c, 7), round(float(f), 2)] for a, c, f in zip(lons, lats, fade)]})
+    return {"around": around, "step": round(step, 2), "suns": [{k: s[k] for k in ("month", "hour", "az", "el", "vector")} for s in suns], "surfaces": out, "sunny": bool(any(yearly))}

@@ -19,10 +19,10 @@ export function IconButton({ label, variant = "fill", size = "md", className, ty
 }
 
 type Option<T> = { value: T; label: string; disabled?: boolean };
-type SegmentedProps<T> = { label: string; value: T; options: Option<T>[]; onChange: (v: T) => void; variant?: "fill" | "glass" | "dev"; size?: Size };
-export function Segmented<T extends string>({ label, value, options, onChange, variant = "fill", size = "md" }: SegmentedProps<T>) {
+type SegmentedProps<T> = { label: string; value: T; options: Option<T>[]; onChange: (v: T) => void; variant?: "fill" | "glass" | "dev"; size?: Size; wide?: boolean };
+export function Segmented<T extends string>({ label, value, options, onChange, variant = "fill", size = "md", wide }: SegmentedProps<T>) {
   return (
-    <div className={cx("seg", `seg-${variant}`, `seg-${size}`)} role="group" aria-label={label}>
+    <div className={cx("seg", `seg-${variant}`, `seg-${size}`, wide && "seg-wide")} role="group" aria-label={label}>
       {options.map((o) => <button key={o.value} type="button" disabled={o.disabled} className={o.value === value ? "on" : undefined} aria-pressed={o.value === value} onClick={() => onChange(o.value)}>{o.label}</button>)}
     </div>
   );

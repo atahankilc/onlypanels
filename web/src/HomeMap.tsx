@@ -58,8 +58,6 @@ const seenBits = (s: SunSurface, suns: number) => { const raw = atob(s.seen), wi
 const MOVE_MS = 900; // the map rising into its window: --move in styles.css
 // Same curve as --glide, so camera, window and fade are one movement.
 const glide = (t: number) => (t < 0.5 ? 8 * t ** 4 : 1 - (-2 * t + 2) ** 4 / 2);
-const RAYS = 26; // per building
-const RAY_M = 34;
 const RIM_M = 0.45;
 const SKIN_REACH = 3; // cells the colour runs past the samples, to the surface's true edge
 
@@ -267,7 +265,6 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     });
     paintTiles();
     paintRims();
-    sunMark();
   };
 
   const paintRims = () => models.current.forEach((x) => x.skins.forEach((k) => (k.edge.material as THREE.MeshBasicMaterial).color.set(TONES[live.current.dark ? "dark" : "light"].rim)));
@@ -302,31 +299,6 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       }
     });
     map.current?.triggerRepaint();
-  };
-
-  // Parallel rays down to the spots the sun reaches. They belong to the buildings, so they stay put when the map moves.
-  const sunMarks = useRef<THREE.Group[]>([]);
-  const sunMark = () => {
-    sunMarks.current.forEach((g) => { g.parent?.remove(g); empty(g); });
-    sunMarks.current = [];
-    const m = map.current;
-    if (!m || !view.moment || view.layer !== "sun" || view.style !== "beams") { m?.triggerRepaint(); return; }
-    models.current.forEach((model) => {
-      const b = live.current.buildings.find((x) => x.id === model.id), suns = b?.sun?.suns ?? [];
-      const moment = suns.findIndex((x) => x.month === view.moment?.month && x.hour === view.moment.hour);
-      if (!b || moment < 0) return;
-      const v = suns[moment].vector, g = new THREE.Group(), rays: number[] = [];
-      const lit = b.sun?.surfaces.flatMap((x) => { const read = seenBits(x, suns.length); return x.year.flatMap((_, i) => (read(i, moment) && x.n[0] * v[0] + x.n[1] * v[1] + x.n[2] * v[2] > 0.15 ? [[x, i] as const] : [])); }) ?? [];
-      const every = Math.max(1, Math.floor(lit.length / RAYS));
-      for (let k = 0; k < lit.length; k += every) {
-        const [x, i] = lit[k], c = toLocal(b.origin, [x.at[i * 3], x.at[i * 3 + 1]]), z = x.at[i * 3 + 2];
-        rays.push(c[0], c[1], z, c[0] + v[0] * RAY_M, c[1] + v[1] * RAY_M, z + v[2] * RAY_M);
-      }
-      g.add(lines(rays, "#FFD400", 0.4));
-      model.scene.add(g);
-      sunMarks.current.push(g);
-    });
-    m.triggerRepaint();
   };
 
   // A letter marks each building, the same one as in the panel.
@@ -634,7 +606,6 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   }, [buildings]);
   useEffect(placePins, [buildings, step, open]);
   useEffect(paintTiles, [view, chosen, face]);
-  useEffect(sunMark, [view]);
   // Models are built when their sun arrives, so tiles appear without leaving the screen.
   const sunReady = buildings.filter((b) => b.sun).length;
   useEffect(() => { if (step === "review" && shown.current === 1) { buildModels(); setShown(1); } }, [sunReady]);

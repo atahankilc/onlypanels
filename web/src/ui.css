@@ -22,6 +22,7 @@
 .seg { display: inline-flex; gap: 2px; border-radius: 999px; }
 .seg-md { height: var(--btn-md); padding: 3px; } .seg-lg { height: var(--btn-lg); padding: 4px; }
 .seg-fill { background: var(--hud-fill); }
+.seg-wide { display: flex; } .seg-wide button { flex: 1; padding: 0 8px; white-space: nowrap; }
 .seg-glass { border: 1px solid var(--hud-line); background: var(--hud-glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); }
 .seg button { height: 100%; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--hud-ink-2); font: 500 13px var(--font-ui); cursor: pointer; transition: background-color 0.15s, color 0.15s; }
 .seg-lg button { padding: 0 16px; font-size: 14px; }

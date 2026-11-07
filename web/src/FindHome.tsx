@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, suggested, sunOf } from "./api";
+import { Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, allRoofs, sunOf } from "./api";
 import { P2, P3, toLocal } from "./geometry";
 import HomeMap, { Face, Picked, Step, letter } from "./HomeMap";
 import { Close, Photo, Search } from "./icons";
@@ -29,8 +29,8 @@ export default function FindHome({ dark }: { dark: boolean }) {
   const [near, setNear] = useState<string | null>(null); // the building under the pointer in the list
   const [face, setFace] = useState<Face | null>(null); // the roof surface under the pointer, on the map or in the list
   const [look, setLook] = useState<{ id: string } | null>(null);
-  const [view, setView] = useState<View>({ layer: "photo", moment: null, style: "glow" });
-  const [picks, setPicks] = useState<string[] | null>(null); // null: our suggestion, until the user changes something
+  const [view, setView] = useState<View>({ layer: "photo", moment: null });
+  const [picks, setPicks] = useState<string[] | null>(null); // null: every roof, until the user changes something
   const typed = useRef("");
   const asked = useRef("");
 
@@ -65,7 +65,7 @@ export default function FindHome({ dark }: { dark: boolean }) {
   const patch = (id: string, change: Partial<Selected>) => setBuildings((list) => list.map((b) => (b.id === id ? { ...b, ...change } : b)));
   // The row under the pointer goes with it and never reports the pointer leaving, so its highlight is cleared here.
   const remove = (id: string) => { setNear(null); setBuildings((list) => list.filter((b) => b.id !== id)); };
-  const chosen = picks ?? suggested(buildings);
+  const chosen = picks ?? allRoofs(buildings);
   const toggleSurface = (key: string) => setPicks(chosen.includes(key) ? chosen.filter((k) => k !== key) : [...chosen, key]);
 
   /** A click selects a building, a second click lets it go. Its roof loads quietly for the next step. */
@@ -120,7 +120,7 @@ export default function FindHome({ dark }: { dark: boolean }) {
         <div className="panelfoot"><Button variant="solid" size="lg" wide disabled={waiting} onClick={() => setWaiting(true)}>{waiting ? "Getting your roofs ready…" : "Continue"}</Button></div>
       </aside>}
 
-      {step === "review" && <Review buildings={buildings} goTo={goTo} face={face} setFace={setFace} view={view} setView={setView} chosen={chosen} toggle={toggleSurface} suggest={() => setPicks(null)} back={() => { setFace(null); setStep("pick"); }} />}
+      {step === "review" && <Review buildings={buildings} goTo={goTo} face={face} setFace={setFace} view={view} setView={setView} chosen={chosen} toggle={toggleSurface} reset={() => setPicks(null)} back={() => { setFace(null); setStep("pick"); }} />}
     </main>
   );
 }

@@ -1,6 +1,6 @@
 import numpy as np
 
-from reonic_engine.sun import Heights, _sample, directions, inside, newell
+from reonic_engine.sun import CONTEXT_M, Heights, _dense, _sample, context, directions, inside, newell
 
 
 def test_sun_stands_south_at_noon_and_higher_in_summer():
@@ -27,6 +27,16 @@ def test_a_wall_touching_a_neighbour_is_found_only_where_the_neighbour_stands():
     h.add([(0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0)], 6)
     wall = np.array([[-0.2, 5.0, 3.0], [-0.2, 5.0, 9.0]])  # low and above the neighbour's roof
     assert h.against(wall, [1, 0, 0]).tolist() == [True, False]
+
+
+def test_context_keeps_close_buildings_and_fades_them_with_distance():
+    own = _dense([(0, 0), (10, 0), (10, 10), (0, 10)])
+    near = [(10, 0), (60, 0), (60, 10), (10, 10)]
+    far = [(200, 0), (210, 0), (210, 10)]
+    found = context([("near", 8, near), ("far", 8, far)], own)
+    assert [f[0] for f in found] == ["near"]
+    pts, fade = found[0][2], found[0][3]
+    assert fade[0] == 1 and fade[np.argmax(pts[:, 0])] == 0 and CONTEXT_M < 50
 
 
 def test_samples_fill_a_surface_and_face_outward():
