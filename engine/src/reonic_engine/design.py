@@ -125,12 +125,12 @@ class Engine:
             guide = any(n["code"] == "battery_guide" for n in d["review"])
             if kwh and d["battery"]["unsure"]:
                 picks.append(("no_battery", "Without battery", "The battery decision is open: the same system without one.", {**locks, "battery_kwh": 0}))
-            elif kwh and guide and [s for s in sizes if s < kwh]:
-                smaller = max(s for s in sizes if s < kwh)
-                picks.append(("battery_down", "Smaller battery", f"{_num(smaller)} kWh, within the independent guideline more often.", {**locks, "battery_kwh": smaller}))
-            elif kwh and [s for s in sizes if s > kwh]:
-                bigger = min(s for s in sizes if s > kwh)
+            elif kwh and [s for s in sizes if s > kwh + HABIT_KWH - 1e-6] and not guide:
+                bigger = min(s for s in sizes if s > kwh + HABIT_KWH - 1e-6)
                 picks.append(("battery_up", "Larger battery", f"{_num(bigger)} kWh: more of the evening from own power.", {**locks, "battery_kwh": bigger}))
+            elif kwh and guide and [s for s in sizes if s < kwh - HABIT_KWH + 1e-6]:
+                smaller = max(s for s in sizes if s < kwh - HABIT_KWH + 1e-6)  # a real step, not a near-identical size
+                picks.append(("battery_down", "Smaller battery", f"{_num(smaller)} kWh, within the independent guideline more often.", {**locks, "battery_kwh": smaller}))
             elif not kwh and self.habit.get(i["installer"]):
                 usual = self.habit[i["installer"]]
                 picks.append(("battery_add", "With battery", f"{_num(usual)} kWh, the size this installer sells most.", {**locks, "battery_kwh": usual}))
