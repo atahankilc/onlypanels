@@ -74,27 +74,40 @@ const seenBits = (s: SunSurface, suns: number) => { const raw = atob(s.seen), wi
 const MOVE_MS = 900; // the map rising into its window: --move in styles.css
 // Same curve as --glide, so camera, window and fade are one movement.
 const glide = (t: number) => (t < 0.5 ? 8 * t ** 4 : 1 - (-2 * t + 2) ** 4 / 2);
-const STRIPE_M = 2.4;
-// Surfaces that already carry panels: a grid of dark modules.
-const modules = (() => {
-  const c = document.createElement("canvas");
-  c.width = c.height = 64;
-  const x = c.getContext("2d") as CanvasRenderingContext2D;
-  x.fillStyle = "#101A33"; x.fillRect(0, 0, 64, 64);
-  x.strokeStyle = "#B8C4DA"; x.lineWidth = 2;
-  for (const v of [1, 32]) { x.beginPath(); x.moveTo(v, 0); x.lineTo(v, 64); x.moveTo(0, v); x.lineTo(64, v); x.stroke(); }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-})();
-const stripes = (() => {
+// The roof's overlays: what is not chosen lies under a light shade and a fine hatch, so roofs and walls read the same way;
+// panels already there keep their photo under amber; planned modules look like modules.
+const HATCH_M = 0.5; // metres between hatch lines
+const hatch = (veil: string, ink: string) => {
   const c = document.createElement("canvas");
   c.width = c.height = 32;
   const x = c.getContext("2d") as CanvasRenderingContext2D;
-  x.strokeStyle = "rgba(8, 10, 16, 0.72)"; x.lineWidth = 9;
-  for (const o of [-32, 0, 32]) { x.beginPath(); x.moveTo(o - 8, 40); x.lineTo(o + 40, -8); x.stroke(); }
+  x.fillStyle = veil; x.fillRect(0, 0, 32, 32);
+  x.strokeStyle = ink; x.lineWidth = 6;
+  for (const o of [-32, 0, 32]) { x.beginPath(); x.moveTo(o - 4, 36); x.lineTo(o + 36, -4); x.stroke(); }
   const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+};
+const OVERLAY = {
+  dark: { hatch: hatch("rgba(14, 15, 19, 0.42)", "rgba(255, 255, 255, 0.45)"), has: "#FFB547" },
+  light: { hatch: hatch("rgba(241, 240, 236, 0.32)", "rgba(17, 18, 21, 0.5)"), has: "#B85F00" },
+};
+const HAS_TINT = 0.28; // how much amber lies over panels already there
+// Planned modules: dark cells under a thin frame, with a little sheen. Portrait: u across, v along.
+const moduleLook = (() => {
+  const c = document.createElement("canvas"), w = 128, h = 200;
+  c.width = w; c.height = h;
+  const x = c.getContext("2d") as CanvasRenderingContext2D;
+  const g = x.createLinearGradient(0, 0, w, h); g.addColorStop(0, "#21407C"); g.addColorStop(1, "#0A1430");
+  x.fillStyle = g; x.fillRect(0, 0, w, h);
+  x.strokeStyle = "rgba(120, 160, 230, 0.32)"; x.lineWidth = 1.5;
+  for (let i = 1; i < 10; i++) { x.beginPath(); x.moveTo(4, (h / 10) * i); x.lineTo(w - 4, (h / 10) * i); x.stroke(); }
+  for (let i = 1; i < 6; i++) { x.beginPath(); x.moveTo((w / 6) * i, 4); x.lineTo((w / 6) * i, h - 4); x.stroke(); }
+  const s = x.createLinearGradient(0, 0, w * 0.9, h * 0.5); s.addColorStop(0, "rgba(255,255,255,0.2)"); s.addColorStop(0.45, "rgba(255,255,255,0)");
+  x.fillStyle = s; x.fillRect(0, 0, w, h);
+  x.strokeStyle = "rgba(205, 220, 242, 0.85)"; x.lineWidth = 5; x.strokeRect(2.5, 2.5, w - 5, h - 5);
+  const t = new THREE.CanvasTexture(c);
+  t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
   return t;
 })();
 const SKIN_REACH = 3; // cells the colour runs past the samples, to the surface's true edge
@@ -131,29 +144,26 @@ function skinOf(s: SunSurface, poly: Poly, step: number) {
   skin.geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
   const material = skin.material as THREE.MeshBasicMaterial;
   material.map = texture; material.transparent = true; material.depthWrite = false; material.userData.alpha = true;
-  // Stripes lie over what is not chosen, so its colour stays readable between them.
-  const cover = polygon(poly.ring, poly.holes, "#FFFFFF");
-  const spot = cover.geometry.getAttribute("position") as THREE.BufferAttribute, wrap = new Float32Array(spot.count * 2);
-  outline.forEach((p, i) => {
-    wrap[i * 2] = (p[0] * step) / STRIPE_M; wrap[i * 2 + 1] = (p[1] * step) / STRIPE_M;
-    spot.setXYZ(i, spot.getX(i) + s.n[0] * 0.16, spot.getY(i) + s.n[1] * 0.16, spot.getZ(i) + s.n[2] * 0.16);
-  });
-  cover.geometry.setAttribute("uv", new THREE.BufferAttribute(wrap, 2));
-  // Which cells are not marked: the stripes show only there. Same small image as the colour, so it follows the cells.
-  cover.geometry.setAttribute("uv1", new THREE.BufferAttribute(uv, 2));
-  const holes = new Uint8Array(w * h * 4), mask = new THREE.DataTexture(holes, w, h, THREE.RGBAFormat);
-  mask.magFilter = mask.minFilter = THREE.LinearFilter; mask.channel = 1;
-  const look = cover.material as THREE.MeshBasicMaterial;
-  look.map = stripes; look.transparent = true; look.depthWrite = false; look.userData.alpha = true;
-  // Panels already there: dark modules, on the cells that carry them, just above the stripes.
-  const plate = polygon(poly.ring, poly.holes, "#FFFFFF"), slab = plate.geometry.getAttribute("position") as THREE.BufferAttribute;
-  outline.forEach((_, i) => slab.setXYZ(i, slab.getX(i) + s.n[0] * 0.2, slab.getY(i) + s.n[1] * 0.2, slab.getZ(i) + s.n[2] * 0.2));
-  plate.geometry.setAttribute("uv", new THREE.BufferAttribute(wrap, 2));
-  plate.geometry.setAttribute("uv1", new THREE.BufferAttribute(uv, 2));
-  const fitted = new Uint8Array(w * h * 4), fit = new THREE.DataTexture(fitted, w, h, THREE.RGBAFormat);
-  fit.magFilter = fit.minFilter = THREE.LinearFilter; fit.channel = 1;
-  const sheet = plate.material as THREE.MeshBasicMaterial;
-  sheet.map = modules; sheet.transparent = true; sheet.depthWrite = false; sheet.userData.alpha = true;
+  // A copy of the surface lifted along its normal, carrying the cell image on uv1 for the per-cell masks.
+  const lifted = (by: number, material: THREE.MeshBasicMaterial) => {
+    const m = polygon(poly.ring, poly.holes, "#FFFFFF"), at = m.geometry.getAttribute("position") as THREE.BufferAttribute;
+    outline.forEach((_, i) => at.setXYZ(i, at.getX(i) + s.n[0] * by, at.getY(i) + s.n[1] * by, at.getZ(i) + s.n[2] * by));
+    m.geometry.setAttribute("uv1", new THREE.BufferAttribute(uv, 2));
+    (m.material as THREE.Material).dispose(); m.material = material;
+    return m;
+  };
+  const cellMask = () => { const px = new Uint8Array(w * h * 4), t = new THREE.DataTexture(px, w, h, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.LinearFilter; t.channel = 1; return [px, t] as const; };
+  // What is not chosen goes grey, only on the cells that are not marked: the mask follows the cells.
+  const [holes, mask] = cellMask();
+  const hatched = new THREE.MeshBasicMaterial({ map: OVERLAY.dark.hatch, side: THREE.DoubleSide, transparent: true, depthWrite: false });
+  hatched.userData.alpha = true;
+  const cover = lifted(0.16, hatched);
+  cover.geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(outline.flatMap((p) => [(p[0] * step) / HATCH_M, (p[1] * step) / HATCH_M])), 2));
+  // Panels already there: their photo under a faint amber, on the cells that carry them.
+  const [fitted, fit] = cellMask();
+  const amber = new THREE.MeshBasicMaterial({ color: OVERLAY.dark.has, side: THREE.DoubleSide, transparent: true, depthWrite: false });
+  amber.userData.alpha = true; amber.userData.opacity = HAS_TINT;
+  const plate = lifted(0.2, amber);
   plate.visible = false;
   // Each cell's middle in the model, for drawing: the outline maps the cell grid onto the surface's plane.
   const corners = [poly.ring, ...poly.holes].flat(), q0 = outline[0];
@@ -380,13 +390,13 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       const faced = (m: THREE.Mesh, poly: number) => { m.userData = { face: { building: b.id, poly }, color: (m.material as THREE.MeshBasicMaterial).color.getHex() }; g.add(m); return m; };
       walls.forEach((p, i) => { faced(polygon(p.ring, p.holes, "#FFFFFF"), roofs.length + i).userData.part = "wall"; });
       const roofMeshes = roofs.map((p, poly) => { const m = faced(polygon(p.ring, p.holes, "#FFFFFF"), poly); m.userData.part = "roof"; return m; });
-      roofPhoto(b, roofMeshes, () => map.current?.triggerRepaint());
       const line = lines(edgesOf([...walls, ...roofs]), COLORS.edge, 0.5);
       line.name = "outline";
       (line.material as THREE.Material).userData.opacity = 0.5;
       g.add(line);
       const skins = (b.sun?.surfaces ?? []).map((x) => skinOf(x, [...roofs, ...walls][polyOf(b, x)], b.sun?.step ?? 1));
       skins.forEach((k) => g.add(k.skin, k.cover, k.plate));
+      roofPhoto(b, roofMeshes, () => map.current?.triggerRepaint());
       const ghosts = ghostsOf(b, new Set(live.current.buildings.map((x) => x.id)));
       ghosts.renderOrder = -1;
       g.add(ghosts);
@@ -407,19 +417,25 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       const old = g.getObjectByName("modules");
       if (old) { g.remove(old); empty(old as THREE.Group); }
       const out = new THREE.Group(); out.name = "modules";
-      const points: P3[] = [], faces: number[] = [], edges: number[] = [];
+      const points: P3[] = [], faces: number[] = [], edges: number[] = [], uv: number[] = [];
       for (const { s, poly } of x.surfaces) {
         const count = live.current.panels?.[surfaceKey(b, s)] ?? 0;
         if (!count || s.kind !== "roof") continue;
         for (const q of fit(x.polys[poly], s.n).slice(0, count)) {
           const k = points.length; points.push(...q); faces.push(k, k + 1, k + 2, k, k + 2, k + 3);
           q.forEach((p, i) => edges.push(...p, ...q[(i + 1) % 4]));
+          // The module image is upright: a module lying on its side turns it.
+          const along = (i: number) => Math.hypot(...([0, 1, 2].map((d) => q[i][d] - q[0][d])) as P3);
+          uv.push(...(along(1) <= along(3) ? [0, 0, 1, 0, 1, 1, 0, 1] : [0, 0, 0, 1, 1, 1, 1, 0]));
         }
       }
       if (points.length) {
-        out.add(mesh(points, faces, "#0B1A36"));
-        out.add(lines(edges, "#9FB8DC", 0.75));
-        out.traverse((o) => { const mat = (o as THREE.Mesh).material as THREE.Material | undefined; if (mat) { mat.userData.opacity = o instanceof THREE.LineSegments ? 0.75 : 1; mat.transparent = shown.current < 1; mat.opacity = shown.current * mat.userData.opacity; } });
+        const panels = mesh(points, faces, "#FFFFFF");
+        panels.geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+        (panels.material as THREE.MeshBasicMaterial).map = moduleLook;
+        out.add(panels);
+        out.add(lines(edges, "#C9D6EA", 0.5));
+        out.traverse((o) => { const mat = (o as THREE.Mesh).material as THREE.Material | undefined; if (mat) { mat.userData.opacity = o instanceof THREE.LineSegments ? 0.5 : 1; mat.transparent = shown.current < 1; mat.opacity = shown.current * mat.userData.opacity; } });
       }
       g.add(out);
     });
@@ -452,13 +468,14 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     const picked = new Set(chosen), hot = face;
     const low = SUN_LOW, high = SUN_HIGH; // one fixed scale, so a surface keeps its colour whatever else is selected
     const dim = new THREE.Color("#0F1013"), mark = new THREE.Color("#FFFFFF");
+    const look = OVERLAY[live.current.dark ? "dark" : "light"];
     models.current.forEach((m) => {
       const b = live.current.buildings.find((x) => x.id === m.id);
       if (!b?.sun) return;
       const suns = b.sun.suns, moment = view.moment ? suns.findIndex((x) => x.month === view.moment?.month && x.hour === view.moment.hour) : -1;
       for (const { s: x, pixels, source, texture, cover, plate, holes, mask, fitted, fit } of m.skins) {
         const key = surfaceKey(b, x), count = x.year.length;
-        // Cells with panels show modules; free cells not chosen show stripes; chosen cells look as they are. Without a drawing a surface is all in or all out.
+        // Cells with panels keep their photo under amber; free cells not chosen are hatched; chosen cells look as they are. Without a drawing a surface is all in or all out.
         const full = new Set(x.year.map((_, n) => n)), none = new Set<number>();
         const has = taken ? new Set(taken[key] ?? []) : installed.includes(key) ? full : none;
         const on = marked ? new Set(marked[key] ?? []) : picked.has(key) && !has.size ? full : none;
@@ -472,6 +489,9 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
         };
         layer(plate, (n) => has.has(n), fitted, fit);
         layer(cover, (n) => !has.has(n) && !on.has(n), holes, mask);
+        (plate.material as THREE.MeshBasicMaterial).color.set(look.has);
+        const veil = cover.material as THREE.MeshBasicMaterial;
+        if (veil.map !== look.hatch) { veil.map = look.hatch; veil.needsUpdate = true; }
         const over = hot?.building === b.id && hot.poly === polyOf(b, x), read = seenBits(x, suns.length);
         const rgba = x.year.map((value, i) => {
           let c = dim, alpha = 0;
@@ -945,6 +965,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     m.setPaintProperty("limit-text", "text-halo-color", tones.land);
     edgeLook.current.color.set(tones.edge);
     paintGhosts();
+    paintTiles();
     m.triggerRepaint();
   }, [dark]);
   // Roof photos load while the user is still picking, so nothing pops in during the move.
