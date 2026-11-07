@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Answers, NO_ANSWERS, Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, chosenKeys, homeParts, homesIn, NO_CHOICE, Choice, sunOf } from "./api";
+import { Answers, NO_ANSWERS, Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, chosenKeys, homeParts, homesIn, NO_CHOICE, Choice, sunOf, markedOf, markedM2, paintChoice, panelsOf, panelsM2 } from "./api";
 import { P2, P3, toLocal } from "./geometry";
 import { Handoff } from "./plan";
-import HomeMap, { Face, Picked, Step, letter } from "./HomeMap";
-import { Close, Photo, Search } from "./icons";
+import HomeMap, { Face, Picked, Step, Tool, letter } from "./HomeMap";
+import { Close, Photo, Search, Undo } from "./icons";
 import Review, { Stage } from "./Review";
+import SunView from "./SunView";
 import { Button, IconButton } from "./ui";
 
-const PHOTO: View = { layer: "photo", moment: null }; // the homeowner sees the roof, the sun views are the planner's
+const PHOTO: View = { layer: "photo", moment: null }; // every page but the roof page shows the photo
 const short = (label: string) => label.split(", ").slice(0, 2).join(", ");
 
 function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real {
@@ -33,9 +34,14 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
   const [face, setFace] = useState<Face | null>(null); // the roof surface under the pointer, on the map or in the list
   const [look, setLook] = useState<{ id: string } | null>(null);
   const [stage, setStage] = useState<Stage>("roof");
+  const [view, setView] = useState<View>(PHOTO); // what the roof page paints on the surfaces: photo or sunlight
   useEffect(() => { if (stage === "sent") onSend({ buildings, answers, choice }); }, [stage]); // what the homeowner produced goes to the planner
   const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
   const [choice, setChoice] = useState<Choice>(NO_CHOICE);
+  const [tool, setTool] = useState<Tool | null>(null); // no tool: the mouse moves the map
+  const [undo, setUndo] = useState<Choice[]>([]); // one step per stroke
+  const now = useRef(choice);
+  now.current = choice;
   const typed = useRef("");
   const asked = useRef("");
 
@@ -71,9 +77,17 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
   // The row under the pointer goes with it and never reports the pointer leaving, so its highlight is cleared here.
   const remove = (home: string) => { setNear(null); setBuildings((list) => list.filter((b) => b.home !== home)); };
   const chosen = chosenKeys(buildings, choice);
-  const flip = (list: string[], key: string) => (list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
-  const toggleSurface = (key: string) => setChoice((c) => (key.includes("|roof") ? { ...c, dropped: flip(c.dropped, key) } : { ...c, added: flip(c.added, key) }));
-  const toggleInstalled = (key: string) => setChoice((c) => ({ ...c, installed: flip(c.installed, key) }));
+  const marked = markedOf(buildings, choice), taken = panelsOf(buildings, choice);
+  const drawn = stage === "solar" ? "panels" : "cells"; // the solar page draws where panels already are, the roof page the homeowner's priority
+  const paint = (cells: Record<string, number[]>, on: boolean, start: boolean) => {
+    if (start) setUndo((u) => [...u.slice(-40), now.current]);
+    setChoice((c) => paintChoice(buildings, c, cells, on, drawn));
+  };
+  const startOver = () => { setUndo((u) => [...u, choice]); setChoice({ ...choice, [drawn]: {} }); };
+  const stepBack = () => { const last = undo[undo.length - 1]; if (!last) return; setUndo(undo.slice(0, -1)); setChoice(last); };
+  const drawing = stage === "roof" || (stage === "solar" && !!answers.has_solar);
+  useEffect(() => setTool(null), [stage]); // each page starts with the mouse moving the map
+  useEffect(() => { if (answers.has_solar === false && Object.keys(choice.panels).length) setChoice((c) => ({ ...c, panels: {} })); }, [answers.has_solar]); // no solar: no panels on the roof
   const retrySun = () => buildings.filter((b) => b.sun === null).forEach((b) => { patch(b.id, { sun: undefined }); sunOf(b.square, b.id).then((sun) => patch(b.id, { sun })).catch(() => patch(b.id, { sun: null })); });
 
   /** A click selects a building, a second click lets it go. Its roof loads quietly for the next step. */
@@ -101,7 +115,14 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
   return (
     <main className={`stage ${step}`}>
       <HomeMap dark={dark} buildings={buildings} step={step} focus={focus} aerial={aerial} onPick={step === "pick" ? toggle : undefined}
-        open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={PHOTO} chosen={step === "review" ? chosen : []} onToggle={stage === "panels" ? toggleInstalled : toggleSurface} editing={stage === "roof" || stage === "panels"} installed={step === "review" ? choice.installed : []} />
+        open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={step === "review" && stage === "roof" ? view : PHOTO} chosen={step === "review" ? chosen : []} onToggle={() => undefined} editing={drawing && !!tool} installed={[]}
+        marked={step === "review" ? marked : undefined} taken={step === "review" ? taken : undefined} editsOn={drawn === "panels" ? taken : marked} tool={drawing ? tool ?? undefined : undefined} onPaint={drawing ? paint : undefined} />
+      {step === "review" && drawing && !move && <div className="tools">
+        <Button variant="glass" size="lg" aria-pressed={tool === "surface"} onClick={() => setTool(tool === "surface" ? null : "surface")}>Whole surface</Button>
+        <Button variant="glass" size="lg" aria-pressed={tool === "draw"} onClick={() => setTool(tool === "draw" ? null : "draw")}>Draw</Button>
+        <IconButton variant="glass" size="lg" label="Undo" disabled={!undo.length} onClick={stepBack}><Undo /></IconButton>
+      </div>}
+      {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
       {step === "pick" && <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</Button>}
       {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
@@ -133,7 +154,7 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
       </aside>}
       </Curtain>}
 
-      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && setMove(null)}><Review stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} goTo={goTo} face={face} setFace={setFace} chosen={chosen} toggle={toggleSurface} changed={choice.dropped.length + choice.added.length > 0} reset={() => setChoice({ ...choice, dropped: [], added: [] })} installed={choice.installed} toggleInstalled={toggleInstalled} retrySun={retrySun} back={() => { setFace(null); setStep("pick"); setMove("out"); }} /></div>}
+      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && setMove(null)}><Review stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={() => { setFace(null); setStep("pick"); setMove("out"); }} /></div>}
     </main>
   );
 }

@@ -52,7 +52,7 @@ export default function Planner({ dark, handoff }: { dark: boolean; handoff?: Ha
   useEffect(() => {
     loadHome(SAMPLE.square, SAMPLE.home).then((buildings) => setRequests((l) => [...l.filter((r) => r.id !== "sample"), {
       id: "sample", label: buildings[0].label, from: "Phone call", buildings, status: "draft", overrides: {}, off: [], installed: [], walls: [], existing: { kwp: null, year: null, battery_kwh: null },
-      inputs: { installer: "2a8ba8e2", demand_kwh: 4200, price_ct_kwh: 32, heating: "Gas", heat_kwh: null, has_solar: false, has_storage: false, ev: true, ev_km: 11300 },
+      inputs: { installer: "2a8ba8e2", demand_kwh: 4200, price_ct_kwh: 32, heating: "Gas", heat_kwh: null, has_solar: false, has_storage: false, ev: false, ev_km: 11300 },
       sources: { demand_kwh: "customer", price_ct_kwh: "assumed", heating: "customer", heat_kwh: "assumed", ev: "customer", ev_km: "assumed", has_solar: "customer", has_storage: "customer" },
     }])).catch(() => undefined);
   }, []);

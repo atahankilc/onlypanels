@@ -106,6 +106,22 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .curtain.old.back { animation: curtain-old-back var(--move) var(--glide); }
 @keyframes curtain-new-back { from { clip-path: inset(0 calc(100% - var(--left, 424px)) 0 0); } to { clip-path: inset(0 100% 0 0); } }
 @keyframes curtain-old-back { from { clip-path: inset(0 0 0 var(--left, 424px)); } to { clip-path: inset(0 0 0 0); } }
+/* The drawing tools sit on the map, centred over it, like an editor's toolbar. */
+.tools { position: absolute; z-index: 2; top: 24px; left: calc(var(--left, 424px) + (100% - var(--left, 424px)) / 2); transform: translateX(-50%); display: flex; gap: 8px; animation: rise 0.35s var(--ease); }
+/* The shape being drawn on the roof: white lines with a dark edge, so they read on any photo. */
+.draft { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.draft .line, .draft .next { fill: none; stroke: #FFFFFF; stroke-width: 2.5; stroke-linejoin: round; filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.8)); }
+.draft .next { stroke-dasharray: 6 5; opacity: 0.85; }
+.draft .pt { fill: #FFFFFF; stroke: #0F1013; stroke-width: 2; }
+.draft .pt.end { fill: var(--hud-route, #0A84FF); stroke: #FFFFFF; }
+.draft .aim { fill: none; stroke: #FFFFFF; stroke-width: 2; }
+.draft .aim.on { fill: #FFFFFF; }
+.quiz .marked { margin: 18px 0 4px; color: var(--hud-ink-2); }
+.quiz .marked b { color: var(--hud-ink); font: 650 28px/1 var(--font-ui); letter-spacing: -0.015em; }
+/* The map's sun choice: top right of the map window, apart from the questions. */
+.sunview { position: absolute; z-index: 2; top: 72px; right: 24px; width: 340px; display: grid; gap: 8px; animation: rise 0.35s var(--ease); }
+.sunbox { display: grid; gap: 14px; padding: 14px 16px; border: 1px solid var(--hud-line); border-radius: 16px; background: var(--hud-glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); }
+.sunview .sunrow { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .maphint { position: absolute; z-index: 2; left: calc(var(--left, 424px) + 16px); bottom: 20px; margin: 0; color: var(--hud-ink-2); font-size: 12px; pointer-events: none; }
 .sunlight { position: absolute; z-index: 1; inset: 0; overflow: hidden; pointer-events: none; mix-blend-mode: screen; opacity: var(--power); transition: opacity 0.4s; animation: rise 0.4s var(--ease); background: linear-gradient(calc(var(--turn) + 180deg), var(--sun), transparent 62%); }
 .request { color: var(--hud-warn); }
@@ -126,6 +142,15 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .answers .field { margin: 0; }
 .answers .control { height: var(--btn-lg); font-size: 16px; }
 .answers .chosen { margin: 0; }
+/* What an answer opens, on the same page, under it. */
+.quiz .more { display: grid; gap: 10px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--hud-line); animation: rise 0.35s var(--ease); }
+.quiz .more h2 { margin: 6px 0 0; font: 600 16px/1.3 var(--font-ui); color: var(--hud-ink); }
+.quiz .more p { margin: 0; }
+.quiz .more .answers { margin-top: 0; }
+.quiz .more .answers.row { grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); }
+.quiz .more .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.quiz .more .field { margin: 0; }
+.quiz .more .control { height: var(--btn-lg); font-size: 16px; }
 .quizfoot { display: flex; justify-content: space-between; margin-top: 14px; }
 .textlink { padding: 8px 4px; border: 0; background: none; color: var(--hud-ink-2); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .quiz .sunbar { padding: 8px 0 10px; }
@@ -180,6 +205,8 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
   .mapctl { bottom: auto; top: 116px; right: 10px; }
   .map-aerial { right: auto; left: 10px; bottom: 90px; }
   .mapnote, .maphint { display: none; }
+  .tools { top: 12px; left: 50%; }
+  .sunview { top: 66px; right: 12px; left: 12px; width: auto; }
   .logo h1 { display: none; }
   .stage.review .map3d { clip-path: inset(0 0 46dvh 0 round 0 0 24px 24px); }
   .stage.review .sunlight { inset: 0 0 46dvh 0; border-radius: 0 0 24px 24px; }

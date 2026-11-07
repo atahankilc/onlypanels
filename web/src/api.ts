@@ -22,13 +22,44 @@ export const polyOf = (b: Selected, s: SunSurface) => (s.kind === "roof" ? s.ind
 export type Answers = { demand_kwh: number | null; price_ct_kwh: number; has_solar: boolean | null; solar_kwp: number | null; solar_year: number | null; has_storage: boolean | null; battery_kwh: number | null; heating: string | null; heat_kwh: number | null; wants_hp: boolean | null; ev: boolean | null; ev_planned: boolean; ev_km: number | null; use_source: "band" | "exact" | "people" | null };
 export const NO_ANSWERS: Answers = { demand_kwh: null, price_ct_kwh: 32, has_solar: null, solar_kwp: null, solar_year: null, has_storage: null, battery_kwh: null, heating: null, heat_kwh: null, wants_hp: null, ev: null, ev_planned: false, ev_km: null, use_source: null };
 export type View = { layer: "photo" | "sun"; moment: { month: number; hour: number } | null };
-/** Every free roof starts chosen: we have no measure of what a surface yields once obstacles are known, so nothing is ruled out for the user. Changes are kept as changes, so a building added later starts the same way. */
-export type Choice = { dropped: string[]; added: string[]; installed: string[] };
-export const NO_CHOICE: Choice = { dropped: [], added: [], installed: [] };
-export const chosenKeys = (buildings: Selected[], c: Choice) => buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => {
+/** Every free roof starts wholly chosen, walls start free: we have no measure of what a surface yields once obstacles are known, so nothing is ruled out for the user.
+ *  What the homeowner draws is kept per surface as the sample cells they marked; a surface not listed is as it started, so a building added later starts the same way.
+ *  The marked area is the homeowner's priority, not a limit: the installer may use less or more. */
+/** `panels` holds the cells that already carry panels, drawn the same way; they are never marked. */
+export type Choice = { cells: Record<string, number[]>; panels: Record<string, number[]> };
+export const NO_CHOICE: Choice = { cells: {}, panels: {} };
+const allCells = (s: SunSurface) => s.year.map((_, n) => n);
+/** The cells marked on one surface. */
+export const cellsOf = (b: Selected, s: SunSurface, c: Choice) => {
   const key = surfaceKey(b, s);
-  return !c.installed.includes(key) && (s.kind === "roof" ? !c.dropped.includes(key) : c.added.includes(key));
-}).map((s) => surfaceKey(b, s)));
+  const taken = new Set(c.panels[key] ?? []), cells = c.cells[key] ?? (s.kind === "roof" ? allCells(s) : []);
+  return taken.size ? cells.filter((n) => !taken.has(n)) : cells;
+};
+/** Every surface's cells that already carry panels. */
+export const panelsOf = (buildings: Selected[], c: Choice) => Object.fromEntries(buildings.flatMap((b) => (b.sun?.surfaces ?? []).map((s) => [surfaceKey(b, s), c.panels[surfaceKey(b, s)] ?? []])));
+/** The area that already carries panels, in m². */
+export const panelsM2 = (buildings: Selected[], c: Choice) => buildings.reduce((sum, b) => sum + (b.sun?.surfaces ?? []).reduce((t, s) => t + (s.m2 * (c.panels[surfaceKey(b, s)]?.length ?? 0)) / Math.max(1, s.year.length), 0), 0);
+/** For the planner, who works by whole surface: a surface at least half covered with panels counts as taken. */
+export const installedKeys = (buildings: Selected[], c: Choice) => buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => (c.panels[surfaceKey(b, s)]?.length ?? 0) * 2 >= s.year.length).map((s) => surfaceKey(b, s)));
+/** Every surface's marked cells, by surface. */
+export const markedOf = (buildings: Selected[], c: Choice) => Object.fromEntries(buildings.flatMap((b) => (b.sun?.surfaces ?? []).map((s) => [surfaceKey(b, s), cellsOf(b, s, c)])));
+export const chosenKeys = (buildings: Selected[], c: Choice) => buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => cellsOf(b, s, c).length > 0).map((s) => surfaceKey(b, s)));
+/** The marked area in m². A surface's area is shared evenly over its cells. */
+export const markedM2 = (buildings: Selected[], c: Choice) => buildings.reduce((sum, b) => sum + (b.sun?.surfaces ?? []).reduce((t, s) => t + (s.m2 * cellsOf(b, s, c).length) / Math.max(1, s.year.length), 0), 0);
+/** Marks cells on, or takes them off: the homeowner's priority, or where panels already are. A cell with panels cannot be marked. */
+export const paintChoice = (buildings: Selected[], c: Choice, cells: Record<string, number[]>, on: boolean, layer: "cells" | "panels" = "cells"): Choice => {
+  const next = { ...c[layer] };
+  for (const b of buildings) for (const s of b.sun?.surfaces ?? []) {
+    const key = surfaceKey(b, s), change = cells[key];
+    if (!change?.length) continue;
+    const taken = new Set(c.panels[key] ?? []), set = new Set(layer === "panels" ? taken : cellsOf(b, s, c));
+    change.forEach((n) => (on && (layer === "panels" || !taken.has(n)) ? set.add(n) : set.delete(n)));
+    // Unmarked cells under panels stay as they were, so taking panels away gives the area back.
+    if (layer === "cells") (c.cells[key] ?? (s.kind === "roof" ? allCells(s) : [])).forEach((n) => { if (taken.has(n)) set.add(n); });
+    next[key] = [...set].sort((x, y) => x - y);
+  }
+  return { ...c, [layer]: next };
+};
 
 const get = <T,>(url: string): Promise<T> => fetch(url).then((r) => { if (!r.ok) throw new Error(); return r.json(); });
 export const searchPlace = (q: string) => get<Place[]>(`/api/site/search?q=${encodeURIComponent(q)}`);

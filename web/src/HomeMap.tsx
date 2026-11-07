@@ -50,7 +50,12 @@ type Props = {
   onFace: (f: Face | null) => void; onOpen: (id: string) => void;
   view: View; chosen: string[]; onToggle: (key: string) => void; dark: boolean; editing: boolean; installed: string[];
   panels?: Record<string, number>; panelW?: number; turn?: number; onReady?: () => void; // the planner's desk
+  // editsOn: the cells the tool changes now (priority or existing panels), to tell adding from taking out.
+  // The homeowner's drawing: the cells marked on each surface, the tool in hand, and each stroke's cells. Without them a click toggles a whole surface.
+  marked?: Record<string, number[]>; taken?: Record<string, number[]>; editsOn?: Record<string, number[]>; tool?: Tool; onPaint?: (cells: Record<string, number[]>, on: boolean, start: boolean) => void;
 };
+export type Tool = "surface" | "draw";
+const SNAP_PX = 10; // a click this close to a point, corner or edge lands on it
 
 // What changes with the theme on the map itself. Everything else comes from the base style.
 const TONES = {
@@ -134,9 +139,34 @@ function skinOf(s: SunSurface, poly: Poly, step: number) {
     spot.setXYZ(i, spot.getX(i) + s.n[0] * 0.16, spot.getY(i) + s.n[1] * 0.16, spot.getZ(i) + s.n[2] * 0.16);
   });
   cover.geometry.setAttribute("uv", new THREE.BufferAttribute(wrap, 2));
+  // Which cells are not marked: the stripes show only there. Same small image as the colour, so it follows the cells.
+  cover.geometry.setAttribute("uv1", new THREE.BufferAttribute(uv, 2));
+  const holes = new Uint8Array(w * h * 4), mask = new THREE.DataTexture(holes, w, h, THREE.RGBAFormat);
+  mask.magFilter = mask.minFilter = THREE.LinearFilter; mask.channel = 1;
   const look = cover.material as THREE.MeshBasicMaterial;
   look.map = stripes; look.transparent = true; look.depthWrite = false; look.userData.alpha = true;
-  return { s, skin, cover, pixels, source, texture };
+  // Panels already there: dark modules, on the cells that carry them, just above the stripes.
+  const plate = polygon(poly.ring, poly.holes, "#FFFFFF"), slab = plate.geometry.getAttribute("position") as THREE.BufferAttribute;
+  outline.forEach((_, i) => slab.setXYZ(i, slab.getX(i) + s.n[0] * 0.2, slab.getY(i) + s.n[1] * 0.2, slab.getZ(i) + s.n[2] * 0.2));
+  plate.geometry.setAttribute("uv", new THREE.BufferAttribute(wrap, 2));
+  plate.geometry.setAttribute("uv1", new THREE.BufferAttribute(uv, 2));
+  const fitted = new Uint8Array(w * h * 4), fit = new THREE.DataTexture(fitted, w, h, THREE.RGBAFormat);
+  fit.magFilter = fit.minFilter = THREE.LinearFilter; fit.channel = 1;
+  const sheet = plate.material as THREE.MeshBasicMaterial;
+  sheet.map = modules; sheet.transparent = true; sheet.depthWrite = false; sheet.userData.alpha = true;
+  plate.visible = false;
+  // Each cell's middle in the model, for drawing: the outline maps the cell grid onto the surface's plane.
+  const corners = [poly.ring, ...poly.holes].flat(), q0 = outline[0];
+  const far = outline.reduce((k, p, i) => (Math.hypot(p[0] - q0[0], p[1] - q0[1]) > Math.hypot(outline[k][0] - q0[0], outline[k][1] - q0[1]) ? i : k), 0);
+  const span = (i: number) => Math.abs((outline[far][0] - q0[0]) * (outline[i][1] - q0[1]) - (outline[far][1] - q0[1]) * (outline[i][0] - q0[0]));
+  const side = outline.reduce((k, _, i) => (span(i) > span(k) ? i : k), 0);
+  const [P0, P1, P2] = [corners[0], corners[far], corners[side]], [a1, b1, a2, b2] = [outline[far][0] - q0[0], outline[far][1] - q0[1], outline[side][0] - q0[0], outline[side][1] - q0[1]];
+  const det = a1 * b2 - a2 * b1 || 1, centres = new Float32Array(s.year.length * 3);
+  s.year.forEach((_, n) => {
+    const x = s.cells[n * 2] - q0[0], y = s.cells[n * 2 + 1] - q0[1], al = (x * b2 - y * a2) / det, be = (a1 * y - b1 * x) / det;
+    for (let k = 0; k < 3; k++) centres[n * 3 + k] = P0[k] + al * (P1[k] - P0[k]) + be * (P2[k] - P0[k]) + s.n[k] * 0.16;
+  });
+  return { s, skin, cover, plate, pixels, source, texture, holes, mask, fitted, fit, centres, plane: [P0, P1, P2] as P3[] };
 }
 
 /** The buildings next to one, as plain blocks fading out with distance, so it stands in its street and not alone. */
@@ -268,7 +298,7 @@ const edgeFade = (zoom: number) => {
 type OnMap = { scene: THREE.Scene; at: P2; done: boolean };
 type Spot = { id: string; square: string };
 
-export default function HomeMap({ buildings, step, focus, aerial, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, dark, editing, installed, panels, panelW, turn, onReady }: Props) {
+export default function HomeMap({ buildings, step, focus, aerial, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, dark, editing, installed, panels, panelW, turn, onReady, marked, taken, editsOn, tool, onPaint }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const models = useRef<{ scene: THREE.Scene; at: P2; id: string; polys: Poly[]; surfaces: { s: SunSurface; poly: number }[]; skins: ReturnType<typeof skinOf>[]; ghosts: THREE.Mesh }[]>([]); // one per building, each around its own origin
@@ -287,8 +317,10 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   const [bearing, setBearing] = useState(0);
   const spot = useRef<maplibregl.Marker | null>(null);
   const pins = useRef<maplibregl.Marker[]>([]);
-  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, dark, editing, panels, panelW, turn, onReady });
-  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, dark, editing, panels, panelW, turn, onReady };
+  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, dark, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint });
+  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, dark, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint };
+  const clearDraft = useRef(() => {});
+  const drawing = () => live.current.step === "review" && live.current.editing && !!live.current.onPaint && !!live.current.tool;
 
   const locateMe = () => navigator.geolocation?.getCurrentPosition((p) => {
     const m = map.current, at: P2 = [p.coords.longitude, p.coords.latitude];
@@ -354,7 +386,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       (line.material as THREE.Material).userData.opacity = 0.5;
       g.add(line);
       const skins = (b.sun?.surfaces ?? []).map((x) => skinOf(x, [...roofs, ...walls][polyOf(b, x)], b.sun?.step ?? 1));
-      skins.forEach((k) => g.add(k.skin, k.cover));
+      skins.forEach((k) => g.add(k.skin, k.cover, k.plate));
       const ghosts = ghostsOf(b, new Set(live.current.buildings.map((x) => x.id)));
       ghosts.renderOrder = -1;
       g.add(ghosts);
@@ -424,11 +456,22 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       const b = live.current.buildings.find((x) => x.id === m.id);
       if (!b?.sun) return;
       const suns = b.sun.suns, moment = view.moment ? suns.findIndex((x) => x.month === view.moment?.month && x.hour === view.moment.hour) : -1;
-      for (const { s: x, pixels, source, texture, cover } of m.skins) {
-        const has = installed.includes(surfaceKey(b, x));
-        cover.visible = has || !picked.has(surfaceKey(b, x)); // only what is not chosen is marked; chosen surfaces look as they are
-        const look = cover.material as THREE.MeshBasicMaterial;
-        if (look.map !== (has ? modules : stripes)) { look.map = has ? modules : stripes; look.needsUpdate = true; }
+      for (const { s: x, pixels, source, texture, cover, plate, holes, mask, fitted, fit } of m.skins) {
+        const key = surfaceKey(b, x), count = x.year.length;
+        // Cells with panels show modules; free cells not chosen show stripes; chosen cells look as they are. Without a drawing a surface is all in or all out.
+        const full = new Set(x.year.map((_, n) => n)), none = new Set<number>();
+        const has = taken ? new Set(taken[key] ?? []) : installed.includes(key) ? full : none;
+        const on = marked ? new Set(marked[key] ?? []) : picked.has(key) && !has.size ? full : none;
+        const layer = (mesh: THREE.Mesh, show: (n: number) => boolean, pixels: Uint8Array, texture: THREE.DataTexture) => {
+          let shown = 0;
+          for (let n = 0; n < count; n++) if (show(n)) shown++;
+          mesh.visible = shown > 0;
+          const material = mesh.material as THREE.MeshBasicMaterial, alphaMap = shown > 0 && shown < count ? texture : null;
+          if (material.alphaMap !== alphaMap) { material.alphaMap = alphaMap; material.needsUpdate = true; }
+          if (alphaMap) { source.forEach((n, px) => { pixels[px * 4 + 1] = n >= 0 && show(n) ? 255 : 0; }); texture.needsUpdate = true; }
+        };
+        layer(plate, (n) => has.has(n), fitted, fit);
+        layer(cover, (n) => !has.has(n) && !on.has(n), holes, mask);
         const over = hot?.building === b.id && hot.poly === polyOf(b, x), read = seenBits(x, suns.length);
         const rgba = x.year.map((value, i) => {
           let c = dim, alpha = 0;
@@ -449,13 +492,13 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     map.current?.triggerRepaint();
   };
 
-  // A letter marks each building, the same one as in the panel.
+  // While picking, a letter marks each building, the same one as in the panel. Once chosen, the buildings are one home: no letters.
   const liftPins = useRef(() => {});
   const placePins = () => {
     const m = map.current;
     pins.current.forEach((x) => x.remove());
     pins.current = [];
-    if (!m || !ready.current) return;
+    if (!m || !ready.current || step === "review") return;
     const pin = (text: string, at: P2, z: number, click: () => void) => {
       const tag = document.createElement("button");
       tag.type = "button";
@@ -677,6 +720,159 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       return (best as { face: Face } | null)?.face ?? null;
     };
 
+    const W = () => m.getContainer().clientWidth, H = () => m.getContainer().clientHeight;
+    const seenOf = (id: string) => models.current.find((x) => x.id === id)?.scene.userData.seen as THREE.Matrix4 | null | undefined;
+    const facing = (seen: THREE.Matrix4, q: P3, n: P3) => new THREE.Vector3(q[0] + n[0], q[1] + n[1], q[2] + n[2]).applyMatrix4(seen).z < new THREE.Vector3(q[0], q[1], q[2]).applyMatrix4(seen).z;
+    const clip = (seen: THREE.Matrix4, q: P3) => { const c = new THREE.Vector4(q[0], q[1], q[2], 1).applyMatrix4(seen); return { x: (c.x / c.w + 1) / 2 * W(), y: (1 - c.y / c.w) / 2 * H(), w: c.w }; };
+    const onScreen = (id: string, q: P3): P2 | null => { const seen = seenOf(id); if (!seen) return null; const c = clip(seen, q); return [c.x, c.y]; };
+
+    /** The cells inside a shape on screen that the viewer really sees: on a side turned to them, and not behind another surface. */
+    const cellsIn = (shape: P2[]) => {
+      const v = new THREE.Vector3(), cells: Record<string, number[]> = {};
+      for (const { scene, id, polys, surfaces, skins } of models.current) {
+        const seen = scene.userData.seen as THREE.Matrix4 | null, b = live.current.buildings.find((x) => x.id === id);
+        if (!seen || !b) continue;
+        skins.forEach(({ s, centres }, k) => {
+          const poly = surfaces[k].poly;
+          if (!facing(seen, polys[poly].ring[0], s.n)) return;
+          const hit: number[] = [];
+          for (let n = 0; n < s.year.length; n++) {
+            v.set(centres[n * 3], centres[n * 3 + 1], centres[n * 3 + 2]).applyMatrix4(seen);
+            const at = new maplibregl.Point((v.x + 1) / 2 * W(), (1 - v.y) / 2 * H());
+            if (!inside([at.x, at.y], shape)) continue;
+            const top = faceAt(at);
+            if (top?.building === id && top.poly === poly) hit.push(n);
+          }
+          if (hit.length) cells[surfaceKey(b, s)] = hit;
+        });
+      }
+      return cells;
+    };
+
+    /** Where a click lands in the model. It snaps to the shape's own points, then to a surface's corners, then to its edges; otherwise it is the exact point on the surface under it. */
+    type Spot3 = { id: string; at: P3 };
+    const pointAt = (p: maplibregl.Point): (Spot3 & { close?: boolean }) | null => {
+      const near = (x: number, y: number) => Math.hypot(x - p.x, y - p.y) <= SNAP_PX;
+      const first = draft[0] && onScreen(draft[0].id, draft[0].at);
+      if (draft.length >= 3 && first && near(first[0], first[1])) return { ...draft[0], close: true };
+      for (const d of draft) { const s = onScreen(d.id, d.at); if (s && near(s[0], s[1])) return d; }
+      let edge: { d: number; spot: Spot3 } | null = null;
+      for (const { scene, id, polys, surfaces } of models.current) {
+        const seen = scene.userData.seen as THREE.Matrix4 | null;
+        if (!seen) continue;
+        for (const { s, poly } of surfaces) {
+          if (!facing(seen, polys[poly].ring[0], s.n)) continue;
+          for (const ring of [polys[poly].ring, ...polys[poly].holes]) ring.forEach((q, i) => {
+            const a = clip(seen, q), r = ring[(i + 1) % ring.length], c = clip(seen, r);
+            if (near(a.x, a.y)) { edge = { d: -1, spot: { id, at: q } }; return; }
+            const dx = c.x - a.x, dy = c.y - a.y, t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / Math.max(1e-6, dx * dx + dy * dy)));
+            const d = Math.hypot(a.x + dx * t - p.x, a.y + dy * t - p.y);
+            if (d > SNAP_PX || (edge && edge.d <= d)) return;
+            const u = (t / c.w) / ((1 - t) / a.w + t / c.w); // the screen's share along the edge, undone for perspective
+            edge = { d, spot: { id, at: [q[0] + (r[0] - q[0]) * u, q[1] + (r[1] - q[1]) * u, q[2] + (r[2] - q[2]) * u] } };
+          });
+        }
+      }
+      if (edge) return (edge as { spot: Spot3 }).spot;
+      const found = faceAt(p), model = models.current.find((x) => x.id === found?.building), seen = model?.scene.userData.seen as THREE.Matrix4 | null;
+      const skin = model?.skins.find((_, k) => model.surfaces[k].poly === found?.poly);
+      if (!model || !seen || !skin) return null;
+      // Barycentric on screen, then weighted back by depth: exact on a flat surface seen in perspective.
+      const [A, B, C] = skin.plane.map((q) => clip(seen, q)), det = (B.y - C.y) * (A.x - C.x) + (C.x - B.x) * (A.y - C.y) || 1;
+      const l0 = ((B.y - C.y) * (p.x - C.x) + (C.x - B.x) * (p.y - C.y)) / det, l1 = ((C.y - A.y) * (p.x - C.x) + (A.x - C.x) * (p.y - C.y)) / det, l2 = 1 - l0 - l1;
+      const k = [l0 / A.w, l1 / B.w, l2 / C.w], sum = k[0] + k[1] + k[2];
+      return { id: model.id, at: [0, 1, 2].map((i) => (k[0] * skin.plane[0][i] + k[1] * skin.plane[1][i] + k[2] * skin.plane[2][i]) / sum) as P3 };
+    };
+
+    // The shape being drawn: points in the model, so it stays put while the map turns. Lines join point to point; clicking the first point closes it.
+    let draft: Spot3[] = [], hoverAt: maplibregl.Point | null = null;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.classList.add("draft");
+    m.getCanvasContainer().appendChild(svg);
+    const drawDraft = () => {
+      const on = drawing() && live.current.tool === "draw";
+      if (!on || (!draft.length && !hoverAt)) { svg.innerHTML = ""; return; }
+      const pts = draft.map((d) => onScreen(d.id, d.at)).filter((x): x is P2 => !!x), next = hoverAt ? pointAt(hoverAt) : null;
+      const tip = next ? onScreen(next.id, next.at) : hoverAt ? [hoverAt.x, hoverAt.y] as P2 : null;
+      let out = "";
+      if (pts.length > 1) out += `<polyline class="line" points="${pts.map((q) => q.join(",")).join(" ")}" />`;
+      if (pts.length && tip) out += `<line class="next" x1="${pts[pts.length - 1][0]}" y1="${pts[pts.length - 1][1]}" x2="${tip[0]}" y2="${tip[1]}" />`;
+      pts.forEach((q, i) => { out += `<circle class="${i === 0 && next?.close ? "pt end" : "pt"}" cx="${q[0]}" cy="${q[1]}" r="${i === 0 && next?.close ? 8 : 5}" />`; });
+      if (tip && !next?.close) out += `<circle class="${next ? "aim on" : "aim"}" cx="${tip[0]}" cy="${tip[1]}" r="4" />`;
+      svg.innerHTML = out;
+    };
+    const finish = () => {
+      if (draft.length >= 3) {
+        const shape = draft.map((d) => onScreen(d.id, d.at)).filter((x): x is P2 => !!x), cells = cellsIn(shape), marked = live.current.marked ?? {};
+        let had = 0, all = 0;
+        for (const [key, list] of Object.entries(cells)) { const set = new Set(marked[key] ?? []); list.forEach((n) => { all++; if (set.has(n)) had++; }); }
+        // Mostly marked inside: the shape takes it out. Mostly free: the shape adds it.
+        if (all) live.current.onPaint?.(cells, had * 2 < all, true);
+      }
+      draft = []; drawDraft();
+    };
+    clearDraft.current = () => { draft = []; hoverAt = null; drawDraft(); };
+    const place = (p: maplibregl.Point) => {
+      const spot = pointAt(p);
+      if (!spot) return;
+      if (spot.close) { finish(); return; }
+      const last = draft[draft.length - 1];
+      if (last && last.id === spot.id && Math.hypot(last.at[0] - spot.at[0], last.at[1] - spot.at[1], last.at[2] - spot.at[2]) < 0.05) return; // a double click
+      draft.push({ id: spot.id, at: spot.at }); drawDraft();
+    };
+    const keys = (e: KeyboardEvent) => {
+      if (!(drawing() && live.current.tool === "draw") || (e.target as HTMLElement).tagName === "INPUT") return;
+      if (e.key === "Escape") { draft = []; drawDraft(); }
+      if (e.key === "Enter") finish();
+      if (e.key === "Backspace" && draft.length) { e.preventDefault(); draft.pop(); drawDraft(); }
+    };
+    addEventListener("keydown", keys);
+    m.on("render", drawDraft);
+    m.on("dblclick", (e) => { if (drawing() && live.current.tool === "draw") { e.preventDefault(); finish(); } });
+
+    // Whole surfaces: a drag runs over them, and the first one decides if the stroke adds or takes out.
+    const surfaceAt = (p: maplibregl.Point) => {
+      const found = faceAt(p), b = live.current.buildings.find((x) => x.id === found?.building), s = b?.sun?.surfaces.find((x) => polyOf(b, x) === found?.poly);
+      return b && s ? { key: surfaceKey(b, s), all: s.year.map((_, n) => n) } : null;
+    };
+    const hitAt = (p: maplibregl.Point): Record<string, number[]> => { const s = surfaceAt(p); return s ? { [s.key]: s.all } : {}; };
+    // A stroke sends what it covered once a frame. Its first batch says it began, so the page can keep one undo step per stroke.
+    let stroke: { on: boolean; last: maplibregl.Point } | null = null, batch: Record<string, number[]> = {}, flush = 0, first = false;
+    const send = () => {
+      flush = 0;
+      if (!stroke || !Object.keys(batch).length) return;
+      live.current.onPaint?.(batch, stroke.on, first);
+      batch = {}; first = false;
+    };
+    const take = (cells: Record<string, number[]>) => {
+      for (const [key, list] of Object.entries(cells)) batch[key] = [...(batch[key] ?? []), ...list];
+      if (!flush) flush = requestAnimationFrame(send);
+    };
+    const paintTo = (p: maplibregl.Point) => {
+      if (!stroke) return;
+      const from = stroke.last, steps = Math.max(1, Math.ceil(from.dist(p) / 10)); // a quick stroke skips no surface
+      for (let i = 1; i <= steps; i++) take(hitAt(from.add(p.sub(from).mult(i / steps))));
+      stroke.last = p;
+    };
+    const begin = (p: maplibregl.Point) => {
+      if (!drawing() || live.current.tool !== "surface") return;
+      const s = surfaceAt(p);
+      if (!s) return;
+      stroke = { on: !live.current.marked?.[s.key]?.length, last: p }; first = true;
+      take(hitAt(p));
+    };
+    const end = () => {
+      if (!stroke) return;
+      if (flush) cancelAnimationFrame(flush);
+      send();
+      stroke = null;
+    };
+    m.on("mousedown", (e) => { if (e.originalEvent.button === 0 && !e.originalEvent.ctrlKey) begin(e.point); });
+    m.on("touchstart", (e) => { if (e.points.length === 1) begin(e.point); });
+    m.on("touchmove", (e) => { if (stroke) paintTo(e.point); });
+    m.on("touchend", end);
+    addEventListener("mouseup", end);
+
     const under = (p: maplibregl.Point) => {
       const layers = [...squares.current.keys()].map(homesOf);
       const hit = layers.length ? m.queryRenderedFeatures(p, { layers })[0] : undefined;
@@ -686,6 +882,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     };
     m.on("click", (e) => {
       if (live.current.step === "review") {
+        if (drawing()) { if (live.current.tool === "draw") place(e.point); return; } // whole surfaces change as the drag goes
         if (!live.current.editing) return; // surfaces are changed on the roof step only
         const found = faceAt(e.point), b = live.current.buildings.find((x) => x.id === found?.building);
         const surface = b?.sun?.surfaces.find((x) => polyOf(b, x) === found?.poly);
@@ -707,12 +904,14 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       lit = spots;
     };
     m.on("mousemove", (e) => {
+      if (stroke) { paintTo(e.point); return; }
+      if (drawing() && live.current.tool === "draw") { hoverAt = e.point; drawDraft(); }
       if (frame || m.isMoving()) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
         if (live.current.step === "review") {
-          const found = live.current.editing ? faceAt(e.point) : null;
-          m.getCanvas().style.cursor = found ? "pointer" : "";
+          const draw = drawing() && live.current.tool === "draw", found = live.current.editing && !draw ? faceAt(e.point) : null;
+          m.getCanvas().style.cursor = draw ? "crosshair" : found ? "pointer" : "";
           live.current.onFace(found);
           return;
         }
@@ -723,9 +922,9 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
         hover(hit ? [hit, ...m.querySourceFeatures(homesOf(hit.square), { filter: ["==", ["get", "home"], hit.home] }).map((f) => ({ id: String(f.id), square: hit.square })).filter((f, i, all) => f.id !== hit.id && all.findIndex((x) => x.id === f.id) === i)] : []);
       });
     });
-    m.on("mouseout", () => hover([]));
+    m.on("mouseout", () => { hover([]); hoverAt = null; drawDraft(); });
     m.on("movestart", () => hover([]));
-    return () => { ready.current = false; clearInterval(pulse); squares.current.clear(); around.current = []; m.remove(); map.current = null; };
+    return () => { removeEventListener("mouseup", end); removeEventListener("keydown", keys); ready.current = false; clearInterval(pulse); squares.current.clear(); around.current = []; m.remove(); map.current = null; };
   }, []);
 
   useEffect(() => { syncHomes.current(); }, [buildings]);
@@ -763,7 +962,16 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   // The search dot helps find the area; once buildings are chosen it only sits in the way.
   useEffect(() => { const dot = spot.current?.getElement(); if (dot) dot.style.display = step === "review" ? "none" : ""; }, [step]);
   useEffect(placePins, [buildings, step, open]);
-  useEffect(paintTiles, [view, chosen, face, installed]);
+  useEffect(paintTiles, [view, chosen, face, installed, marked, taken]);
+  // While drawing, a left drag paints; right drag still turns and the wheel still zooms.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const on = step === "review" && editing && !!onPaint;
+    // Whole surfaces take the left drag; drawing places points by click, so the map still moves by drag.
+    if (on && tool === "surface") m.dragPan.disable(); else m.dragPan.enable(PAN);
+    clearDraft.current();
+  }, [tool, step, editing]);
   useEffect(() => { paintPanels(); }, [panels]);
   // Models are built when their sun arrives, so tiles appear without leaving the screen.
   const sunReady = buildings.filter((b) => b.sun).length;
@@ -875,7 +1083,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       {loading > 0 && <div className="mapload" role="status">Loading measured buildings…</div>}
       <div className="rim" aria-hidden="true" />
       <SunLight view={view} sun={buildings.find((b) => b.sun)?.sun ?? null} bearing={bearing} />
-      {step === "review" && <p className="maphint">Drag to move · Right-drag or Ctrl-drag to turn · Scroll to zoom</p>}
+      {step === "review" && <p className="maphint">{editing && onPaint && tool === "draw" ? "Click to place points · Click the first point to close · Backspace undoes a point" : editing && onPaint && tool === "surface" ? "Drag over surfaces · Right-drag to turn · Scroll to zoom" : "Drag to move · Right-drag or Ctrl-drag to turn · Scroll to zoom"}</p>}
       <div className="mapctl">
         {step === "pick" && <IconButton variant="glass" size="lg" label="Go to my location" onClick={locateMe}><Locate /></IconButton>}
         <div className="mapstack">

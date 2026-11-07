@@ -1,5 +1,5 @@
 // The planner's side: one request, each fact with where it came from, and the calls to the engine.
-import { Answers, Choice, Place, Selected, SunSurface, measured, meanSun, placeAt, polyOf, sunOf, surfaceKey } from "./api";
+import { Answers, Choice, Place, Selected, SunSurface, chosenKeys, installedKeys, measured, meanSun, placeAt, polyOf, sunOf, surfaceKey } from "./api";
 import { P2, P3, toLocal } from "./geometry";
 import { fit } from "./panels";
 
@@ -25,6 +25,10 @@ export type Request = {
 export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice };
 
 const TYPICAL_KM = 11300;
+const chosenOff = (buildings: Selected[], c: Choice) => {
+  const on = new Set(chosenKeys(buildings, c)), taken = new Set(installedKeys(buildings, c));
+  return buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => s.kind === "roof" && !on.has(surfaceKey(b, s)) && !taken.has(surfaceKey(b, s))).map((s) => surfaceKey(b, s)));
+};
 const source = (known: unknown): Source => (known === null || known === undefined ? "assumed" : "customer");
 
 /** What the homeowner produced becomes the planner's starting point. Skipped answers arrive marked, nothing is asked twice. */
@@ -35,7 +39,8 @@ export function fromHomeowner({ buildings, answers: a, choice }: Handoff): Reque
     inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating, heat_kwh: a.heat_kwh, has_solar: !!a.has_solar, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM },
     sources: { demand_kwh: a.use_source === "exact" ? "customer" : "assumed", price_ct_kwh: "assumed", heating: source(a.heating), heat_kwh: source(a.heat_kwh), ev: source(a.ev), ev_km: car ? source(a.ev_km) : "customer", has_solar: source(a.has_solar), has_storage: source(a.has_storage) },
     overrides: a.wants_hp === false ? { heatpump: false } : a.wants_hp ? { heatpump: true } : {},
-    off: choice.dropped, installed: choice.installed, walls: choice.added, existing: { kwp: a.solar_kwp, year: a.solar_year, battery_kwh: a.battery_kwh },
+    // The planner still works by whole surface: a roof with nothing marked is out, a wall with anything marked is in.
+    off: chosenOff(buildings, choice), installed: installedKeys(buildings, choice), walls: chosenKeys(buildings, choice).filter((k) => !k.includes("|roof")), existing: { kwp: a.solar_kwp, year: a.solar_year, battery_kwh: a.battery_kwh },
   };
 }
 

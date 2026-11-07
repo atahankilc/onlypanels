@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import FindHome from "./FindHome";
 import { Mark } from "./icons";
 import { Handoff } from "./plan";
@@ -10,14 +10,26 @@ export default function App() {
   const [handoff, setHandoff] = useState<Handoff | null>(null);
   const [dark, setDark] = useState(localStorage.getItem("theme") !== "light");
   useEffect(() => { document.documentElement.dataset.theme = dark ? "dark" : "light"; localStorage.setItem("theme", dark ? "dark" : "light"); }, [dark]);
+  // The demo tools fold into one small button; a click elsewhere or Escape folds them again.
+  const [devOpen, setDevOpen] = useState(false);
+  const devRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!devOpen) return;
+    const away = (e: PointerEvent) => { if (!devRef.current?.contains(e.target as Node)) setDevOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setDevOpen(false); };
+    addEventListener("pointerdown", away); addEventListener("keydown", esc);
+    return () => { removeEventListener("pointerdown", away); removeEventListener("keydown", esc); };
+  }, [devOpen]);
   return (
     <div className="app">
       <header className="topbar">
         <div className="logo"><Mark /><h1>Energy Design Desk</h1></div>
-        <div className="dev" role="group" aria-label="Demo tools">
-          <span>DEV</span>
-          <Segmented label="Demo only: switch profile" variant="dev" value={view} onChange={setView} options={[{ value: "homeowner", label: "Homeowner" }, { value: "planner", label: "Planner" }]} />
-          <Button variant="dev" aria-label="Demo only: switch theme" onClick={() => setDark(!dark)}>{dark ? "Dark" : "Light"}</Button>
+        <div className="dev" ref={devRef}>
+          <Button variant="dev" aria-expanded={devOpen} aria-label="Demo tools" onClick={() => setDevOpen(!devOpen)}>DEV</Button>
+          {devOpen && <div className="devmenu" role="group" aria-label="Demo tools">
+            <Segmented label="Demo only: switch profile" variant="dev" value={view} onChange={setView} options={[{ value: "homeowner", label: "Homeowner" }, { value: "planner", label: "Planner" }]} />
+            <Button variant="dev" aria-label="Demo only: switch theme" onClick={() => setDark(!dark)}>{dark ? "Dark" : "Light"}</Button>
+          </div>}
         </div>
       </header>
       <FindHome dark={dark} onSend={setHandoff} />

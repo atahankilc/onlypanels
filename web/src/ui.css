@@ -30,8 +30,10 @@
 .seg button:disabled { opacity: 0.4; cursor: default; }
 
 /* Demo tooling, not product UI: it must never read as part of the app. */
-.dev { display: flex; align-items: center; gap: 2px; height: var(--btn-lg); padding: 0 4px 0 10px; border: 1px dashed var(--hud-warn); border-radius: 999px; background: var(--hud-land); }
-.dev > span { padding-right: 6px; font: 600 10.5px var(--font-mono); letter-spacing: 0.1em; color: var(--hud-warn); }
+.dev { position: relative; }
+.dev > .btn-dev { height: var(--btn-md); border: 1px dashed var(--hud-warn); background: var(--hud-land); font-weight: 600; letter-spacing: 0.1em; }
+.dev > .btn-dev[aria-expanded="true"] { background: var(--hud-warn); color: var(--hud-land); }
+.devmenu { position: absolute; top: calc(100% + 6px); right: 0; display: flex; align-items: center; gap: 2px; height: var(--btn-lg); padding: 0 4px; border: 1px dashed var(--hud-warn); border-radius: 999px; background: var(--hud-land); animation: rise 0.2s var(--ease); }
 .seg-dev { align-items: center; height: 100%; }
 .seg-dev button { padding: 0 10px; color: var(--hud-warn); font: 500 11px var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; }
 .seg-dev button.on { background: var(--hud-warn); color: var(--hud-land); }
