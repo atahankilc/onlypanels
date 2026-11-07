@@ -25,6 +25,7 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
   const [focus, setFocus] = useState<P2 | null>(null);
   const [buildings, setBuildings] = useState<Selected[]>([]);
   const [step, setStep] = useState<Step>("pick");
+  const [move, setMove] = useState<"in" | "out" | null>(null); // while the map's edge sweeps between the steps: see .curtain
   const [waiting, setWaiting] = useState(false);
   const [aerial, setAerial] = useState(false);
   const [open, setOpen] = useState<string | null>(null); // the building shown in detail
@@ -93,7 +94,7 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
   const measuring = buildings.some((b) => b.measuring || b.sun === undefined);
   useEffect(() => {
     if (!waiting || measuring) return;
-    setWaiting(false); setOpen(buildings[0]?.home ?? null); setStep("review");
+    setWaiting(false); setOpen(buildings[0]?.home ?? null); setStep("review"); setMove("in");
   }, [waiting, measuring]);
   const goTo = (id: string) => { setOpen(id); setLook({ id }); };
 
@@ -104,7 +105,8 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
       {step === "pick" && <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</Button>}
       {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
-      {step === "pick" && <div className="finder">
+      {(step === "pick" || move === "in") && <Curtain move={move} done={() => setMove(null)}>
+      <div className="finder">
         <div className="field-pill">
           <Search />
           <input id="where" role="combobox" aria-expanded={!!places?.length} aria-controls="places" aria-label="Go to an address" autoComplete="off"
@@ -119,9 +121,9 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
             return <button type="button" key={p.label} role="option" aria-selected={i === active} className={i === active ? "on" : ""} onMouseEnter={() => setActive(i)} onClick={() => choose(p)}><b>{name}</b><small>{rest.slice(0, 3).join(", ")}</small></button>;
           })}
         </div>}
-      </div>}
+      </div>
 
-      {step === "pick" && buildings.length > 0 && <aside className="panel">
+      {buildings.length > 0 && <aside className={move === "in" ? "panel gone" : "panel"}>
         <h2>Selected buildings</h2>
         <ul className="picked">{homesIn(buildings).map((b, i) => <li key={b.home} onMouseEnter={() => setNear(b.home)} onMouseLeave={() => setNear(null)}>
           <button type="button" className="row" onClick={() => goTo(b.home)}><span className="tag">{letter(i)}</span><span className="name">{b.label}</span></button>
@@ -129,8 +131,15 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
         </li>)}</ul>
         <div className="panelfoot"><Button variant="solid" size="lg" wide disabled={waiting} onClick={() => setWaiting(true)}>{waiting ? "Getting your roofs ready…" : "Continue"}</Button></div>
       </aside>}
+      </Curtain>}
 
-      {step === "review" && <Review stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} goTo={goTo} face={face} setFace={setFace} chosen={chosen} toggle={toggleSurface} changed={choice.dropped.length + choice.added.length > 0} reset={() => setChoice({ ...choice, dropped: [], added: [] })} installed={choice.installed} toggleInstalled={toggleInstalled} retrySun={retrySun} back={() => { setFace(null); setStep("pick"); }} />}
+      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && setMove(null)}><Review stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} goTo={goTo} face={face} setFace={setFace} chosen={chosen} toggle={toggleSurface} changed={choice.dropped.length + choice.added.length > 0} reset={() => setChoice({ ...choice, dropped: [], added: [] })} installed={choice.installed} toggleInstalled={toggleInstalled} retrySun={retrySun} back={() => { setFace(null); setStep("pick"); setMove("out"); }} /></div>}
     </main>
   );
+}
+
+/** The picking controls: while the map's edge sweeps, inside the wrapper it wipes or uncovers; otherwise nothing extra around them. */
+function Curtain({ move, done, children }: { move: "in" | "out" | null; done: () => void; children: React.ReactNode }) {
+  if (!move) return <>{children}</>;
+  return <div className={move === "out" ? "curtain old back" : "curtain old"} inert={move === "in"} onAnimationEnd={(e) => e.target === e.currentTarget && done()}>{children}</div>;
 }

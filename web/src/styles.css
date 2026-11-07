@@ -91,8 +91,21 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .rim { z-index: 1; border: 1px solid var(--rim); }
 .stage.review .sheet, .stage.review .rim { top: 8px; right: 8px; bottom: 8px; left: var(--left, 424px); border-radius: 24px; opacity: 1; }
 .mapctl { transition: right var(--move) var(--glide), bottom var(--move) var(--glide); }
-.stage.review .panel { top: 68px; left: 12px; bottom: 12px; max-height: none; border: 0; border-radius: 0; background: none; box-shadow: none; animation: rise 0.6s var(--ease) 0.3s backwards; }
+.stage.review .panel:not(.gone), .curtain.new .panel { top: 68px; left: 12px; bottom: 12px; max-height: none; border: 0; border-radius: 0; background: none; box-shadow: none; animation: rise 0.6s var(--ease) 0.3s backwards; }
 .stage.review .mapctl { right: 20px; bottom: 20px; }
+/* One movement: the map's left edge sweeps right like a curtain. Left of it the new page shows on the base; right of it the old panel stays on the map
+   until the edge wipes it. Both clips run on the map's own curve and reach exactly as far as its edge. */
+.curtain { position: absolute; z-index: 2; inset: 0; pointer-events: none; }
+.curtain > * { pointer-events: auto; }
+.curtain.new { animation: curtain-new var(--move) var(--glide); }
+.curtain.old { animation: curtain-old var(--move) var(--glide) forwards; }
+@keyframes curtain-new { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 calc(100% - var(--left, 424px)) 0 0); } }
+@keyframes curtain-old { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 0 0 var(--left, 424px)); } }
+/* Back: the same sweep the other way, on the same curve, so the clips stay on the map's edge. */
+.curtain.new.back { animation: curtain-new-back var(--move) var(--glide) forwards; }
+.curtain.old.back { animation: curtain-old-back var(--move) var(--glide); }
+@keyframes curtain-new-back { from { clip-path: inset(0 calc(100% - var(--left, 424px)) 0 0); } to { clip-path: inset(0 100% 0 0); } }
+@keyframes curtain-old-back { from { clip-path: inset(0 0 0 var(--left, 424px)); } to { clip-path: inset(0 0 0 0); } }
 .maphint { position: absolute; z-index: 2; left: calc(var(--left, 424px) + 16px); bottom: 20px; margin: 0; color: var(--hud-ink-2); font-size: 12px; pointer-events: none; }
 .sunlight { position: absolute; z-index: 1; inset: 0; overflow: hidden; pointer-events: none; mix-blend-mode: screen; opacity: var(--power); transition: opacity 0.4s; animation: rise 0.4s var(--ease); background: linear-gradient(calc(var(--turn) + 180deg), var(--sun), transparent 62%); }
 .request { color: var(--hud-warn); }
@@ -104,7 +117,7 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .taken { min-height: 44px; display: grid; align-content: center; opacity: 0.7; }
 .again { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 /* one topic a page: a heading, one line, big answers */
-.stage.review .panel.quiz { display: flex; flex-direction: column; padding: 24px 18px 14px; animation: rise 0.35s var(--ease) backwards; }
+.stage.review .panel.quiz, .curtain.new .panel.quiz { display: flex; flex-direction: column; padding: 24px 18px 14px; animation: rise 0.35s var(--ease) backwards; }
 .count { margin: 0 0 12px; font: 500 11px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--hud-ink-2); }
 .quiz h1 { margin-bottom: 8px; font-size: 30px; line-height: 1.12; text-wrap: balance; }
 .quiz > p { max-width: none; }
@@ -170,7 +183,11 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
   .stage.review .map3d { clip-path: inset(0 0 46dvh 0 round 0 0 24px 24px); }
   .stage.review .sunlight { inset: 0 0 46dvh 0; border-radius: 0 0 24px 24px; }
   .stage.review .sheet, .stage.review .rim { top: 0; right: 0; left: 0; bottom: 46dvh; border-radius: 0 0 24px 24px; }
-  .stage.review .panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 45dvh; overflow-y: auto; }
+  .stage.review .panel:not(.gone), .curtain.new .panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 45dvh; overflow-y: auto; }
+  @keyframes curtain-new { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(calc(100% - 46dvh) 0 0 0); } }
+  @keyframes curtain-old { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 0 46dvh 0); } }
+  @keyframes curtain-new-back { from { clip-path: inset(calc(100% - 46dvh) 0 0 0); } to { clip-path: inset(100% 0 0 0); } }
+  @keyframes curtain-old-back { from { clip-path: inset(0 0 46dvh 0); } to { clip-path: inset(0 0 0 0); } }
   .stage.review .mapctl { right: 16px; top: 70px; bottom: auto; }
   .credits { top: 116px; bottom: auto; right: 64px; left: 10px; max-width: none; }
 }
