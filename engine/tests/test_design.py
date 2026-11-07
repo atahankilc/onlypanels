@@ -62,3 +62,14 @@ def test_reaction_checks_hold_on_monotone_engine(engine):
     homes = engine.train.head(50)
     checks = reaction_checks(engine, homes)
     assert checks["ev_never_shrinks_pv"] == 1 and checks["area_limit_respected"] == 1
+
+
+def test_existing_battery_means_no_new_battery_unless_planner_asks(engine):
+    d = engine.design({**HOME, "has_storage": True})
+    assert d["battery"]["kwh"] == 0 and "battery_existing" in {r["code"] for r in d["reasons"]}
+    assert engine.design({**HOME, "has_storage": True}, {"battery_kwh": 10})["battery"]["kwh"] == 10
+
+
+def test_unknown_heat_demand_is_flagged_when_a_heat_pump_is_forced(engine):
+    d = engine.design(HOME, {"heatpump": True})
+    assert "hp_assumed_heat" in {w["code"] for w in d["warnings"]}

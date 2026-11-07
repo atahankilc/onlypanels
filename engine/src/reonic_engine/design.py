@@ -23,6 +23,7 @@ MOUNTS = {
 FOSSIL = ["Gas", "Oil", "OtherNonRenewable"]
 COLS = ["demand_mwh", "price_ct_kwh", "existing_hp", "fossil_heat", "has_solar", "has_storage", "installer_b"]
 MIN_SIMILAR = 30
+UNSURE_BATTERY = 0.8  # below this, tell the planner the battery decision is open
 
 
 def _x(d, demand=None):
@@ -90,7 +91,8 @@ class Engine:
         if heat_type == "Heatpump":
             reasons.append({"code": "hp_existing"})
         elif hp_wanted:
-            reasons.append({"code": "hp_fossil", "heat_mwh": round(heat_mwh, 1)})
+            reasons.append({"code": "hp_fossil", "heat_mwh": round(heat_mwh, 1),
+                            "kw": float(HP_SIZES[np.abs(heat_mwh * 1000 / HP_KWH_PER_KW - HP_SIZES).argmin()])})
         elif heat_type in FOSSIL:
             reasons.append({"code": "hp_needs_heat"})
         if o.get("heatpump") is not None and heat_type != "Heatpump":
@@ -128,15 +130,23 @@ class Engine:
             reasons.insert(0, {"code": "pv_capped", "modules": max_modules, "area": area,
                                "wanted": round(free_kwp, 1)})
         else:
-            reasons.insert(0, {"code": "pv_demand", "demand": round(total, 1), "n": similar["n"]})
+            reasons.insert(0, {"code": "pv_demand", "demand": round(total, 1), "n": similar["n"],
+                               "low": similar["kwp_low"], "high": similar["kwp_high"]})
 
-        battery_yes = bool(p_battery[0] >= 0.5)
+        has_storage = bool(i.get("has_storage"))
+        battery_yes = bool(p_battery[0] >= 0.5) and not has_storage
         battery_kwh = float(battery[0]) if battery_yes else 0.0
+        unsure = not has_storage and o.get("battery_kwh") is None and bool(p_battery[0] < UNSURE_BATTERY)
+        catalog = [float(v) for v in self.catalog.get(i["installer"], [])]
         if o.get("battery_kwh") is not None:
             battery_kwh = float(o["battery_kwh"])
             reasons.append({"code": "battery_locked"})
+        elif has_storage:
+            reasons.append({"code": "battery_existing"})
         elif battery_yes:
-            reasons.append({"code": "battery_yes", "rate": similar["battery_rate"], "kwp": round(kwp_final, 1)})
+            reasons.append({"code": "battery_yes", "rate": similar["battery_rate"], "kwh": battery_kwh,
+                            "kwp": round(kwp_final, 1), "per_kwp": round(battery_kwh / kwp_final, 1),
+                            "common": ", ".join(f"{v:g}" for v in similar["battery_common"])})
         else:
             reasons.append({"code": "battery_no", "rate": similar["battery_rate"]})
 
@@ -152,15 +162,20 @@ class Engine:
             warnings.append({"code": "non_roof"})
         if not area:
             warnings.append({"code": "no_area"})
+        if hp_wanted and not heat_mwh:
+            warnings.append({"code": "hp_assumed_heat"})
+        if unsure:
+            warnings.append({"code": "battery_unsure", "share": round((1 - float(p_battery[0])) * 100)})
 
         country = i.get("country", "Germany")
         production = kwp_final * KWH_PER_KWP.get(country, KWH_PER_KWP["Other"]) * mount["yield"] / 1000
+        reasons.append({"code": "balance", "production": round(production, 1), "ratio": round(production / total, 1)})
         return {
             "pv": {"modules": modules, "kwp": round(kwp_final, 2), "max_modules": max_modules,
                    "locked": lock is not None, "capped": bool(capped)},
             "battery": {"kwh": battery_kwh, "locked": o.get("battery_kwh") is not None,
                         "probability": round(float(p_battery[0]) * 100),
-                        "choices": [float(v) for v in self.catalog.get(i["installer"], [])]},
+                        "choices": catalog, "unsure": unsure},
             "wallbox": {"included": wallbox, "locked": o.get("wallbox") is not None},
             "heatpump": {"included": hp_kw > 0, "kw": hp_kw, "locked": o.get("heatpump") is not None,
                          "blocked": heat_type == "Heatpump"},

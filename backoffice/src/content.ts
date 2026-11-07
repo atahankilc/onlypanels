@@ -35,7 +35,7 @@ export const FLOWS: { name: string; who: string; need: string; goal: string; ste
       { who: "Planlayıcı", does: "Ev hakkında birkaç temel bilgi girer", status: "var" },
       { who: "Sistem", does: "Panel, batarya ve ısı pompasını gerektiği kadar önerir, gerekmiyorsa önermez", status: "kismen" },
       { who: "Sistem", does: "Kısa bir gerekçe gösterir", status: "var" },
-      { who: "Planlayıcı", does: "Bir bilgiyi veya parçayı değiştirir, örneğin \"aile gelecek yıl elektrikli araba alıyor\"", status: "kismen" },
+      { who: "Planlayıcı", does: "Bir bilgiyi veya parçayı değiştirir, örneğin \"aile gelecek yıl elektrikli araba alıyor\"", status: "var" },
       { who: "Sistem", does: "Tasarımın geri kalanı uzmanın beklediği gibi uyum sağlar ve nedenini anlatır", status: "var" },
       { who: "Planlayıcı", does: "Öneriyi uzmanın o projedeki tasarımıyla karşılaştırır", status: "var" },
     ],
@@ -103,7 +103,7 @@ export const REAL: { who: string; intro: string; steps: Real[] }[] = [
 export const VALUE = [
   { today: "Her tasarım sıfırdan başlar", ours: "Temel bilgilerden tam tasarım çıkar", who: "Planlayıcı", gain: "Daha hızlı teklif", state: "Çalışıyor" },
   { today: "Bir değişiklik tüm hesabı açar", ours: "Değişince gerisi kendiliğinden uyum sağlar", who: "Planlayıcı", gain: "Daha hızlı revizyon", state: "Çalışıyor" },
-  { today: "Neden bu boyut, açıklamak zor", ours: "Her öneride kısa gerekçe ve benzer evler", who: "Planlayıcı", gain: "Savunulabilir teklif", state: "Temel hali var" },
+  { today: "Neden bu boyut, açıklamak zor", ours: "Her öneride kısa gerekçe ve benzer evler", who: "Planlayıcı", gain: "Savunulabilir teklif", state: "Çalışıyor" },
   { today: "Bilgi deneyimli kişilerin kafasında", ours: "Geçmiş uzman kararlarından öğrenir", who: "Kurulumcu", gain: "Yeni çalışan da tutarlı tasarlar", state: "Sınırlı, doğruluk düşük" },
   { today: "Hata teklif çıktıktan sonra fark edilir", ours: "Alışılmadık seçim önceden işaretlenir", who: "Kurulumcu", gain: "Daha az yanlış teklif", state: "Yapılmadı" },
   { today: "Ev sahibi her soruda bekler", ours: "İzin verilen varyantları kendisi dener", who: "İkisi de", gain: "Daha az soru, daha güvenli karar", state: "Yapılmadı" },

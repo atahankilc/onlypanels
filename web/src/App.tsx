@@ -18,6 +18,7 @@ type Design = {
   reasons: Note[]; warnings: Note[];
 };
 type T = ReturnType<typeof makeT>;
+type Refined = { inputs: Partial<Inputs>; overrides: Overrides; understood: Note[]; source: string };
 
 const START: Inputs = {
   installer: "2a8ba8e2", country: "Germany", demand_kwh: 4500, price_ct_kwh: 32, heating: null, heat_kwh: null,
@@ -26,6 +27,10 @@ const START: Inputs = {
 
 const post = (inputs: Inputs, overrides: Overrides): Promise<Design> =>
   fetch("/api/design", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ inputs, overrides }) })
+    .then((r) => { if (!r.ok) throw new Error(); return r.json(); });
+
+const refine = (text: string, mount: string): Promise<Refined> =>
+  fetch("/api/refine", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, mount }) })
     .then((r) => { if (!r.ok) throw new Error(); return r.json(); });
 
 const num = (v: string) => (v === "" ? null : Number(v));
@@ -124,11 +129,42 @@ function DesignPage({ t, inputs, setInputs, overrides, setOverrides }: {
       </form>
 
       <section className="result" aria-live="polite">
+        <Ask t={t} mount={inputs.mount} onChange={(r) => { setInputs({ ...inputs, ...r.inputs }); setOverrides({ ...overrides, ...r.overrides }); }} />
         {failed && <p className="error">{t("apiError")}</p>}
         {!design && !failed && <p className="muted">{t("loading")}</p>}
         {design && <Proposal t={t} d={design} prev={previous} overrides={overrides} setOverrides={setOverrides} />}
       </section>
     </main>
+  );
+}
+
+function Ask({ t, mount, onChange }: { t: T; mount: string; onChange: (r: Refined) => void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<Refined | null>(null);
+  const [failed, setFailed] = useState(false);
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim() || busy) return;
+    setBusy(true); setFailed(false);
+    refine(text, mount)
+      .then((r) => { setDone(r); if (r.understood.length) { onChange(r); setText(""); } })
+      .catch(() => setFailed(true))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <form className="ask" onSubmit={submit}>
+      <label htmlFor="ask">{t("ask")}</label>
+      <div>
+        <input id="ask" value={text} placeholder={t("askHint")} onChange={(e) => setText(e.target.value)} />
+        <button type="submit" disabled={busy || !text.trim()}>{busy ? t("loading") : t("apply")}</button>
+      </div>
+      {failed && <p className="error">{t("apiError")}</p>}
+      {done && done.understood.length === 0 && <p className="warn-text">{t("notUnderstood")}</p>}
+      {done && done.understood.length > 0 && (
+        <p className="got"><b>{t("understood")}:</b> {done.understood.map((u) => t(u.code, u)).join(" · ")} <span className="muted">{t(done.source === "claude" ? "byClaude" : "byRules")}</span></p>
+      )}
+    </form>
   );
 }
 
@@ -192,7 +228,7 @@ function Proposal({ t, d, prev, overrides, setOverrides }: { t: T; d: Design; pr
         <div>
           <h3>{t("why")}</h3>
           <ul>{d.reasons.map((r) => <li key={r.code}>{t(`r_${r.code}`, r)}</li>)}</ul>
-          {d.warnings.length > 0 && <><h3>{t("notes")}</h3><ul className="warn">{d.warnings.map((w) => <li key={w.code}>{t(`w_${w.code}`)}</li>)}</ul></>}
+          {d.warnings.length > 0 && <><h3>{t("notes")}</h3><ul className="warn">{d.warnings.map((w) => <li key={w.code}>{t(`w_${w.code}`, w)}</li>)}</ul></>}
         </div>
         <div>
           <h3>{t("energy")}</h3>

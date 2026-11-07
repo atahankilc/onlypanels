@@ -4,9 +4,11 @@ version = "0.1.0"
 description = "Learns installer design decisions and proposes PV, battery and heat pump systems."
 requires-python = ">=3.12"
 dependencies = [
+    "anthropic>=2.6.0",
     "fastapi>=0.162.1",
     "numpy",
     "pandas",
+    "python-dotenv>=1.2.4",
     "scikit-learn",
     "uvicorn>=0.54.0",
 ]

@@ -8,7 +8,7 @@ Every requirement in the brief, with page and current status. Update the status 
 |---|---|---|
 | Decide whether a home gets PV, battery and heat pump, and how large each is | 2, 6 | Partly: first models, weak on "no battery" |
 | Proposal makes sense as a whole, not three independent guesses | 6 | Done for v1: battery follows final PV, checks in `scripts/evaluate.py` |
-| Can recommend no battery or no heat pump | 4 | Weak: rarely says no battery |
+| Can recommend no battery or no heat pump | 4 | Partly: rule for existing batteries, otherwise flags an open decision. Data does not support stronger "no" answers |
 | Short explanation of why | 2, 7 | Done for v1: template text from engine facts |
 | Measure closeness to experts on unseen projects | 2, 6, 7 | Done on dev; final test run pending |
 | Planner changes at least one input or component and gets an updated design | 2, 7 | Done |
@@ -23,7 +23,7 @@ Every requirement in the brief, with page and current status. Update the status 
 |---|---|
 | Planner enters a few basic facts | Done |
 | Complete system appears with explanation | Done |
-| Refinement, for example the family buying an electric car | Done with a checkbox; free-text request not started |
+| Refinement, for example the family buying an electric car | Done with checkbox and free text. Claude path untested until an API key is added |
 | Comparison with the expert for the same project | Done, on held-out projects |
 | Results across many projects | Done, dev scores; final test run pending |
 

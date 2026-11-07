@@ -23,9 +23,9 @@ Living document. Update it whenever the phase, blockers or next steps change.
 
 1. Ask Reonic the blocking questions in `docs/open-questions.md` (Q1 to Q4, Q23)
 2. Agree the proposed decisions and split roles
-3. User reviews the analysis on port 5174 and picks the direction
-4. Improve "no battery" and range quality, using dev scores only
-5. Free-text refinement with Claude, once data sharing (Q2) is answered
+3. Add an Anthropic key to `.env` and test the Claude path
+4. Split compare and results into the back office
+5. Unusual-choice warnings
 
 ## Proposed timeline
 

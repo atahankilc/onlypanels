@@ -107,6 +107,10 @@ What this shows:
 
 Sensible reaction checks on 192 unseen homes: adding a car never shrinks PV (100%) and grows it in 96.9%; never shrinks the battery (99.5%); a heat pump never shrinks PV (100%); more PV never shrinks the battery (100%); area limits hold (100%).
 
+## "No battery" decisions
+
+Forcing more "no battery" answers does not work: at 40% recall, only 23% of those answers are right (dev cross-validation). The inputs do not separate these homes well. Instead the engine keeps the battery by default, removes it when the home already has one, and flags an open decision below 80% confidence. On 192 unseen homes the flag covers 7.3%; 35.7% of flagged homes had no battery, against 8.4% of the others.
+
 ## Mounting sites
 
 About 1,300 projects carry substructure lines and they are almost all rooftop: 1 facade line and no clear ground mount. "Garden Work" lines appear in about 19 projects but look like cable trenching (*hypothesis*). So garden, carport and facade behaviour in the engine is a stated assumption, not learned.

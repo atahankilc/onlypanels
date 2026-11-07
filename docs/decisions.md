@@ -30,3 +30,5 @@
 | D24 | Germany is the default and the training base. Other countries are selectable with a clear warning | Confirmed (user) | User: focus on Germany without being limited to it |
 | D25 | Separate app (5173, daily work) and back office (5174, oversight), sharing the engine and API | Proposed by the user; moving compare and results screens awaits go-ahead | Different users and jobs. See `docs/users.md` |
 | D26 | Scope users to the brief's two: planner and homeowner, with its three use cases. Other roles are parked | Confirmed (user) | The judges look at the brief's users |
+| D27 | Free-text changes: Claude when a key is set, simple rules otherwise and on failure. Only the sentence is sent, never project data | Proposed | The demo must not depend on the network. Keeps Q2 from blocking this feature |
+| D28 | Do not force more "no battery" answers. Default to a battery, respect an existing one, flag open decisions below 80% | Proposed | Forced answers are wrong about three times in four |

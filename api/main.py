@@ -2,12 +2,15 @@
 import json
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from reonic_engine.data import load_dataset
 from reonic_engine.design import Engine
+from reonic_engine.refine import refine
 
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 SCORES = Path(__file__).resolve().parents[1] / "data" / "processed" / "scores.json"
 LABELS = {"2a8ba8e2": "A", "23c108b7": "B"}
 
@@ -65,6 +68,16 @@ def expert_options(pid):
 @app.post("/api/design")
 def design(req: DesignRequest):
     return engine.design(req.inputs.model_dump(), req.overrides.model_dump())
+
+
+class RefineRequest(BaseModel):
+    text: str
+    mount: str = "roof"
+
+
+@app.post("/api/refine")
+def refine_text(req: RefineRequest):
+    return refine(req.text, req.mount)
 
 
 @app.get("/api/projects")

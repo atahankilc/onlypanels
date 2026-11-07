@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from reonic_engine.data import INSTALLERS, load_dataset, split_of
-from reonic_engine.design import Engine, engine_predictor, reaction_checks
+from reonic_engine.design import UNSURE_BATTERY, Engine, engine_predictor, reaction_checks
 from reonic_engine.evaluate import cross_validate, score
 from reonic_engine.models import PREDICTORS
 
@@ -48,6 +48,13 @@ def main():
     engine = Engine().fit(train, options[options.project_id.isin(train.project_id)])
     checks = reaction_checks(engine, homes)
     print("reaction checks on", len(homes), "homes:", {k: round(v, 3) for k, v in checks.items()})
+
+    # Does the "open decision" flag mean anything? Compare no-battery rates on held-out homes.
+    probability = engine.predict(homes)[2]
+    open_call = probability < UNSURE_BATTERY
+    print("battery flagged open:", round(open_call.mean(), 3),
+          "| no battery when flagged:", round((~homes.has_battery[open_call]).mean(), 3),
+          "| when not flagged:", round((~homes.has_battery[~open_call]).mean(), 3))
 
     out = Path(__file__).resolve().parents[1] / "data" / "processed" / "scores.json"
     # NaN is not valid JSON: it appears when a slice has no cases, such as no heat pumps.
