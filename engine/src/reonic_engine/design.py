@@ -25,6 +25,7 @@ FOSSIL = ["Gas", "Oil", "OtherNonRenewable"]
 COLS = ["demand_mwh", "price_ct_kwh", "existing_hp", "fossil_heat", "has_solar", "has_storage", "installer_b"]
 MIN_SIMILAR = 30
 UNSURE_BATTERY = 0.8  # below this, tell the planner the battery decision is open
+HABIT_KWH = 2.0  # a learned battery this close to the installer's most sold size becomes that size
 GUIDE_KWH_PER_UNIT = 1.5  # HTW Berlin 2022: usable kWh per kWp and per MWh of use, at most
 
 
@@ -62,7 +63,14 @@ class Engine:
         self.has_battery = HistGradientBoostingClassifier(**TREE).fit(xb, b)
         self.catalog = battery_catalog(options)
         self.train = train[pv].copy()
+        self.habit = self._habit(train)
         return self
+
+    def _habit(self, train):
+        """The battery size each installer sells most often, among its catalog sizes."""
+        b = train[train.has_battery]
+        tiers = snap(b.battery_kwh.values, b.installer.values, self.catalog)
+        return {i: float(pd.Series(t).mode().iloc[0]) for i, t in pd.Series(tiers).groupby(b.installer.values)}
 
     def predict(self, d, added_mwh=0.0, max_modules=None, kwp_lock=None):
         """Vectorised core. Returns kWp, battery kWh and battery probability."""
@@ -74,6 +82,11 @@ class Engine:
             kwp = np.full(len(d), float(kwp_lock))
         xb = _x(d, demand).assign(kwp=kwp)
         battery = snap(self.battery.predict(xb), d.installer.values, self.catalog)
+        if kwp_lock is None:
+            # Experts mostly sell their usual size: dev cross-validation, exact size 20% to 38% at both installers,
+            # and a smaller gap. Not when the planner fixed solar: then the size learned from solar is closer.
+            habit = np.array([self.habit.get(i, np.nan) for i in d.installer.values])
+            battery = np.where((battery > 0) & (np.abs(battery - habit) <= HABIT_KWH), habit, battery)
         return kwp, battery, self.has_battery.predict_proba(xb)[:, 1]
 
     def near(self, installer, demand_mwh):
@@ -213,7 +226,8 @@ class Engine:
             hp_kw=hp_kw, hp_wanted=hp_wanted, surfaces=surfaces, max_modules=max_modules, free_kwp=free_kwp,
             modules=modules, kwp_final=kwp_final, capped=capped, similar=similar, catalog=catalog,
             battery_kwh=battery_kwh, p_battery=float(p_battery[0]), has_storage=has_storage, wallbox=wallbox,
-            production=production, estimate=estimate, review=review, typical=typical)
+            production=production, estimate=estimate, review=review, typical=typical,
+            habit=self.habit.get(i["installer"]))
         return {
             "pv": {"modules": modules, "kwp": round(kwp_final, 2), "max_modules": max_modules, "placed": placed,
                    "locked": lock is not None, "capped": bool(capped)},
@@ -273,7 +287,7 @@ def _review(near, similar, kwp, battery_kwh, total_mwh, has_storage, unsure, p_b
 
 def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_wanted, surfaces, max_modules, free_kwp,
            modules, kwp_final, capped, similar, catalog, battery_kwh, p_battery, has_storage, wallbox, production,
-           estimate, review, typical):
+           estimate, review, typical, habit=None):
     """The engine's own steps, in order, each with what went in, how it was decided and what came out.
     Every number here is the engine's. Input keys match the request's facts, so the screen can show their source."""
     def fact(key, label, value):
@@ -328,7 +342,9 @@ def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_
         b_res, by = f"No battery. The engine is {round((1 - p_battery) * 100)}% sure it does not belong here.", "engine"
     steps.append({"id": "battery", "title": "Battery", "kind": "learned", "by": by,
                   "inputs": [fact(None, "Solar", f"{_num(kwp_final)} kWp"), fact("has_storage", "Existing battery", "yes" if has_storage else "no")],
-                  "how": f"Learned from past designs: whether to add one, and how large, rounded to sizes this installer sells ({sizes} kWh). More solar never gives a smaller battery.",
+                  "how": f"Learned from past designs: whether to add one, and how large, rounded to sizes this installer sells ({sizes} kWh)." +
+                         (f" Within {_num(HABIT_KWH)} kWh of its most sold size, {_num(habit)} kWh, that size is taken: experts mostly sell it." if habit and o.get("modules") is None else "") +
+                         " More solar never gives a smaller battery.",
                   "result": b_res,
                   "context": f"{similar['battery_rate']}% of similar homes bought one" +
                              (f", most {_num(similar['battery_low'])}–{_num(similar['battery_high'])} kWh." if similar["battery_low"] is not None else ".")})
@@ -366,6 +382,7 @@ def engine_predictor(train, test, catalog):
     """Same interface as models.PREDICTORS, for scoring."""
     e = Engine().fit(train, train)  # project rows carry the same size columns as options
     e.catalog = catalog
+    e.habit = e._habit(train)
     kwp, battery, p = e.predict(test)
     return _frame(test, kwp, p >= 0.5, battery, test.has_ev.astype(float).values)
 

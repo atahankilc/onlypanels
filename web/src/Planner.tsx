@@ -5,6 +5,7 @@ import { Back } from "./icons";
 import { Design, Handoff, Inputs, Overrides, Request, Source, Spot, design, facing, fromHomeowner, loadHome, refine, roofOf, turnTo } from "./plan";
 import { Change, ChangeCard, Trace, touched } from "./Trace";
 import "./planner.css";
+import ProofPage from "./Proof";
 import { Button, Check, Field, Input, Segmented, Select, Slider } from "./ui";
 
 const LEFT = 620;
@@ -41,6 +42,7 @@ const SAMPLE = { square: "682_5336", home: "DEBY_LOD2_4545924" };
 
 export default function Planner({ dark, handoff }: { dark: boolean; handoff?: Handoff | null }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [page, setPage] = useState<"requests" | "proof">("requests");
   const [requests, setRequests] = useState<Request[]>([]);
   const [scores, setScores] = useState<Scores | null>(null);
   const update = (id: string, p: Partial<Request>) => setRequests((l) => l.map((r) => (r.id === id ? { ...r, ...p } : r)));
@@ -56,11 +58,14 @@ export default function Planner({ dark, handoff }: { dark: boolean; handoff?: Ha
   const open = requests.find((r) => r.id === openId);
   if (open) return <Workspace key={open.id} dark={dark} r={open} update={update} back={() => setOpenId(null)} scores={scores} />;
   return <main className="inbox-page">
-    <h1>Requests</h1>
+    <div className="pagehead"><h1>{page === "requests" ? "Requests" : "Proof"}</h1>
+      <Segmented label="Page" value={page} onChange={setPage} options={[{ value: "requests", label: "Requests" }, { value: "proof", label: "Proof" }]} /></div>
+    {page === "proof" ? <ProofPage /> : <>
     <p className="muted">A draft is ready before you open a request. You check it, change it and send it.</p>
     <table className="inbox"><thead><tr><th>Home</th><th>From</th><th>AI draft</th><th>To check</th><th>Status</th></tr></thead>
       <tbody>{requests.map((r) => <Line key={r.id} r={r} open={() => setOpenId(r.id)} />)}</tbody></table>
     {!requests.length && <p className="muted">Loading sample requests…</p>}
+    </>}
   </main>;
 }
 

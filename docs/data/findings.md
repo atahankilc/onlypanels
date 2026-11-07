@@ -94,13 +94,13 @@ From `uv run python scripts/evaluate.py`: 5-fold cross-validation grouped by cus
 | Battery as catalog choice | 2.68 | 2.95 | 43.2% |
 | Installer's most common battery | 2.89 | 2.82 | **44.7%** |
 | **Planner fixes PV (true kWp)** | given | **2.43** | 27.9% |
-| **Engine** (behind the UI) | **2.65** | 2.85 | 22.0% |
+| **Engine** (behind the UI, battery pulled to the installer's usual size within 2 kWh) | **2.65** | 2.81 | 37.7% |
 
 What this shows:
 
 - **Coupling does not help the first proposal.** Predicted PV comes from the same inputs, so it adds no information. This corrects our earlier reading of the baseline.
 - **Coupling helps refinement.** Once a planner fixes PV, battery error falls 11%, from 2.75 to 2.43 kWh.
-- **Our model does not beat the installer's habit on exact battery tier.** We report both tier match and size error.
+- **Our model does not beat the installer's habit on exact battery tier.** We report both tier match and size error. Taking the usual size when the learned answer is within 2 kWh raised the engine from 22.0% to 37.7% and lowered its battery error (D73).
 - **Our learned kWp range is no better than a fixed one yet:** 7.35 kWp wide against 7.20 at the same 74.5% coverage, which also falls short of the 80% target.
 - **"No battery" is rarely found:** recall is 5% to 10%.
 - **Heat pump rule:** finds 7 of 8 dev projects, but only 37% of its recommendations match a sold heat pump.

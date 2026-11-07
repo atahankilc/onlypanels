@@ -90,6 +90,15 @@ def scores():
     return json.loads(found.read_text())
 
 
+@app.get("/api/proof")
+def proof():
+    """Past projects, each predicted by an engine trained without it, next to the expert's design. Local data only."""
+    found = FilePath(__file__).resolve().parents[1] / "data" / "processed" / "proof.json"
+    if not found.exists():
+        raise HTTPException(404, "Run scripts/build_proof.py first")
+    return FileResponse(found, media_type="application/json")
+
+
 @app.post("/api/refine")
 def refine_text(req: RefineRequest):
     return refine(req.text, req.mount)
