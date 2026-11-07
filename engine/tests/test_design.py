@@ -109,3 +109,27 @@ def test_alternatives_vary_one_decision_and_come_from_the_engine(engine):
     no_gas = {**home, "heating": None}
     large = {a["id"]: a for a in engine.alternatives(no_gas, {}, engine.design(no_gas))}.get("pv_large")
     assert large is None or large["pv"]["kwp"] <= engine.design(no_gas)["similar"]["kwp_high"] + 1e-6  # never past what experts go to
+
+
+def test_existing_solar_leaves_less_for_the_new_system(engine):
+    """A system already there covers part of the need; a bigger or newer one covers more. Size given or from the marked area."""
+    none = engine.design({**HOME, "demand_kwh": 9000})
+    given = engine.design({**HOME, "demand_kwh": 9000, "has_solar": True, "existing_kwp": 4, "existing_year": 2004})
+    newer = engine.design({**HOME, "demand_kwh": 9000, "has_solar": True, "existing_kwp": 4, "existing_year": 2024})
+    area = engine.design({**HOME, "demand_kwh": 9000, "has_solar": True, "existing_m2": 20})
+    assert given["pv"]["kwp"] <= none["pv"]["kwp"]
+    assert newer["energy"]["existing_mwh"] > given["energy"]["existing_mwh"] > 0
+    assert area["energy"]["existing_kwp"] == 4.0
+    assert "existing_estimated" in {n["code"] for n in area["review"]}
+    assert "existing_feed_in_ended" in {n["code"] for n in given["review"]}
+    unknown = engine.design({**HOME, "has_solar": True})
+    assert "existing_unknown" in {w["code"] for w in unknown["warnings"]}
+
+
+def test_existing_heat_pump_use_joins_the_need_when_given(engine):
+    """Given, a heat pump's own meter adds to the need and the solar never shrinks; not given, nothing changes."""
+    hp = {**HOME, "heating": "Heatpump"}
+    without, given = engine.design(hp), engine.design({**hp, "hp_kwh": 4500})
+    assert given["energy"]["total_mwh"] == round(without["energy"]["total_mwh"] + 4.5, 2)
+    assert given["pv"]["kwp"] >= without["pv"]["kwp"]
+    assert "hp_kwh" in {f["key"] for s in given["trace"] for f in s["inputs"]}

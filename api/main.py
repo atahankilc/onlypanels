@@ -50,11 +50,18 @@ class Inputs(BaseModel):
     price_ct_kwh: float = 32
     heating: str | None = None
     heat_kwh: float | None = None
+    hp_kwh: float | None = None  # what a heat pump already there uses a year, usually on its own meter
     has_solar: bool | None = False
     has_storage: bool | None = False
     ev: bool | None = False
     ev_km: float = 15000
     surfaces: list[Surface] | None = None
+    # Solar already on the building: size and year if the customer knows them, else the area they marked, and its sun.
+    existing_kwp: float | None = None
+    existing_year: int | None = None
+    existing_m2: float | None = None
+    existing_kwh_per_kwp: float | None = None
+    existing_battery_kwh: float | None = None
 
 
 class Overrides(BaseModel):

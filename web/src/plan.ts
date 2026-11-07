@@ -3,7 +3,7 @@ import { Answers, Choice, Place, Selected, SunSurface, chosenKeys, installedKeys
 import { P2, P3, toLocal } from "./geometry";
 import { fit } from "./panels";
 
-export type Inputs = { installer: string; demand_kwh: number | null; price_ct_kwh: number; heating: string | null; heat_kwh: number | null; has_solar: boolean; has_storage: boolean; ev: boolean; ev_km: number };
+export type Inputs = { installer: string; demand_kwh: number | null; price_ct_kwh: number; heating: string | null; heat_kwh: number | null; hp_kwh?: number | null; has_solar: boolean; has_storage: boolean; ev: boolean; ev_km: number };
 export type Overrides = { modules?: number | null; battery_kwh?: number | null; wallbox?: boolean | null; heatpump?: boolean | null };
 /** One step of the engine's own decision, in order. Input keys match the request's facts, so their source can be shown. */
 export type TraceStep = { id: string; title: string; kind: "measured" | "learned" | "rule" | "physics" | "input"; by?: "engine" | "planner"; inputs: { key: string | null; label: string; value: string }[]; how: string; result: string; context?: string };
@@ -20,11 +20,24 @@ export type Design = {
 export type Source = "customer" | "assumed" | "planner";
 export type Request = {
   id: string; label: string; from: string; buildings: Selected[]; inputs: Inputs; sources: Record<string, Source>; overrides: Overrides;
-  off: string[]; installed: string[]; walls: string[]; existing: { kwp: number | null; year: number | null; battery_kwh: number | null }; status: "draft" | "sent";
+  off: string[]; installed: string[]; walls: string[]; existing: Existing; status: "draft" | "sent";
 };
+/** Solar already on the building: size and year as the customer gave them, else the area they marked and the sun it gets. */
+export type Existing = { kwp: number | null; year: number | null; battery_kwh: number | null; m2?: number | null; kwh_per_kwp?: number | null };
 export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice };
 
 const TYPICAL_KM = 11300;
+/** The marked area with panels and the sun it gets: measured yield after shade, weighted by area. */
+const existingArea = (buildings: Selected[], c: Choice) => {
+  let m2 = 0, kwh = 0;
+  for (const b of buildings) for (const s of b.sun?.surfaces ?? []) {
+    const n = c.panels[surfaceKey(b, s)]?.length ?? 0;
+    if (!n) continue;
+    const area = (s.m2 * n) / Math.max(1, s.year.length), shade = s.kwh_m2 ? Math.max(0, 1 - meanSun(s) / s.kwh_m2) : 0;
+    m2 += area; kwh += area * (s.kwh_per_kwp ?? 950) * (1 - shade);
+  }
+  return { m2: m2 ? Math.round(m2) : null, kwh_per_kwp: m2 ? Math.round(kwh / m2) : null };
+};
 const chosenOff = (buildings: Selected[], c: Choice) => {
   const on = new Set(chosenKeys(buildings, c)), taken = new Set(installedKeys(buildings, c));
   return buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => s.kind === "roof" && !on.has(surfaceKey(b, s)) && !taken.has(surfaceKey(b, s))).map((s) => surfaceKey(b, s)));
@@ -36,11 +49,11 @@ export function fromHomeowner({ buildings, answers: a, choice }: Handoff): Reque
   const car = !!(a.ev || a.ev_planned);
   return {
     id: "homeowner", label: buildings[0]?.label ?? "Home", from: "Homeowner", buildings, status: "draft",
-    inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating, heat_kwh: a.heat_kwh, has_solar: !!a.has_solar, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM },
+    inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating, heat_kwh: a.heat_kwh, hp_kwh: a.heating === "Heatpump" ? a.hp_kwh : null, has_solar: !!a.has_solar, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM },
     sources: { demand_kwh: a.use_source === "exact" ? "customer" : "assumed", price_ct_kwh: "assumed", heating: source(a.heating), heat_kwh: source(a.heat_kwh), ev: source(a.ev), ev_km: car ? source(a.ev_km) : "customer", has_solar: source(a.has_solar), has_storage: source(a.has_storage) },
     overrides: a.wants_hp === false ? { heatpump: false } : a.wants_hp ? { heatpump: true } : {},
     // The planner still works by whole surface: a roof with nothing marked is out, a wall with anything marked is in.
-    off: chosenOff(buildings, choice), installed: installedKeys(buildings, choice), walls: chosenKeys(buildings, choice).filter((k) => !k.includes("|roof")), existing: { kwp: a.solar_kwp, year: a.solar_year, battery_kwh: a.battery_kwh },
+    off: chosenOff(buildings, choice), installed: installedKeys(buildings, choice), walls: chosenKeys(buildings, choice).filter((k) => !k.includes("|roof")), existing: { kwp: a.solar_kwp, year: a.solar_year, battery_kwh: a.battery_kwh, ...existingArea(buildings, choice) },
   };
 }
 
@@ -56,9 +69,10 @@ export const roofOf = (buildings: Selected[], installed: string[]): Spot[] => bu
   });
 }).sort((x, y) => y.yield_ - x.yield_);
 
-export const design = (i: Inputs, o: Overrides, roof: Spot[], off: string[]) => {
+export const design = (i: Inputs, o: Overrides, roof: Spot[], off: string[], ex?: Existing) => {
   const use = roof.filter((r) => r.fits > 0 && !off.includes(r.key));
-  return post<Design>("/api/design", { inputs: { ...i, surfaces: use.map((r) => ({ max_modules: r.fits, kwh_per_kwp: r.yield_, tilt: r.s.tilt, azimuth: r.s.azimuth })) }, overrides: o })
+  const existing = ex ? { existing_kwp: ex.kwp, existing_year: ex.year, existing_m2: ex.m2 ?? null, existing_kwh_per_kwp: ex.kwh_per_kwp ?? null, existing_battery_kwh: ex.battery_kwh } : {};
+  return post<Design>("/api/design", { inputs: { ...i, ...existing, surfaces: use.map((r) => ({ max_modules: r.fits, kwh_per_kwp: r.yield_, tilt: r.s.tilt, azimuth: r.s.azimuth })) }, overrides: o })
     .then((d) => ({ d, panels: Object.fromEntries(use.map((r, k) => [r.key, Math.min(r.fits, d.pv.placed?.[k] ?? 0)])) as Record<string, number> }));
 };
 export const refine = (text: string) => post<{ inputs: Partial<Inputs>; overrides: Overrides; understood: ({ code: string } & Record<string, unknown>)[]; source: string }>("/api/refine", { text, mount: "roof" });

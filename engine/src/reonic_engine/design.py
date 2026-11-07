@@ -3,6 +3,8 @@
 Learned from experts: PV size, battery size and whether to include one.
 Stated assumptions, not learned: the constants below.
 """
+import datetime
+
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
@@ -28,6 +30,28 @@ MIN_SIMILAR = 30
 UNSURE_BATTERY = 0.8  # below this, tell the planner the battery decision is open
 HABIT_KWH = 2.0  # a learned battery this close to the installer's most sold size becomes that size
 GUIDE_KWH_PER_UNIT = 1.5  # HTW Berlin 2022: usable kWh per kWp and per MWh of use, at most
+# A system already on the roof. The past projects hold no sizes for these (18 had one, none with a size), so this is
+# physics and stated assumptions, not learned. An assumption only stands in for what the customer did not give.
+KWP_PER_M2 = 0.2  # module power per m² of covered roof, when the size is not known
+AGEING = 0.005  # output lost per year of age, when the year is known
+FEED_IN_YEARS = 20  # after this the fixed feed-in tariff ends, so own use of its power matters more
+
+
+def existing_pv(i, typical):
+    """What a system already on the building makes: size given or from its marked area, its sun, its age."""
+    if not i.get("has_solar"):
+        return None
+    kwp, source = i.get("existing_kwp"), "customer"
+    if not kwp and i.get("existing_m2"):
+        kwp, source = i["existing_m2"] * KWP_PER_M2, "area"
+    if not kwp:
+        return {"kwp": None, "source": None, "mwh": 0.0, "age": None, "ended": False}
+    year = i.get("existing_year")
+    age = max(0, datetime.date.today().year - int(year)) if year else None
+    sun = i.get("existing_kwh_per_kwp") or typical
+    mwh = kwp * sun * (1 - AGEING) ** (age or 0) / 1000
+    return {"kwp": float(kwp), "source": source, "mwh": float(mwh), "age": age, "sun": float(sun),
+            "ended": age is not None and age >= FEED_IN_YEARS, "battery_kwh": float(i.get("existing_battery_kwh") or 0)}
 
 
 def place(modules, surfaces):
@@ -73,15 +97,15 @@ class Engine:
         tiers = snap(b.battery_kwh.values, b.installer.values, self.catalog)
         return {i: float(pd.Series(t).mode().iloc[0]) for i, t in pd.Series(tiers).groupby(b.installer.values)}
 
-    def predict(self, d, added_mwh=0.0, max_modules=None, kwp_lock=None):
-        """Vectorised core. Returns kWp, battery kWh and battery probability."""
+    def predict(self, d, added_mwh=0.0, max_modules=None, kwp_lock=None, extra_kwp=0.0):
+        """Vectorised core. Returns kWp, battery kWh and battery probability. extra_kwp: solar already there, which the battery also stores."""
         demand = d.demand_mwh + added_mwh
         kwp = self.kwp.predict(_x(d, demand))
         if max_modules is not None:
             kwp = np.minimum(kwp, max_modules * ASSUMED_KWP_PER_MODULE)
         if kwp_lock is not None:
             kwp = np.full(len(d), float(kwp_lock))
-        xb = _x(d, demand).assign(kwp=kwp)
+        xb = _x(d, demand).assign(kwp=kwp + extra_kwp)
         battery = snap(self.battery.predict(xb), d.installer.values, self.catalog)
         if kwp_lock is None:
             # Experts mostly sell their usual size: dev cross-validation, exact size 20% to 38% at both installers,
@@ -181,13 +205,25 @@ class Engine:
         ev_mwh = i.get("ev_km", 0) * EV_KWH_PER_KM / 1000 if i.get("ev") else 0.0
         hp_mwh = (heat_mwh or 15.0) / HEAT_PUMP_COP if hp_wanted else 0.0
         base = i["demand_kwh"] / 1000
-        total = base + ev_mwh + hp_mwh
+        # A heat pump already there runs on its own meter, so its use is not in the house's. Given, it joins the need the solar is sized
+        # for, and the model then sees a home without one, so it is not counted twice. Not given, the model's own "has a heat pump" stands.
+        own_hp = (i.get("hp_kwh") or 0) / 1000 if heat_type == "Heatpump" else 0.0
+        total = base + ev_mwh + hp_mwh + own_hp
+        country = i.get("country", "Germany")
+        typical = KWH_PER_KWP.get(country, KWH_PER_KWP["Other"])
 
+        # A system already there covers part of the need: the new one is sized for what is left. The model then sees a home
+        # without solar, so the old system is not counted twice. With no size at all, the model's own "has solar" stands.
+        ex = existing_pv(i, typical)
+        known = bool(ex and ex["kwp"])
+        left = max(0.0, total - ex["mwh"]) if known else total
         row = pd.DataFrame([{
-            "demand_mwh": base, "price_ct_kwh": i.get("price_ct_kwh", 32.0), "installer": i["installer"],
-            "heating_existing_type": heat_type, "has_solar": bool(i.get("has_solar")),
+            "demand_mwh": left if known else base, "price_ct_kwh": i.get("price_ct_kwh", 32.0), "installer": i["installer"],
+            "heating_existing_type": None if own_hp else heat_type, "has_solar": bool(i.get("has_solar")) and not known,
             "has_storage": bool(i.get("has_storage")),
         }])
+        added = 0.0 if known else ev_mwh * EV_SIZING + hp_mwh + own_hp
+        old_kwp = ex["kwp"] if known else 0.0
         area = i.get("area_m2")
         surfaces = i.get("surfaces") or None
         max_modules = int(area // mount["m2_per_module"]) if area else None
@@ -196,12 +232,12 @@ class Engine:
         locked_modules = o.get("modules")
         lock = locked_modules * ASSUMED_KWP_PER_MODULE if locked_modules is not None else None
 
-        free_kwp = self.predict(row, ev_mwh * EV_SIZING + hp_mwh)[0][0]
-        kwp, battery, p_battery = self.predict(row, ev_mwh * EV_SIZING + hp_mwh, max_modules, lock)
+        free_kwp = self.predict(row, added)[0][0]
+        kwp, battery, p_battery = self.predict(row, added, max_modules, lock, extra_kwp=old_kwp)
         modules = locked_modules if lock is not None else max(1, round(kwp[0] / ASSUMED_KWP_PER_MODULE))
         kwp_final = modules * ASSUMED_KWP_PER_MODULE
         capped = lock is None and max_modules is not None and free_kwp > max_modules * ASSUMED_KWP_PER_MODULE
-        like = total - ev_mwh  # need without the car, as past homes recorded it
+        like = max(0.0, left - ev_mwh)  # need without the car, as past homes recorded it
         similar = self.similar(i["installer"], like, car=bool(ev_mwh))
 
         if lock is not None:
@@ -242,13 +278,13 @@ class Engine:
             warnings.append({"code": "non_roof"})
         if not area and not surfaces:
             warnings.append({"code": "no_area"})
+        if ex and not known:
+            warnings.append({"code": "existing_unknown"})
         if hp_wanted and not heat_mwh:
             warnings.append({"code": "hp_assumed_heat"})
         if unsure:
             warnings.append({"code": "battery_unsure", "share": round((1 - float(p_battery[0])) * 100)})
 
-        country = i.get("country", "Germany")
-        typical = KWH_PER_KWP.get(country, KWH_PER_KWP["Other"])
         production = kwp_final * typical * mount["yield"] / 1000
         placed = None
         if surfaces:
@@ -257,19 +293,28 @@ class Engine:
                 n * ASSUMED_KWP_PER_MODULE * (s.get("kwh_per_kwp") or typical * MOUNTS[s["kind"]]["yield"])
                 for n, s in zip(placed, surfaces)) / 1000
             reasons.append({"code": "site_sun", "kwh": round(production * 1000 / kwp_final)})
-        estimate = simulate(base * 1000, ev_mwh * 1000, hp_mwh * 1000, production * 1000, battery_kwh,
-                            i.get("price_ct_kwh", 32.0), sun=sun_shape(surfaces, placed))  # real weather years, this roof's directions
+        price = i.get("price_ct_kwh", 32.0)
+        sun = sun_shape(surfaces, placed)  # real weather years, this roof's directions
+        old_mwh, old_battery = (ex["mwh"], ex["battery_kwh"]) if known else (0.0, 0.0)
+        # The home as a whole, both systems and both batteries. The saving is only what the new system adds to the old one.
+        heat_load = (hp_mwh + own_hp) * 1000
+        estimate = simulate(base * 1000, ev_mwh * 1000, heat_load, (production + old_mwh) * 1000, battery_kwh + old_battery, price, sun=sun)
+        if known:
+            before = simulate(base * 1000, ev_mwh * 1000, heat_load, old_mwh * 1000, old_battery, price, sun=sun)
+            estimate["saving_eur"] = max(0, estimate["saving_eur"] - before["saving_eur"])
         reasons.append({"code": "balance", "production": round(production, 1), "ratio": round(production / total, 1)})
 
         near = self.near(i["installer"], like, car=bool(ev_mwh))
         review = _review(near, similar, kwp_final, battery_kwh, total, has_storage, unsure, p_battery[0])
+        if ex:
+            review.extend(_existing_notes(ex))
         trace = _trace(
             i=i, o=o, base=base, ev_mwh=ev_mwh, hp_mwh=hp_mwh, total=total, heat_type=heat_type, heat_mwh=heat_mwh,
             hp_kw=hp_kw, hp_wanted=hp_wanted, surfaces=surfaces, max_modules=max_modules, free_kwp=free_kwp,
             modules=modules, kwp_final=kwp_final, capped=capped, similar=similar, catalog=catalog,
             battery_kwh=battery_kwh, p_battery=float(p_battery[0]), has_storage=has_storage, wallbox=wallbox,
             production=production, estimate=estimate, review=review, typical=typical,
-            habit=self.habit.get(i["installer"]))
+            habit=self.habit.get(i["installer"]), ex=ex, left=left)
         return {
             "pv": {"modules": modules, "kwp": round(kwp_final, 2), "max_modules": max_modules, "placed": placed,
                    "locked": lock is not None, "capped": bool(capped)},
@@ -280,7 +325,8 @@ class Engine:
             "heatpump": {"included": hp_kw > 0, "kw": hp_kw, "locked": o.get("heatpump") is not None,
                          "blocked": heat_type == "Heatpump"},
             "energy": {"base_mwh": round(base, 2), "ev_mwh": round(ev_mwh, 2), "hp_mwh": round(hp_mwh, 2),
-                       "total_mwh": round(total, 2), "production_mwh": round(production, 1), **estimate},
+                       "total_mwh": round(total, 2), "production_mwh": round(production, 1), "own_hp_mwh": round(own_hp, 2),
+                       "existing_mwh": round(old_mwh, 1), "existing_kwp": round(old_kwp, 1) if known else None, **estimate},
             "similar": similar, "reasons": reasons, "warnings": warnings, "trace": trace, "review": review,
         }
 
@@ -327,9 +373,27 @@ def _review(near, similar, kwp, battery_kwh, total_mwh, has_storage, unsure, p_b
     return notes
 
 
+def _existing_notes(ex):
+    notes = []
+    if not ex["kwp"]:
+        notes.append({"code": "existing_unknown", "level": "warn", "on": "pv",
+                      "text": "There is solar on the building, but neither its size nor its area is known, so the new system ignores it. Ask the customer."})
+        return notes
+    if ex["source"] == "area":
+        notes.append({"code": "existing_estimated", "level": "warn", "on": "pv",
+                      "text": f"The existing system's size is estimated from its marked area: {_num(ex['kwp'])} kWp at {KWP_PER_M2} kWp per m². Ask the customer for the real size."})
+    if ex["ended"]:
+        notes.append({"code": "existing_feed_in_ended", "level": "note", "on": "battery",
+                      "text": f"The existing system is {ex['age']} years old: its fixed feed-in tariff ({FEED_IN_YEARS} years) has ended, so storing its power for the home pays more. Worth discussing a battery."})
+    elif ex["age"] is None:
+        notes.append({"code": "existing_age_unknown", "level": "note", "on": "pv",
+                      "text": "The existing system's age is not known, so no output loss from ageing is counted."})
+    return notes
+
+
 def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_wanted, surfaces, max_modules, free_kwp,
            modules, kwp_final, capped, similar, catalog, battery_kwh, p_battery, has_storage, wallbox, production,
-           estimate, review, typical, habit=None):
+           estimate, review, typical, habit=None, ex=None, left=None):
     """The engine's own steps, in order, each with what went in, how it was decided and what came out.
     Every number here is the engine's. Input keys match the request's facts, so the screen can show their source."""
     def fact(key, label, value):
@@ -344,9 +408,26 @@ def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_
     if hp_mwh:
         need_in.append(fact("heat_kwh", "Heat", f"{_num((heat_mwh or 15.0) * 1000, 0)} kWh"))
         how.append(f"heat pump: heat ÷ {HEAT_PUMP_COP}")
-    parts = [f"{_num(base)} house"] + ([f"{_num(ev_mwh)} car"] if ev_mwh else []) + ([f"{_num(hp_mwh)} heat pump"] if hp_mwh else [])
+    if heat_type == "Heatpump" and i.get("hp_kwh"):
+        need_in.append(fact("hp_kwh", "Heat pump now", f"{_num(i['hp_kwh'], 0)} kWh"))
+        how.append("the heat pump already there, on its own meter")
+    own_hp = (i.get("hp_kwh") or 0) / 1000 if heat_type == "Heatpump" else 0.0
+    parts = [f"{_num(base)} house"] + ([f"{_num(ev_mwh)} car"] if ev_mwh else []) + ([f"{_num(hp_mwh)} heat pump"] if hp_mwh else []) + ([f"{_num(own_hp)} heat pump now"] if own_hp else [])
     steps.append({"id": "need", "title": "Yearly need", "kind": "rule", "inputs": need_in, "how": ", ".join(how) + ".",
                   "result": f"{_num(total)} MWh a year" + (f" ({' + '.join(parts)})" if len(parts) > 1 else "")})
+
+    if ex:
+        if ex["kwp"]:
+            ex_in = [fact("existing_kwp", "Size", f"{_num(ex['kwp'])} kWp") if ex["source"] == "customer" else fact("existing_m2", "Marked area", f"{_num(ex['kwp'] / KWP_PER_M2, 0)} m²"),
+                     fact("existing_year", "Year", str(datetime.date.today().year - ex["age"]) if ex["age"] is not None else "unknown")]
+            how = ("Its size as given" if ex["source"] == "customer" else f"Size from the marked area at {KWP_PER_M2} kWp per m²") + \
+                  f", {_num(ex['sun'], 0)} kWh per kWp" + (f", {_num(AGEING * 100)}% less output for each of its {ex['age']} years" if ex["age"] else "") + \
+                  ". The new system is sized for the need that is left, and the battery for both systems."
+            steps.append({"id": "existing", "title": "Solar already there", "kind": "physics", "inputs": ex_in, "how": how,
+                          "result": f"{_num(ex['kwp'])} kWp makes about {_num(ex['mwh'])} MWh a year. Need left for the new system: {_num(left)} MWh."})
+        else:
+            steps.append({"id": "existing", "title": "Solar already there", "kind": "input", "inputs": [fact("has_solar", "Solar", "yes")],
+                          "how": "Neither its size nor its area is known.", "result": "Not counted. The model only knows the home has solar."})
 
     if surfaces:
         best = max((s.get("kwh_per_kwp") or 0) for s in surfaces)
@@ -358,7 +439,7 @@ def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_
         steps.append({"id": "roof", "title": "Roof", "kind": "input", "inputs": [],
                       "how": "No measured roof.", "result": "No area limit. Check the roof before quoting."})
 
-    pv_in = [fact(None, "Need", f"{_num(total)} MWh"), fact("installer", "Installer", "catalog and style")]
+    pv_in = [fact(None, "Need", f"{_num(left if left is not None else total)} MWh"), fact("installer", "Installer", "catalog and style")]
     if o.get("modules") is not None:
         pv_res = f"You fixed {modules} modules ({_num(kwp_final)} kWp). The model alone would choose {_num(free_kwp)} kWp."
         by = "planner"
@@ -384,7 +465,7 @@ def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_
     else:
         b_res, by = f"No battery. The engine is {round((1 - p_battery) * 100)}% sure it does not belong here.", "engine"
     steps.append({"id": "battery", "title": "Battery", "kind": "learned", "by": by,
-                  "inputs": [fact(None, "Solar", f"{_num(kwp_final)} kWp"), fact("has_storage", "Existing battery", "yes" if has_storage else "no")],
+                  "inputs": [fact(None, "Solar", f"{_num(kwp_final)} kWp" + (f" new + {_num(ex['kwp'])} kWp there" if ex and ex["kwp"] else "")), fact("has_storage", "Existing battery", "yes" if has_storage else "no")],
                   "how": f"Learned from past designs: whether to add one, and how large, rounded to sizes this installer sells ({sizes} kWh)." +
                          (f" Within {_num(HABIT_KWH)} kWh of its most sold size, {_num(habit)} kWh, that size is taken: experts mostly sell it." if habit and o.get("modules") is None else "") +
                          " More solar never gives a smaller battery.",
@@ -412,7 +493,10 @@ def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_
     steps.append({"id": "energy", "title": "Energy check", "kind": "physics",
                   "inputs": [fact(None, "Production", f"{_num(production)} MWh"), fact("price_ct_kwh", "Price", f"{_num(i.get('price_ct_kwh', 32.0))} ct")],
                   "how": f"One year hour by hour, with assumed household, car and heat profiles and {FEED_IN_CT_KWH} ct feed-in. An estimate, not a measurement.",
-                  "result": f"Makes {_num(production)} MWh, {_num(production / total)} times the need. About {estimate['self_sufficiency_pct']}% of the need from own power, about €{estimate['saving_eur']:,} saved a year."})
+                  "result": (f"The new system makes {_num(production)} MWh, with the old one {_num(production + ex['mwh'])} MWh: {_num((production + ex['mwh']) / total)} times the need. "
+                             f"About {estimate['self_sufficiency_pct']}% of the need from own power. The new system adds about €{estimate['saving_eur']:,} a year."
+                             if ex and ex["kwp"] else
+                             f"Makes {_num(production)} MWh, {_num(production / total)} times the need. About {estimate['self_sufficiency_pct']}% of the need from own power, about €{estimate['saving_eur']:,} saved a year.")})
 
     warn = [r for r in review if r["level"] == "warn"]
     steps.append({"id": "review", "title": "Review", "kind": "rule", "inputs": [],

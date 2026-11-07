@@ -15,7 +15,7 @@ const LEFT = 620;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const SOURCE: Record<Source, string> = { customer: "Customer", assumed: "Assumed", planner: "You" };
 const INSTALLERS: [string, string][] = [["2a8ba8e2", "Installer A"], ["23c108b7", "Installer B"]];
-const HEATS: [string, string][] = [["", "Unknown"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherNonRenewable", "Other fossil"], ["Heatpump", "Heat pump"]];
+const HEATS: [string, string][] = [["", "Unknown"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherNonRenewable", "Other fossil"], ["OtherRenewable", "Wood or pellets"], ["Heatpump", "Heat pump"]];
 const summary = (d: Design) => `${d.pv.kwp.toFixed(1)} kWp · ${d.battery.kwh ? `${d.battery.kwh} kWh` : "no battery"}${d.wallbox.included ? " · wallbox" : ""}${d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}`;
 const FACT: Record<string, string> = { demand_kwh: "Yearly electricity", price_ct_kwh: "Price", heating: "Heating", heat_kwh: "Yearly heat", ev: "Electric car", ev_km: "Driving", has_solar: "Existing solar", has_storage: "Existing battery", installer: "Catalog" };
 const UNDERSTOOD: Record<string, (u: Record<string, unknown>) => string> = {
@@ -34,9 +34,9 @@ const useDesign = (r: Request, roof: Spot[]) => {
   useEffect(() => {
     if (!roof.length) return;
     let live = true;
-    const t = setTimeout(() => design(r.inputs, r.overrides, roof, r.off).then((x) => live && setOut(x)).catch(() => undefined), 120);
+    const t = setTimeout(() => design(r.inputs, r.overrides, roof, r.off, r.existing).then((x) => live && setOut(x)).catch(() => undefined), 120);
     return () => { live = false; clearTimeout(t); };
-  }, [r.inputs, r.overrides, r.off, roof]);
+  }, [r.inputs, r.overrides, r.off, roof, r.existing]);
   return out;
 };
 
@@ -92,7 +92,7 @@ const fmt = (r: Request, k: string, d: Design): string => {
   if (k === "heat_kwh") return v == null ? "15,000 kWh (stand-in)" : `${Number(v).toLocaleString("en")} kWh`;
   if (k === "price_ct_kwh") return `${v} ct per kWh`;
   if (k === "ev_km") return `${Number(v).toLocaleString("en")} km a year`;
-  if (k === "heating") return v == null ? "unknown" : v === "OtherNonRenewable" ? "other fossil" : v === "Heatpump" ? "heat pump" : String(v).toLowerCase();
+  if (k === "heating") return v == null ? "unknown" : v === "OtherNonRenewable" ? "other fossil" : v === "OtherRenewable" ? "wood or pellets" : v === "Heatpump" ? "heat pump" : String(v).toLowerCase();
   return v ? "yes" : "no";
 };
 /** Facts that matter for this design and were not given by anyone: they must be confirmed before the offer leaves. */
@@ -290,7 +290,7 @@ function Facts({ r, setI }: { r: Request; setI: (c: Partial<Inputs>) => void }) 
     <Tagged label="Driving (km a year)" source={s.ev_km}><Input type="number" step={1000} value={i.ev_km} onChange={(e) => setI({ ev_km: Number(e.target.value) })} /></Tagged>
     <Tagged label="Existing solar" source={s.has_solar}><Segmented wide label="Existing solar" value={i.has_solar ? "yes" : "no"} onChange={(v) => setI({ has_solar: v === "yes" })} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></Tagged>
     <Tagged label="Existing battery" source={s.has_storage}><Segmented wide label="Existing battery" value={i.has_storage ? "yes" : "no"} onChange={(v) => setI({ has_storage: v === "yes" })} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></Tagged>
-    {(r.existing.kwp || r.existing.year || r.existing.battery_kwh) && <p className="small muted span">On the building: {[r.existing.kwp && `${r.existing.kwp} kWp`, r.existing.year && `from ${r.existing.year}`, r.existing.battery_kwh && `${r.existing.battery_kwh} kWh battery`].filter(Boolean).join(", ")}. Not used by the engine yet.</p>}
+    {i.has_solar && (r.existing.kwp || r.existing.m2 || r.existing.year || r.existing.battery_kwh) && <p className="small muted span">On the building: {[r.existing.kwp ? `${r.existing.kwp} kWp` : r.existing.m2 && `${r.existing.m2} m² of panels marked, size estimated from it`, r.existing.year && `from ${r.existing.year}`, r.existing.battery_kwh && `${r.existing.battery_kwh} kWh battery`].filter(Boolean).join(", ")}. The engine sizes the new system for the need the old one leaves.</p>}
     <Tagged label="Catalog"><Select value={i.installer} onChange={(e) => setI({ installer: e.target.value })}>{INSTALLERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Tagged>
   </div>;
 }
