@@ -30,7 +30,7 @@ Measured 2026-11-07. Reproduce with `uv run python scripts/profile_data.py`. Int
 
 - **Only won deals.** All 1,619 projects have `first_signed_at`. Win rate cannot be modelled, and business claims about it must be argued, not measured. We can measure offer-to-signature times (median 19 and 28 days).
 - **Which option was delivered is unknown.** 300 of 1,593 projects have several options and nothing marks the winner. 33% of projects (531 of 1,593) have no option 1, so *hypothesis:* the export contains only signed options, or the options are filtered in some other way.
-- **Key drivers are missing.** No roof area, orientation, shading, postcode, prices or budget. House size and inhabitants are 99.5% empty. The brief names budget as a driver, but it cannot be learned here.
+- **Key drivers are missing.** No roof area, orientation, shading, postcode, prices or budget. House size and inhabitants are 99.5% empty. So household size cannot stand in for an unknown use: only 6 dev projects have both (`scripts/profile_household.py`). The brief names budget as a driver, but it cannot be learned here.
 - **Two installers, two styles.** Itemised against bundled, with different catalogs. A single global model hides this.
 - **Thin slices.** Heat pumps in 17 projects. EV flag in 62. Existing solar in 18.
 
