@@ -32,3 +32,15 @@ These are presented as product vision or added on top of the working engine. Inp
 | Price optimisation | Best system for a budget or payback target | New data: product prices, absent from the export |
 
 Roof input is the one to try first: it could improve the core accuracy too, not only the UI.
+
+## Planner: notes for later
+
+The app focuses on the homeowner for now. The planner screen was removed and returns after that flow is finished.
+
+- It should read what the homeowner produced, not ask again: buildings, chosen surfaces, wall requests, answers, and which numbers are measured, entered or estimated.
+- Its first job is the things that cannot be estimated: who decides, grants, monument status, grid, meter cabinet, roof condition, room-by-room heat load.
+- Keep it plain: one request list and one working screen, with override on every part. Speed and control matter more than visuals.
+- Windows and chimneys stay a planner check on the photo, not an automatic deduction.
+- Walls arrive as requests. The planner accepts or declines them.
+- Expert comparison and scores need a home, on this screen or only in the pitch. Undecided.
+
