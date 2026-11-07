@@ -4,6 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import * as THREE from "three";
 import { Poly, Selected, SunSurface, View, homesIn, polyOf, surfaceKey, Square, homesUrl, squareEdges, squaresIn } from "./api";
 import { fit } from "./panels";
+import { TILT_PER_PX, TURN_PER_PX, leash } from "./camera";
 import { P2, P3, centre, inside, normal, toLngLat, toLocal } from "./geometry";
 import { Info, Locate, Minus, Needle, Plus } from "./icons";
 import { BUILDINGS_3D_FILTER, mapStyle } from "./mapStyle";
@@ -25,6 +26,9 @@ const EDGE_OPACITY = 0.8;
 export const SUN_LOW = 500, SUN_HIGH = 1400; // kWh per m² a year
 const PANEL_W = 424; // room the panel takes on a wide screen
 const PITCH = 50; // steeper tilts make a drag near the horizon cover hundreds of metres
+const MAX_PITCH = 60;
+const REVIEW_PITCH = 75; // around one site there is no horizon to drag, and walls need seeing
+const PAN = { maxSpeed: 500, deceleration: 4000 }; // less fling after a drag
 const SITE = "site-fade"; // around the chosen buildings the map fades into plain ground
 const SITE_FROM_M = 45, SITE_RING_M = 10, SITE_RINGS = [0.2, 0.25, 0.3, 0.4, 0.6, 1];
 const FADE_MS = 900; // from the map's blocks to the measured buildings, and back
@@ -440,15 +444,18 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
 
   useEffect(() => {
     const m = new maplibregl.Map({
-      container: box.current as HTMLDivElement, style: mapStyle(dark), attributionControl: false, center: MUNICH, zoom: 11, pitch: 30, maxPitch: 60, bearing: 0,
-      maxBounds: VIEW_LIMIT, clickTolerance: 8, canvasContextAttributes: { antialias: true }, reduceMotion: false,
+      container: box.current as HTMLDivElement, style: mapStyle(dark), attributionControl: false, center: MUNICH, zoom: 11, pitch: 30, maxPitch: MAX_PITCH, bearing: 0,
+      maxBounds: VIEW_LIMIT, clickTolerance: 8, canvasContextAttributes: { antialias: true }, reduceMotion: false, boxZoom: false,
+      rotateSpeed: TURN_PER_PX, pitchSpeed: -TILT_PER_PX,
       // By default tiles are cut into smaller ones when zooming in, which cuts every building along a grid.
       zoomLevelsToOverscale: 16,
     });
     map.current = m;
-    // Less fling after a drag, and zooming stays on the view's centre instead of chasing the pointer.
-    m.dragPan.enable({ maxSpeed: 500, deceleration: 4000 });
+    // Zooming stays on the view's centre instead of chasing the pointer.
+    m.dragPan.enable(PAN);
     m.scrollZoom.enable({ around: "center" });
+    // Linear: by default a drag spins the map like a wheel, the opposite way below the centre and slower far from it.
+    m.dragRotate.enable({ around: "center", movement: "linear" });
     // A marker has no height of its own: lift it to the roof by hand.
     liftPins.current = () => {
       const px = (512 * 2 ** m.getZoom()) / (40075016 * Math.cos((m.getCenter().lat * Math.PI) / 180)) * Math.sin((m.getPitch() * Math.PI) / 180);
@@ -745,13 +752,19 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   }, [near]);
   useEffect(() => { if (look) frame(700, look.id); }, [look]);
 
+  // The map stays full size behind its window, so the room is measured from the screen's edges.
+  const room = () => wide() ? live.current.panelW ? { top: 130, left: live.current.panelW + 110, right: 130, bottom: 130 } : { top: 90, left: PANEL_W + 70, right: 90, bottom: 120 } : { top: 110, left: 30, right: 30, bottom: innerHeight * 0.5 };
+  const areaOf = (list: Selected[]) => {
+    const points = list.flatMap((b) => [b.origin, ...(b.real?.roofs ?? []).flatMap((r) => r.ring.map((p) => toLngLat(b.origin, [p[0], p[1]])))]);
+    return points.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(points[0], points[0]));
+  };
+
   const frame = (duration: number, only?: string) => {
     const m = map.current, list = live.current.buildings.filter((b) => !only || b.home === only);
     if (!m || !list.length) return;
-    const points = list.flatMap((b) => [b.origin, ...(b.real?.roofs ?? []).flatMap((r) => r.ring.map((p) => toLngLat(b.origin, [p[0], p[1]])))]);
-    const area = points.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(points[0], points[0]));
-    // The map stays full size behind its window, so the room is measured from the screen's edges.
-    m.fitBounds(area, { padding: wide() ? live.current.panelW ? { top: 130, left: live.current.panelW + 110, right: 130, bottom: 130 } : { top: 90, left: PANEL_W + 70, right: 90, bottom: 120 } : { top: 110, left: 30, right: 30, bottom: innerHeight * 0.5 }, maxZoom: live.current.panelW ? 20.4 : 19.5, pitch: PITCH, bearing: live.current.turn ?? m.getBearing(), duration, easing: glide });
+    const area = areaOf(list);
+    // The padding stays on the map, so its centre, which it turns around, is the middle of the window.
+    m.fitBounds(area, { padding: room(), absolutePadding: true, maxZoom: live.current.panelW ? 20.4 : 19.5, pitch: PITCH, bearing: live.current.turn ?? m.getBearing(), duration, easing: glide });
   };
 
   // Between the steps the map's blocks fade out while the measured buildings fade in, as the camera settles on them.
@@ -766,21 +779,24 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       buildModels(); setShown(0); placePins(); frame(MOVE_MS);
       (m.getSource(SITE) as maplibregl.GeoJSONSource).setData(fadeAround(live.current.buildings));
       m.setLayoutProperty(SITE, "visibility", "visible");
-      // Once it has arrived, this view is the limit: closer is fine, further or elsewhere is not, so nothing more loads.
+      m.setMaxPitch(REVIEW_PITCH);
+      // Once it has arrived, nothing more loads. Closer is fine; further only until the whole site fits at any turn, and the centre stays on the buildings.
       m.once("moveend", () => {
         if (live.current.step !== "review") return;
-        // The screen's own size, not getBounds(): tilted, that reaches far past the view and would leave room to wander.
-        const c = maplibregl.MercatorCoordinate.fromLngLat(m.getCenter()), box = m.getContainer(), unit = 1 / (512 * 2 ** m.getZoom()), grow = 1.005;
-        const at = (dx: number, dy: number) => new maplibregl.MercatorCoordinate(c.x + dx * unit * grow, c.y + dy * unit * grow).toLngLat();
-        m.setMinZoom(m.getZoom());
-        m.setMaxZoom(Math.max(m.getZoom() + 1.5, 20)); // past this the photo is only blur
-        m.setMaxBounds([at(-box.clientWidth / 2, box.clientHeight / 2), at(box.clientWidth / 2, -box.clientHeight / 2)]);
+        const area = areaOf(live.current.buildings), across = area.getSouthWest().distanceTo(area.getNorthEast()), pad = room(), box = m.getContainer();
+        const side = Math.min(box.clientWidth - pad.left - pad.right, box.clientHeight - pad.top - pad.bottom);
+        const fits = Math.log2((side * 40075016 * Math.cos((area.getCenter().lat * Math.PI) / 180)) / (512 * Math.max(1, across)));
+        const zoom = m.getZoom();
+        m.setMaxZoom(Math.max(zoom + 1.5, 20)); // past this the photo is only blur
+        m.setMinZoom(Math.min(zoom - 0.5, fits));
+        m.setTransformConstrain(leash(m, area));
       });
     } else {
-      m.setMaxBounds(VIEW_LIMIT);
+      m.setTransformConstrain(null);
       m.setMinZoom(null);
       m.setMaxZoom(null);
-      if (camera.current) m.easeTo({ ...camera.current, duration: MOVE_MS, easing: glide });
+      if (camera.current) m.easeTo({ ...camera.current, padding: { top: 0, left: 0, right: 0, bottom: 0 }, duration: MOVE_MS, easing: glide });
+      m.setMaxPitch(MAX_PITCH);
       hidden.current.forEach((visibility, id) => m.setLayoutProperty(id, "visibility", visibility as "visible"));
       hidden.current.clear();
     }
@@ -832,6 +848,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       {loading > 0 && <div className="mapload" role="status">Loading measured buildings…</div>}
       <div className="rim" aria-hidden="true" />
       <SunLight view={view} sun={buildings.find((b) => b.sun)?.sun ?? null} bearing={bearing} />
+      {step === "review" && <p className="maphint">Drag to move · Right-drag or Ctrl-drag to turn · Scroll to zoom</p>}
       <div className="mapctl">
         {step === "pick" && <IconButton variant="glass" size="lg" label="Go to my location" onClick={locateMe}><Locate /></IconButton>}
         <div className="mapstack">
