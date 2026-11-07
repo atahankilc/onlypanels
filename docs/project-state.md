@@ -28,6 +28,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - Energy estimate uses real weather years (PVGIS hourly, Munich, 2018 to 2020) per roof direction, battery losses and a factor calibrated to HTW Berlin values (`scripts/check_energy.py`). Before, it put own power about 20 points too high without a battery and could not tell battery sizes apart
 - Design shows what each catalog battery size does in this home (own-power share and saving); a click sets it
 - Price no longer moves the system size (D82); feed-in at the 2026 rate of 7.7 ct
+- Heat pump size from 2,250 kWh of heat per kW, a car sizes solar at 75% of its use, cars compared with past wallbox homes (D84). Homeowner to planner tested end to end in the browser: request arrives with sources, assumed facts block sending until confirmed, sent offers show in the list
 
 ## Not done
 
