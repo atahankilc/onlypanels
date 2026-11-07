@@ -4,7 +4,7 @@ Measured 2026-11-07. Reproduce with `uv run python scripts/profile_data.py`. Int
 
 ## What this means for the build
 
-1. **The inputs predict little.** A first gradient-boosting baseline barely beats always guessing the median. The big missing variable is probably roof capacity, which is not in the data. Our edge has to come from coupling, catalog awareness and honest measurement, not from a cleverer regressor.
+1. **The inputs predict little.** A first gradient-boosting baseline barely beats always guessing the median. The big missing variable is probably roof capacity, which is not in the data. Our edge has to come from refinement, installer knowledge and honest measurement, not from a cleverer regressor.
 2. **Treat expert designs as a range, not one answer.** The same home at the same installer often has options that differ. Score against that noise floor.
 3. **Filter before training.** Roughly one project in six is a post-sale add-on, not a design.
 4. **Heat pumps cannot be learned from this data.** Only 17 projects have one. Use physics and rules, and say so.
@@ -72,13 +72,37 @@ Gradient boosting, 5 folds grouped by customer, new-system subset, last option p
 | kWp, `2a8ba8e2` | 983 | 2.52 | 2.70 | |
 | kWp, `23c108b7` | 326 | 3.26 | 3.28 | No gain |
 | Battery kWh | 1,180 | 2.95 | 2.98 | No gain from inputs alone |
-| Battery kWh given true kWp | 1,180 | 2.63 | 2.98 | **Coupling is the real signal** |
+| Battery kWh given true kWp | 1,180 | 2.63 | 2.98 | Helps only when PV is really known, see the dev scores below |
 | kWp = k × demand | 1,309 | 3.82 | | Rule of thumb is worse than the constant |
 
 | Decision | AUC | Base rate |
 |---|---|---|
 | Has battery | 0.717 | 90% |
 | Has wallbox | 0.527 | 25%, effectively random from these inputs |
+
+## Dev scores
+
+From `uv run python scripts/evaluate.py`: 5-fold cross-validation grouped by customer, on the 1,041 dev projects. The 276 test projects are untouched. The design population is 1,317 projects: 1,313 with PV, plus heat-pump-only designs, minus commercial outliers.
+
+| Predictor | kWp MAE | Battery MAE | Exact battery tier (closest option) |
+|---|---|---|---|
+| Median design | 2.89 | 2.88 | 36.8% |
+| Rule of thumb | 3.72 | 3.53 | 23.5% |
+| Nearest homes | 2.72 | 2.88 | 18.8% |
+| Independent boosted models | 2.68 | 2.75 | 23.5% |
+| Coupled, predicted PV feeds battery | 2.68 | 2.81 | 21.8% |
+| Battery as catalog choice | 2.68 | 2.95 | 43.2% |
+| Installer's most common battery | 2.89 | 2.82 | **44.7%** |
+| **Planner fixes PV (true kWp)** | given | **2.43** | 27.9% |
+
+What this shows:
+
+- **Coupling does not help the first proposal.** Predicted PV comes from the same inputs, so it adds no information. This corrects our earlier reading of the baseline.
+- **Coupling helps refinement.** Once a planner fixes PV, battery error falls 11%, from 2.75 to 2.43 kWh.
+- **Our model does not beat the installer's habit on exact battery tier.** The best metric depends on the scoring rule, so Q24 matters.
+- **Our learned kWp range is no better than a fixed one yet:** 7.35 kWp wide against 7.20 at the same 74.5% coverage, which also falls short of the 80% target.
+- **"No battery" is rarely found:** recall is 5% to 10%.
+- **Heat pump rule:** finds 7 of 8 dev projects, but only 37% of its recommendations match a sold heat pump.
 
 ## Noise floor
 

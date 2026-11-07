@@ -11,6 +11,11 @@ Read `docs/project-state.md` first. Keep `project-state.md`, `decisions.md` and 
 - The LLM never produces design numbers. The engine does.
 - Do not use parts-derived values as model features: that leaks the answer.
 - Split by `customer_contact_id`, and report results per installer.
+- Develop on the dev split only. Score the test split rarely, for final numbers.
+
+## Git
+
+Work directly on `main`. No feature branches (D20).
 
 ## Data traps
 
@@ -26,6 +31,7 @@ Details are in `docs/data/findings.md`. Any new number in the docs must be repro
 ```bash
 uv sync
 uv run python scripts/profile_data.py
+uv run python scripts/evaluate.py
 uv run pytest
 ```
 

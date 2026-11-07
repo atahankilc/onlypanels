@@ -9,7 +9,7 @@
 | D3 | Serve the planner first; homeowner view is stretch | Confirmed (brief) | Minimum result serves the planner |
 | D4 | Python with `uv`, version 3.12, isolated from system Anaconda | Confirmed (environment) | System numpy and pandas are broken |
 | D5 | Swap and convert spec columns on load | Confirmed (evidence) | `docs/data/findings.md` traps 1 and 2 |
-| D6 | Hybrid engine: learned models propose, physics checks, catalog snaps, LLM only parses and explains | Proposed | Brief says an LLM alone fails. Baseline shows the coupling is real |
+| D6 | Hybrid engine: learned models propose, physics checks, catalog snaps, LLM only parses and explains | Proposed | Brief says an LLM alone fails. Dev scores show coupling pays during refinement, not in the first proposal |
 | D7 | Exclude add-on options from training and scoring | Proposed, needs Q3 | They are not designs |
 | D8 | Score against the closest option in a project; also report last option | Proposed, needs Q1 | Delivered option is unknown |
 | D9 | Module count is the primary PV target | Proposed, needs Q5 | Module wattage is unknown at the larger installer |
@@ -23,3 +23,4 @@
 | D17 | Each size is output as a recommended value plus a plausible range, snapped to real catalog products | Proposed, based on a verbal comment from a Reonic team member on 2026-11-07, needs Q23 | Experts differ for the same home, so a range is the honest output. Also serves the planner: a starting value and how much room there is |
 | D18 | Build order: core decision accuracy first, behind a plain back-office UI. Polished UI and extra features come only after the minimum works | Confirmed (user) | Accuracy on unseen projects comes first. Extras go beyond the brief |
 | D19 | The core model uses only fields that exist in `projects_status_quo.csv`. Anything else, such as a roof limit (D11), stays optional and must not be required | Proposed, needs Q24 | A hidden test can only supply the fields in the data |
+| D20 | Work only on `main`, no feature branches | Confirmed (user) | User does not want to deal with branches |

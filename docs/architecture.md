@@ -35,7 +35,7 @@ The aim is a simple system that runs. One Python service holds all intelligence,
 
 | Requirement | Approach |
 |---|---|
-| Decisions are coupled | Chained models, with battery conditioned on PV. The baseline supports this: battery error falls from 2.95 to 2.63 kWh given PV size |
+| Decisions are coupled | Battery conditioned on PV when the planner fixes it: dev battery error falls from 2.75 to 2.43 kWh. Feeding in predicted PV gave no gain in the first proposal |
 | Implicit expert rules | Learned per installer; catalog snapping reproduces typical sizes |
 | Plausible for unusual homes | Physics check on an hourly simulation bounds the learned proposal |
 | "As appropriate" | Explicit decision step that can return no battery or no heat pump |

@@ -3,7 +3,7 @@
 Living document. Update it whenever the phase, blockers or next steps change.
 
 **Last updated:** 2026-11-07, before build start
-**Phase:** Setup done. Nothing built yet.
+**Phase:** Measurement in place. Engine v0 scored on dev. No API or UI yet.
 **Deadline:** Sunday 8 November 2026, 15:00
 
 ## Done
@@ -12,18 +12,19 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - Data profiled and reproducible: `docs/data/`, `scripts/profile_data.py`
 - Repo structure, data protection (`.gitignore`), Python environment (`uv`)
 - Proposed architecture, evaluation plan, tool plan, demo script
+- `engine/`: dataset, fixed customer-grouped split, predictors, scoring, tests. Scores in `docs/data/findings.md`
 
 ## Not done
 
-- Engine, API, web app, pitch deck: not started
+- API, web app, pitch deck: not started
 - Team decisions in `docs/decisions.md` marked Proposed are not yet agreed
 
 ## Next steps
 
 1. Ask Reonic the blocking questions in `docs/open-questions.md` (Q1 to Q4, Q23, Q24)
 2. Agree the proposed decisions and split roles
-3. Build the cleaned dataset and fixed test split
-4. Run the evaluation harness on the baselines before improving any model
+3. Improve "no battery" and range quality, using dev scores only
+4. Expose the engine through the API and back-office UI
 
 ## Proposed timeline
 
