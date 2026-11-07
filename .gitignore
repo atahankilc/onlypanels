@@ -1,0 +1,33 @@
+# Reonic data: "use only for this hackathon, do not share outside your team".
+# Never commit raw data, derived per-project data, or anything trained on it.
+data/raw/
+data/processed/
+models/
+*.csv
+*.parquet
+*.pkl
+*.joblib
+docs/brief/*.pdf
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+dist/
+.next/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
