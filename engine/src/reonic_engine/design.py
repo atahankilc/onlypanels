@@ -22,7 +22,7 @@ MOUNTS = {
     "facade": {"m2_per_module": 2.0, "yield": 0.7},
 }
 FOSSIL = ["Gas", "Oil", "OtherNonRenewable"]
-COLS = ["demand_mwh", "price_ct_kwh", "existing_hp", "fossil_heat", "has_solar", "has_storage", "installer_b"]
+COLS = ["demand_mwh", "existing_hp", "fossil_heat", "has_solar", "has_storage", "installer_b"]
 MIN_SIMILAR = 30
 UNSURE_BATTERY = 0.8  # below this, tell the planner the battery decision is open
 HABIT_KWH = 2.0  # a learned battery this close to the installer's most sold size becomes that size
