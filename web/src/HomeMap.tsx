@@ -6,6 +6,7 @@ import { Poly, Selected, SunSurface, View, polyOf, surfaceKey, Square, homesUrl,
 import { P2, P3, centre, inside, normal, toLngLat, toLocal } from "./geometry";
 import { Info, Locate, Minus, Needle, Plus } from "./icons";
 import { BUILDINGS_3D_FILTER, mapStyle } from "./mapStyle";
+import SunLight from "./SunLight";
 import { MUNICH, REGION_EDGE, REGION_OUTSIDE, VIEW_LIMIT, inRegion } from "./region";
 import { Button, IconButton } from "./ui";
 
@@ -37,8 +38,15 @@ type Props = {
   buildings: Selected[]; step: Step; focus: P2 | null; aerial: boolean; onPick?: (b: Picked) => void;
   open: string | null; near: string | null; face: Face | null; look: { id: string } | null;
   onFace: (f: Face | null) => void; onOpen: (id: string) => void;
-  view: View; chosen: string[]; onToggle: (key: string) => void;
+  view: View; chosen: string[]; onToggle: (key: string) => void; dark: boolean;
 };
+
+// What changes with the theme on the map itself. Everything else comes from the base style.
+const TONES = {
+  dark: { rim: "#FFFFFF", block: "#2A2C34", edge: "#8A95A8", hover: "#2F5E94", land: "#0F1013" },
+  light: { rim: "#0E6FFF", block: "#E4E2DC", edge: "#8E8B82", hover: "#9FC2EC", land: "#F1F0EC" },
+};
+const blockColour = (dark: boolean): maplibregl.ExpressionSpecification => { const t = TONES[dark ? "dark" : "light"]; return ["case", ["boolean", ["feature-state", "near"], false], COLORS.face, ["boolean", ["feature-state", "picked"], false], COLORS.roof, ["boolean", ["feature-state", "hover"], false], t.hover, t.block]; };
 
 const HEAT = ["#2C6BED", "#18C3C9", "#FFE14A", "#FF8A1F", "#E5261F"].map((c) => new THREE.Color(c));
 const heat = (t: number) => {
@@ -47,36 +55,74 @@ const heat = (t: number) => {
 };
 const seenBits = (s: SunSurface, suns: number) => { const raw = atob(s.seen), width = Math.ceil(suns / 8); return (row: number, sun: number) => (raw.charCodeAt(row * width + (sun >> 3)) >> (7 - (sun & 7))) & 1; };
 
-/** Square map tiles lying on a building's surfaces: the samples, drawn. Colours are set later. */
-function tilesOf(b: Selected) {
-  const points: number[] = [], faces: number[] = [], owner: [SunSurface, number][] = [];
-  for (const s of b.sun?.surfaces ?? []) {
-    s.year.forEach((_, i) => {
-      const c = toLocal(b.origin, [s.at[i * 3], s.at[i * 3 + 1]]), z = s.at[i * 3 + 2], k = points.length / 3;
-      const lift = [s.n[0] * 0.15, s.n[1] * 0.15, s.n[2] * 0.15];
-      for (const [a, d] of [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]) points.push(c[0] + a * s.u[0] + d * s.v[0] + lift[0], c[1] + a * s.u[1] + d * s.v[1] + lift[1], z + a * s.u[2] + d * s.v[2] + lift[2]);
-      faces.push(k, k + 1, k + 2, k, k + 2, k + 3);
-      owner.push([s, i]);
-    });
+const MOVE_MS = 900; // the map rising into its window: --move in styles.css
+// Same curve as --glide, so camera, window and fade are one movement.
+const glide = (t: number) => (t < 0.5 ? 8 * t ** 4 : 1 - (-2 * t + 2) ** 4 / 2);
+const RAYS = 26; // per building
+const RAY_M = 34;
+const RIM_M = 0.45;
+const SKIN_REACH = 3; // cells the colour runs past the samples, to the surface's true edge
+
+/** A coat of colour over one surface: its exact outline, with the samples as a small image stretched smoothly across it. */
+function skinOf(s: SunSurface, poly: Poly) {
+  const outline = [s.outline, ...s.holes].flat();
+  const i0 = Math.floor(Math.min(...outline.map((p) => p[0]))) - 1, j0 = Math.floor(Math.min(...outline.map((p) => p[1]))) - 1;
+  const w = Math.ceil(Math.max(...outline.map((p) => p[0]))) - i0 + 2, h = Math.ceil(Math.max(...outline.map((p) => p[1]))) - j0 + 2;
+  // Each pixel takes the nearest sample, so the edge of the surface is coloured, and missing wall stays clear.
+  const source = new Int32Array(w * h).fill(-1);
+  let ring: number[] = [];
+  s.year.forEach((_, n) => { const px = (s.cells[n * 2 + 1] - j0) * w + s.cells[n * 2] - i0; source[px] = n; ring.push(px); });
+  for (let k = 0; k < SKIN_REACH; k++) {
+    const next: number[] = [];
+    for (const px of ring) {
+      const x = px % w, y = (px - x) / w;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const X = x + dx, Y = y + dy, q = Y * w + X;
+        if (X >= 0 && Y >= 0 && X < w && Y < h && source[q] < 0) { source[q] = source[px]; next.push(q); }
+      }
+    }
+    ring = next;
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
-  g.setAttribute("color", new THREE.BufferAttribute(new Float32Array((points.length / 3) * 4), 4));
-  g.setIndex(faces);
-  const material = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, side: THREE.DoubleSide, depthWrite: false });
-  material.userData.alpha = true;
-  return { tiles: new THREE.Mesh(g, material), owner };
+  const pixels = new Uint8Array(w * h * 4), texture = new THREE.DataTexture(pixels, w, h, THREE.RGBAFormat);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = texture.minFilter = THREE.LinearFilter;
+  const skin = polygon(poly.ring, poly.holes, "#FFFFFF");
+  const at = skin.geometry.getAttribute("position") as THREE.BufferAttribute, uv = new Float32Array(at.count * 2);
+  outline.forEach((p, i) => {
+    uv[i * 2] = (p[0] - i0 + 0.5) / w; uv[i * 2 + 1] = (p[1] - j0 + 0.5) / h;
+    at.setXYZ(i, at.getX(i) + s.n[0] * 0.12, at.getY(i) + s.n[1] * 0.12, at.getZ(i) + s.n[2] * 0.12);
+  });
+  skin.geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  const material = skin.material as THREE.MeshBasicMaterial;
+  material.map = texture; material.transparent = true; material.depthWrite = false; material.userData.alpha = true;
+  // A thick line along the surface's edge marks it as chosen, on any layer.
+  const rim: P3[] = [], faces: number[] = [];
+  for (const ring of [poly.ring, ...poly.holes]) ring.forEach((p, i) => {
+    const q = ring[(i + 1) % ring.length], e = new THREE.Vector3(q[0] - p[0], q[1] - p[1], q[2] - p[2]).normalize();
+    const side = new THREE.Vector3(...s.n).cross(e).multiplyScalar(RIM_M / 2), up = new THREE.Vector3(...s.n).multiplyScalar(0.2), k = rim.length;
+    for (const [a, d] of [[p, 1], [q, 1], [q, -1], [p, -1]] as const) rim.push([a[0] + side.x * d + up.x, a[1] + side.y * d + up.y, a[2] + side.z * d + up.z]);
+    faces.push(k, k + 1, k + 2, k, k + 2, k + 3);
+  });
+  const edge = mesh(rim, faces, "#FFFFFF");
+  return { s, skin, edge, pixels, source, texture };
 }
 
-/** The aerial photo of the ground under a building, as a texture lying on its roofs. */
-function roofPhoto(b: Selected, roofs: THREE.Mesh[], redraw: () => void) {
+/** Where a building's roof photo comes from, and the part of the ground it covers. */
+function photoOf(b: Selected) {
   const all = b.real?.roofs.flatMap((p) => p.ring) ?? [];
-  if (!all.length) return;
+  if (!all.length) return null;
   const x0 = Math.min(...all.map((p) => p[0])) - 3, x1 = Math.max(...all.map((p) => p[0])) + 3, y0 = Math.min(...all.map((p) => p[1])) - 3, y1 = Math.max(...all.map((p) => p[1])) + 3;
   const merc = (p: P2): P2 => [(p[0] * 20037508.34) / 180, Math.log(Math.tan(((90 + p[1]) * Math.PI) / 360)) * 6378137];
   const [a, c] = [merc(toLngLat(b.origin, [x0, y0])), merc(toLngLat(b.origin, [x1, y1]))];
   const px = (m: number) => Math.min(4096, Math.max(256, Math.round(m / 0.1))); // the photo is 20 cm: twice that, so resampling does not soften it
-  const url = `https://geoservices.bayern.de/od/wms/dop/v1/dop20?service=WMS&version=1.3.0&request=GetMap&layers=by_dop20c&styles=&crs=EPSG:3857&bbox=${a[0]},${a[1]},${c[0]},${c[1]}&width=${px(x1 - x0)}&height=${px(y1 - y0)}&format=image/jpeg`;
+  return { x0, x1, y0, y1, url: `https://geoservices.bayern.de/od/wms/dop/v1/dop20?service=WMS&version=1.3.0&request=GetMap&layers=by_dop20c&styles=&crs=EPSG:3857&bbox=${a[0]},${a[1]},${c[0]},${c[1]}&width=${px(x1 - x0)}&height=${px(y1 - y0)}&format=image/jpeg` };
+}
+
+/** The aerial photo of the ground under a building, as a texture lying on its roofs. */
+function roofPhoto(b: Selected, roofs: THREE.Mesh[], redraw: () => void) {
+  const photo = photoOf(b);
+  if (!photo) return;
+  const { x0, x1, y0, y1, url } = photo;
   new THREE.TextureLoader().setCrossOrigin("anonymous").load(url, (texture) => {
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 16; // roofs are seen at an angle
@@ -133,10 +179,10 @@ const edgeFade = (zoom: number) => {
 type OnMap = { scene: THREE.Scene; at: P2; done: boolean };
 type Spot = { id: string; square: string };
 
-export default function HomeMap({ buildings, step, focus, aerial, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle }: Props) {
+export default function HomeMap({ buildings, step, focus, aerial, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, dark }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const models = useRef<{ scene: THREE.Scene; at: P2; id: string; polys: Poly[]; surfaces: { s: SunSurface; poly: number }[]; tiles?: THREE.Mesh; owner: [SunSurface, number][] }[]>([]); // one per building, each around its own origin
+  const models = useRef<{ scene: THREE.Scene; at: P2; id: string; polys: Poly[]; surfaces: { s: SunSurface; poly: number }[]; skins: ReturnType<typeof skinOf>[] }[]>([]); // one per building, each around its own origin
   const edgeLook = useRef(new THREE.LineBasicMaterial({ color: COLORS.edge, transparent: true, opacity: 0 })); // one for all squares
   const [loading, setLoading] = useState(0);
   const squares = useRef(new Map<string, OnMap>());
@@ -149,10 +195,11 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   const needle = useRef<HTMLSpanElement>(null);
   const me = useRef<maplibregl.Marker | null>(null);
   const [credits, setCredits] = useState(false);
+  const [bearing, setBearing] = useState(0);
   const spot = useRef<maplibregl.Marker | null>(null);
   const pins = useRef<maplibregl.Marker[]>([]);
-  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle });
-  live.current = { onPick, buildings, step, onFace, onOpen, onToggle };
+  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, dark });
+  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, dark };
 
   const locateMe = () => navigator.geolocation?.getCurrentPosition((p) => {
     const m = map.current, at: P2 = [p.coords.longitude, p.coords.latitude];
@@ -213,58 +260,73 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       const line = lines(edgesOf([...walls, ...roofs]), COLORS.ownEdge, 0.5);
       (line.material as THREE.Material).userData.opacity = 0.5;
       g.add(line);
-      const { tiles, owner } = tilesOf(b);
-      g.add(tiles);
+      const skins = (b.sun?.surfaces ?? []).map((x) => skinOf(x, [...roofs, ...walls][polyOf(b, x)]));
+      skins.forEach((k) => g.add(k.skin, k.edge));
       scene.add(g);
-      return { scene, at: b.origin, id: b.id, polys: [...roofs, ...walls], surfaces: (b.sun?.surfaces ?? []).map((x) => ({ s: x, poly: polyOf(b, x) })), tiles, owner };
+      return { scene, at: b.origin, id: b.id, polys: [...roofs, ...walls], surfaces: (b.sun?.surfaces ?? []).map((x) => ({ s: x, poly: polyOf(b, x) })), skins };
     });
     paintTiles();
+    paintRims();
     sunMark();
   };
+
+  const paintRims = () => models.current.forEach((x) => x.skins.forEach((k) => (k.edge.material as THREE.MeshBasicMaterial).color.set(TONES[live.current.dark ? "dark" : "light"].rim)));
 
   // Chosen surfaces carry a colour. Everything else shows what it really is, so the eye goes to the choice.
   const paintTiles = () => {
     const picked = new Set(chosen), hot = face;
-    const values = models.current.flatMap((m) => m.owner.map(([x, i]) => x.year[i]));
+    const values = models.current.flatMap((m) => m.skins.flatMap((k) => k.s.year));
     const sorted = [...values].sort((a, b) => a - b), low = sorted[Math.floor(sorted.length * 0.05)] ?? 0, high = sorted[Math.floor(sorted.length * 0.98)] ?? 1;
-    const blue = new THREE.Color("#2F8CFF"), dim = new THREE.Color("#0F1013"), mark = new THREE.Color("#FFFFFF");
+    const dim = new THREE.Color("#0F1013"), mark = new THREE.Color("#FFFFFF");
     models.current.forEach((m) => {
-      const b = live.current.buildings.find((x) => x.id === m.id), attr = m.tiles?.geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
-      if (!b?.sun || !attr) return;
+      const b = live.current.buildings.find((x) => x.id === m.id);
+      if (!b?.sun) return;
       const suns = b.sun.suns, moment = view.moment ? suns.findIndex((x) => x.month === view.moment?.month && x.hour === view.moment.hour) : -1;
-      const readers = new Map(b.sun.surfaces.map((x) => [x, seenBits(x, suns.length)]));
-      m.owner.forEach(([x, i], n) => {
-        const on = picked.has(surfaceKey(b, x)), over = hot?.building === b.id && hot.poly === polyOf(b, x);
-        let c = blue, alpha = 0;
-        if (view.layer === "sun") {
-          if (!view.moment) c = heat((x.year[i] - low) / Math.max(1, high - low));
-          else if (moment < 0) c = HEAT[0];
-          else { const v = suns[moment].vector; c = heat(readers.get(x)?.(i, moment) ? Math.max(0, x.n[0] * v[0] + x.n[1] * v[1] + x.n[2] * v[2]) : 0); }
-          alpha = on ? 0.94 : 0.3;
-        } else if (!on) { c = dim; alpha = 0.6; } // the chosen ones keep the clean photo, the rest step back
-        if (over) { c = c.clone().lerp(mark, 0.45); alpha = Math.max(alpha, 0.6); }
-        for (let k = 0; k < 4; k++) attr.setXYZW(n * 4 + k, c.r, c.g, c.b, alpha);
-      });
-      attr.needsUpdate = true;
+      for (const { s: x, pixels, source, texture, edge } of m.skins) {
+        edge.visible = picked.has(surfaceKey(b, x));
+        const on = picked.has(surfaceKey(b, x)), over = hot?.building === b.id && hot.poly === polyOf(b, x), read = seenBits(x, suns.length);
+        const rgba = x.year.map((value, i) => {
+          let c = dim, alpha = 0;
+          if (view.layer === "sun") {
+            if (!view.moment) c = heat((value - low) / Math.max(1, high - low));
+            else if (moment < 0) c = HEAT[0];
+            else { const v = suns[moment].vector; c = heat(read(i, moment) ? Math.max(0, x.n[0] * v[0] + x.n[1] * v[1] + x.n[2] * v[2]) : 0); }
+            alpha = 0.94;
+          } else if (!on) alpha = 0.6; // the chosen ones keep the clean photo, the rest step back
+          if (over) { c = c.clone().lerp(mark, 0.45); alpha = Math.max(alpha, 0.55); }
+          const out = c.clone().convertLinearToSRGB();
+          return [out.r * 255, out.g * 255, out.b * 255, alpha * 255];
+        });
+        source.forEach((n, px) => { if (n >= 0) pixels.set(rgba[n], px * 4); else pixels[px * 4 + 3] = 0; });
+        texture.needsUpdate = true;
+      }
     });
     map.current?.triggerRepaint();
   };
 
-  // Where the sun stands at the chosen moment, over the open building.
-  const sunBall = useRef<THREE.Group | null>(null);
+  // Parallel rays down to the spots the sun reaches. They belong to the buildings, so they stay put when the map moves.
+  const sunMarks = useRef<THREE.Group[]>([]);
   const sunMark = () => {
-    sunBall.current?.parent?.remove(sunBall.current);
-    sunBall.current = null;
-    const m = models.current.find((x) => x.id === open) ?? models.current[0], b = live.current.buildings.find((x) => x.id === m?.id);
-    const at = b?.sun?.suns.find((x) => x.month === view.moment?.month && x.hour === view.moment?.hour);
-    if (!m || !view.moment || view.layer !== "sun" || !at) return;
-    const reach = 30, v = at.vector, g = new THREE.Group();
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(2.2, 20, 14), new THREE.MeshBasicMaterial({ color: "#FFD400" }));
-    ball.position.set(v[0] * reach, v[1] * reach, v[2] * reach);
-    g.add(ball, lines([0, 0, 0, v[0] * reach, v[1] * reach, v[2] * reach], "#FFD400", 0.9));
-    m.scene.add(g);
-    sunBall.current = g;
-    map.current?.triggerRepaint();
+    sunMarks.current.forEach((g) => { g.parent?.remove(g); empty(g); });
+    sunMarks.current = [];
+    const m = map.current;
+    if (!m || !view.moment || view.layer !== "sun" || view.style !== "beams") { m?.triggerRepaint(); return; }
+    models.current.forEach((model) => {
+      const b = live.current.buildings.find((x) => x.id === model.id), suns = b?.sun?.suns ?? [];
+      const moment = suns.findIndex((x) => x.month === view.moment?.month && x.hour === view.moment.hour);
+      if (!b || moment < 0) return;
+      const v = suns[moment].vector, g = new THREE.Group(), rays: number[] = [];
+      const lit = b.sun?.surfaces.flatMap((x) => { const read = seenBits(x, suns.length); return x.year.flatMap((_, i) => (read(i, moment) && x.n[0] * v[0] + x.n[1] * v[1] + x.n[2] * v[2] > 0.15 ? [[x, i] as const] : [])); }) ?? [];
+      const every = Math.max(1, Math.floor(lit.length / RAYS));
+      for (let k = 0; k < lit.length; k += every) {
+        const [x, i] = lit[k], c = toLocal(b.origin, [x.at[i * 3], x.at[i * 3 + 1]]), z = x.at[i * 3 + 2];
+        rays.push(c[0], c[1], z, c[0] + v[0] * RAY_M, c[1] + v[1] * RAY_M, z + v[2] * RAY_M);
+      }
+      g.add(lines(rays, "#FFD400", 0.4));
+      model.scene.add(g);
+      sunMarks.current.push(g);
+    });
+    m.triggerRepaint();
   };
 
   // A letter marks each building, the same one as in the panel.
@@ -291,7 +353,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
 
   useEffect(() => {
     const m = new maplibregl.Map({
-      container: box.current as HTMLDivElement, style: mapStyle(true), attributionControl: false, center: MUNICH, zoom: 11, pitch: 30, maxPitch: 60, bearing: 0,
+      container: box.current as HTMLDivElement, style: mapStyle(dark), attributionControl: false, center: MUNICH, zoom: 11, pitch: 30, maxPitch: 60, bearing: 0,
       maxBounds: VIEW_LIMIT, clickTolerance: 8, canvasContextAttributes: { antialias: true }, reduceMotion: false,
       // By default tiles are cut into smaller ones when zooming in, which cuts every building along a grid.
       zoomLevelsToOverscale: 16,
@@ -306,7 +368,8 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       pins.current.forEach((x) => x.setOffset([0, -Number(x.getElement().dataset.z) * px]));
     };
     m.on("move", () => liftPins.current());
-    m.on("rotate", () => { if (needle.current) needle.current.style.rotate = `${-m.getBearing()}deg`; });
+    m.on("rotate", () => { if (needle.current) needle.current.style.rotate = `${-m.getBearing()}deg`; setBearing(m.getBearing()); });
+
     m.once("load", locateMe);
     let renderer: THREE.WebGLRenderer;
     const camera = new THREE.Camera();
@@ -408,7 +471,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
           m.addLayer({
             id: homesOf(name), type: "fill-extrusion", source: homesOf(name), minzoom: HOMES_FROM_ZOOM, layout: { visibility: solid.current.visibility },
             paint: {
-              "fill-extrusion-color": ["case", ["boolean", ["feature-state", "near"], false], COLORS.face, ["boolean", ["feature-state", "picked"], false], COLORS.roof, ["boolean", ["feature-state", "hover"], false], COLORS.hover, "#2A2C34"],
+              "fill-extrusion-color": blockColour(live.current.dark),
               "fill-extrusion-height": ["get", "h"],
               "fill-extrusion-base": 0,
               "fill-extrusion-opacity": solid.current.opacity,
@@ -539,9 +602,39 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   }, []);
 
   useEffect(() => { syncHomes.current(); }, [buildings]);
+  // The theme repaints the map in place: reloading the style would drop every layer added to it.
+  useEffect(() => {
+    const m = map.current, tones = TONES[dark ? "dark" : "light"];
+    if (!m || !ready.current) return;
+    const style = mapStyle(dark);
+    for (const layer of style.layers) {
+      if (!m.getLayer(layer.id) || !("paint" in layer) || !layer.paint) continue;
+      for (const [key, value] of Object.entries(layer.paint)) if (key !== "fill-extrusion-opacity") (m as unknown as { setPaintProperty: (id: string, key: string, value: unknown) => void }).setPaintProperty(layer.id, key, value);
+    }
+    if (style.sky) m.setSky(style.sky);
+    if (style.light) m.setLight(style.light);
+    squares.current.forEach((_, name) => { if (m.getLayer(homesOf(name))) m.setPaintProperty(homesOf(name), "fill-extrusion-color", blockColour(dark)); });
+    m.setPaintProperty("outside", "fill-color", tones.land);
+    m.setPaintProperty("limit-text", "text-halo-color", tones.land);
+    edgeLook.current.color.set(tones.edge);
+    paintRims();
+    m.triggerRepaint();
+  }, [dark]);
+  // Roof photos load while the user is still picking, so nothing pops in during the move.
+  const fetched = useRef(new Set<string>());
+  useEffect(() => {
+    for (const b of buildings) {
+      const photo = b.real && !fetched.current.has(b.id) ? photoOf(b) : null;
+      if (!photo) continue;
+      fetched.current.add(b.id);
+      const image = new Image();
+      image.crossOrigin = "anonymous";
+      image.src = photo.url;
+    }
+  }, [buildings]);
   useEffect(placePins, [buildings, step, open]);
   useEffect(paintTiles, [view, chosen, face]);
-  useEffect(sunMark, [view, open]);
+  useEffect(sunMark, [view]);
   // Models are built when their sun arrives, so tiles appear without leaving the screen.
   const sunReady = buildings.filter((b) => b.sun).length;
   useEffect(() => { if (step === "review" && shown.current === 1) { buildModels(); setShown(1); } }, [sunReady]);
@@ -561,8 +654,8 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     if (!m || !list.length) return;
     const points = list.flatMap((b) => [b.origin, ...(b.real?.roofs ?? []).flatMap((r) => r.ring.map((p) => toLngLat(b.origin, [p[0], p[1]])))]);
     const area = points.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(points[0], points[0]));
-    const side = matchMedia("(min-width: 821px)").matches ? PANEL_W : 0;
-    m.fitBounds(area, { padding: { top: 120, bottom: 120, right: 120, left: 120 + side }, maxZoom: 19.5, pitch: PITCH, bearing: m.getBearing(), duration });
+    // The map stays full size behind its window, so the room is measured from the screen's edges.
+    m.fitBounds(area, { padding: wide() ? { top: 90, left: PANEL_W + 70, right: 90, bottom: 120 } : { top: 110, left: 30, right: 30, bottom: innerHeight * 0.5 }, maxZoom: 19.5, pitch: PITCH, bearing: m.getBearing(), duration, easing: glide });
   };
 
   // Between the steps the map's blocks fade out while the measured buildings fade in, as the camera settles on them.
@@ -571,13 +664,13 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     if (!m || !ready.current) return;
     const to = step === "review" ? 1 : 0, from = shown.current;
     if (to === from) return;
-    if (to) { buildModels(); setShown(0); frame(FADE_MS); placePins(); }
+    if (to) { buildModels(); setShown(0); placePins(); frame(MOVE_MS); }
     refreshSquares.current();
     setSolid({ visibility: "visible", opacity: to || aerial ? 0 : 1 });
     const start = performance.now();
     let frameId = 0;
     const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / FADE_MS), eased = t * t * (3 - 2 * t);
+      const t = Math.min(1, (now - start) / MOVE_MS), eased = glide(t);
       setShown(from + (to - from) * eased);
       fadeLines.current();
       if (t < 1) { frameId = requestAnimationFrame(tick); return; }
@@ -608,8 +701,11 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   }, [aerial]);
   return (
     <>
+      <div className="sheet" aria-hidden="true" />
       <div ref={box} className="map3d" role="application" aria-label="3D map of the home" />
       {loading > 0 && <div className="mapload" role="status">Loading measured buildings…</div>}
+      <div className="rim" aria-hidden="true" />
+      <SunLight view={view} sun={buildings.find((b) => b.sun)?.sun ?? null} bearing={bearing} />
       <div className="mapctl">
         <IconButton variant="glass" size="lg" label="Go to my location" onClick={locateMe}><Locate /></IconButton>
         <div className="mapstack">

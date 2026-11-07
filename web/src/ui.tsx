@@ -5,7 +5,7 @@ import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttribu
 import "./ui.css";
 
 type Size = "md" | "lg";
-type Variant = "solid" | "fill" | "glass" | "plain";
+type Variant = "solid" | "fill" | "glass" | "plain" | "dev";
 const cx = (...names: (string | false | undefined)[]) => names.filter(Boolean).join(" ");
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size; wide?: boolean };

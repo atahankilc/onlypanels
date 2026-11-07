@@ -29,10 +29,13 @@
 .seg button:disabled { opacity: 0.4; cursor: default; }
 
 /* Demo tooling, not product UI: it must never read as part of the app. */
-.seg-dev { align-items: center; border: 1px dashed var(--hud-warn); background: var(--hud-land); }
-.seg-dev::before { content: "DEV"; padding: 0 6px 0 10px; font: 600 10.5px var(--font-mono); letter-spacing: 0.1em; color: var(--hud-warn); }
+.dev { display: flex; align-items: center; gap: 2px; height: var(--btn-lg); padding: 0 4px 0 10px; border: 1px dashed var(--hud-warn); border-radius: 999px; background: var(--hud-land); }
+.dev > span { padding-right: 6px; font: 600 10.5px var(--font-mono); letter-spacing: 0.1em; color: var(--hud-warn); }
+.seg-dev { align-items: center; height: 100%; }
 .seg-dev button { padding: 0 10px; color: var(--hud-warn); font: 500 11px var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; }
 .seg-dev button.on { background: var(--hud-warn); color: var(--hud-land); }
+
+.btn-dev { height: 32px; padding: 0 10px; background: none; color: var(--hud-warn); font: 500 11px var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; }
 
 .field { display: block; margin-bottom: 14px; }
 .field-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; font-size: 13px; color: var(--hud-ink-2); }
@@ -43,7 +46,7 @@
 .control:hover:not(:disabled) { border-color: var(--hud-line); }
 .control::placeholder { color: var(--hud-ink-3); }
 .control-select { appearance: none; padding-right: 32px; background: var(--hud-fill) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23A2A6AE' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") right 14px center / 9px no-repeat; }
-.control-select option { background: #1E1F25; }
+.control-select option { background: var(--hud-land); }
 .control:disabled { color: var(--hud-ink-3); }
 
 .check { position: relative; display: flex; align-items: center; gap: 10px; min-height: var(--btn-md); cursor: pointer; }

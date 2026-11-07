@@ -7,18 +7,18 @@ export type Square = { name: string; ring: P2[] };
 /** Its surfaces, in metres around the building's origin. */
 export type Real = { roofs: Poly[]; walls: Poly[] };
 /** One surface of a building, sampled. `at` is lon, lat, height per sample; `seen` says which sun positions reach each one. */
-export type SunSurface = { kind: "roof" | "wall"; index: number; m2: number; tilt: number; azimuth: number; kwh_m2: number | null; kwh_per_kwp: number | null; year: number[]; at: number[]; seen: string; u: P3; v: P3; n: P3 };
+export type SunSurface = { kind: "roof" | "wall"; index: number; m2: number; tilt: number; azimuth: number; kwh_m2: number | null; kwh_per_kwp: number | null; year: number[]; at: number[]; seen: string; cells: number[]; outline: P2[]; holes: P2[][]; n: P3 };
 export type SunData = { step: number; suns: { month: number; hour: number; az: number; el: number; vector: P3 }[]; surfaces: SunSurface[]; sunny: boolean };
 export type Selected = { id: string; square: string; label: string; origin: P2; real: Real | null; measuring: boolean; sun?: SunData | null };
 const COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
 export const surfaceKey = (b: { id: string }, s: SunSurface) => `${b.id}|${s.kind}${s.index}`;
 export const meanSun = (s: SunSurface) => s.year.reduce((a, v) => a + v, 0) / s.year.length;
-export const surfaceArea = (b: Selected, s: SunSurface) => s.year.length * (b.sun?.step ?? 1) ** 2;
 export const surfaceName = (s: SunSurface) => (s.kind === "roof" ? (s.tilt < 8 ? "Flat roof" : `Roof, ${COMPASS[Math.round(s.azimuth / 45) % 8]} side`) : `Wall, ${COMPASS[Math.round(s.azimuth / 45) % 8]} side`);
 /** The solid each surface belongs to: roofs first, then walls. */
 export const polyOf = (b: Selected, s: SunSurface) => (s.kind === "roof" ? s.index : (b.real?.roofs.length ?? 0) + s.index);
 
-export type View = { layer: "photo" | "sun"; moment: { month: number; hour: number } | null };
+export type SunStyle = "glow" | "beams" | "dial" | "sky";
+export type View = { layer: "photo" | "sun"; moment: { month: number; hour: number } | null; style: SunStyle };
 const BEST_SHARE = 0.75; // the suggestion keeps roofs with at least this share of the best roof's sun
 /** Our suggestion: the sunniest roofs. Walls only ever come from the user. */
 export function suggested(buildings: Selected[]) {

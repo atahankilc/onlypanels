@@ -120,7 +120,7 @@ class Heights:
 
 
 def _sample(ring, holes, step):
-    """A grid of points on a flat surface: the points, its two axes and its outward normal."""
+    """A grid of points on a flat surface: the points, their cells, a way to place other points on that grid, the normal, the area."""
     p = np.asarray(ring, float)
     n = newell(ring)
     area = float(np.linalg.norm(n)) / 2
@@ -134,7 +134,10 @@ def _sample(ring, holes, step):
     mask = inside(ga, gb, a)
     for h in holes:
         mask &= ~inside(ga, gb, flat(h))
-    return p[0] + ga[mask, None] * u + gb[mask, None] * v, u, v, n, area
+    a0, b0 = ga[0, 0] if ga.size else 0, gb[0, 0] if gb.size else 0
+    cells = np.stack(np.nonzero(mask), 1)
+    place = lambda r: [[round((x - a0) / step, 2), round((y - b0) / step, 2)] for x, y in flat(r)]
+    return p[0] + ga[mask, None] * u + gb[mask, None] * v, cells, place, n, area
 
 
 @lru_cache(maxsize=512)
@@ -199,11 +202,13 @@ def surfaces(name, building_id):
     suns = directions(lat)
     out, jobs = [], []
     for kind, index, ring, holes in shapes:
+        original = (ring, holes)
         if kind == "roof" and newell(ring)[2] < 0:
             ring, holes = ring[::-1], [h[::-1] for h in holes]
-        points, u, v, n, area = _sample(ring, holes, step)
+        points, cells, place, n, area = _sample(ring, holes, step)
         if kind == "wall" and len(points):
-            points = points[~heights.against(points, n)]
+            free = ~heights.against(points, n)
+            points, cells = points[free], cells[free]
             area = len(points) * step * step
             if area < MIN_FREE_M2:
                 continue
@@ -221,7 +226,7 @@ def surfaces(name, building_id):
         share = (seen @ weight) / max(float(weight.sum()), 1e-9)
         lons, lats = lod2.TO_LONLAT.transform(points[:, 0] + ox, points[:, 1] + oy)
         out.append({"kind": kind, "index": index, "m2": round(area, 1), "tilt": round(tilt), "azimuth": round(azimuth), "share": share, "seen": seen,
-                    "at": np.stack([lons, lats, points[:, 2]], 1), "u": (u * step).round(3).tolist(), "v": (v * step).round(3).tolist(), "n": n.round(4).tolist()})
+                    "at": np.stack([lons, lats, points[:, 2]], 1), "cells": cells.ravel().tolist(), "outline": place(original[0]), "holes": [place(h) for h in original[1]], "n": n.round(4).tolist()})
         jobs.append((lat, lon, tilt, azimuth))
     with ThreadPoolExecutor(max_workers=6) as pool:
         yearly = list(pool.map(lambda j: _yearly(*j), jobs))

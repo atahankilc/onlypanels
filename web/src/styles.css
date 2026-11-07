@@ -8,13 +8,27 @@
   --hud-ink: #F3F4F6; --hud-ink-2: #A2A6AE; --hud-ink-3: #7E828A;
   --hud-solid: #F3F4F6; --hud-solid-ink: #0E0F11;
   --hud-route: #4B85FF; --hud-live: #7CF0C6; --hud-warn: #FFB547; --hud-sun: #FF9F0A; --hud-bad: #FF8A7A;
-  --hud-land: #0F1013;
+  --hud-land: #0F1013; --hud-panel: rgba(18, 19, 23, 0.93); --hud-base: #17181D;
+  --lift: 0 14px 44px rgba(0, 0, 0, 0.6), 0 2px 10px rgba(0, 0, 0, 0.45); --rim: rgba(255, 255, 255, 0.14);
   --hud-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
   --btn-md: 36px; --btn-lg: 44px;
   --font-ui: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --glide: cubic-bezier(0.65, 0, 0.35, 1); --move: 0.9s;
   color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --hud-glass: rgba(255, 255, 255, 0.78); --hud-glass-2: rgba(255, 255, 255, 0.92);
+  --hud-line: rgba(20, 22, 26, 0.12); --hud-line-2: rgba(20, 22, 26, 0.24);
+  --hud-fill: rgba(20, 22, 26, 0.06); --hud-fill-2: rgba(20, 22, 26, 0.11);
+  --hud-ink: #111215; --hud-ink-2: #5C6068; --hud-ink-3: #7A7E86;
+  --hud-solid: #111215; --hud-solid-ink: #FFFFFF;
+  --hud-route: #2F6BFF; --hud-live: #0FA67A; --hud-warn: #B85F00; --hud-bad: #C2331F;
+  --hud-land: #F1F0EC; --hud-panel: rgba(255, 255, 255, 0.96); --hud-base: #F1F0EC;
+  --hud-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  --lift: 0 14px 44px rgba(30, 28, 20, 0.26), 0 2px 10px rgba(30, 28, 20, 0.16); --rim: rgba(20, 22, 26, 0.1);
+  color-scheme: light;
 }
 * { box-sizing: border-box; }
 ::selection { background: rgba(75, 133, 255, 0.4); }
@@ -46,9 +60,9 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .logo h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
 
 /* ---------- stage: the map fills the screen, the panel floats on it ---------- */
-.stage { position: fixed; inset: 0; overflow: hidden; }
+.stage { position: fixed; inset: 0; overflow: hidden; background: var(--hud-base); transition: background-color 0.3s; }
 .map3d { position: absolute; inset: 0; background: var(--hud-land); }
-.panel { position: absolute; z-index: 2; top: 132px; left: 12px; width: 400px; max-height: calc(100dvh - 210px); overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--hud-line); border-radius: 24px; background: rgba(18, 19, 23, 0.93); box-shadow: var(--hud-shadow); } /* no blur: repainting one this large on every map frame makes dragging lag */
+.panel { position: absolute; z-index: 2; top: 132px; left: 12px; width: 400px; max-height: calc(100dvh - 210px); overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--hud-line); border-radius: 24px; background: var(--hud-panel); box-shadow: var(--hud-shadow); } /* no blur: repainting one this large on every map frame makes dragging lag */
 .panel.tall { top: 76px; max-height: calc(100dvh - 92px); }
 .panel > h2 { margin: 0; padding: 16px 18px 6px; }
 .panel > section { padding: 14px 18px; border-top: 1px solid var(--hud-line); }
@@ -71,10 +85,36 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .chosen li.on { background: var(--hud-fill-2); }
 .chosen b { display: block; font-weight: 500; font-size: 14px; }
 .chosen small { display: block; font-size: 12.5px; color: var(--hud-ink-2); }
-.sunbar { position: absolute; z-index: 2; right: 76px; bottom: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-.sunbox { width: 300px; padding: 12px 14px; border: 1px solid var(--hud-line); border-radius: 22px; background: rgba(18, 19, 23, 0.93); box-shadow: var(--hud-shadow); }
-.sunbox .seg { display: flex; width: 100%; margin-bottom: 12px; }
-.sunbox .seg button { flex: 1; }
+/* The second step: the map rises into a window on the right, the panel stays on the dark base beside it. */
+/* The map keeps its size: resizing a live map flickers. Only what is visible of it shrinks, while the camera moves in step. */
+.map3d { clip-path: inset(0 0 0 0 round 0); transition: clip-path var(--move) var(--glide); }
+.stage.review .map3d { clip-path: inset(8px 8px 8px 424px round 24px); }
+.stage.review .sunlight { inset: 8px 8px 8px 424px; border-radius: 24px; }
+/* The map as a sheet lying over the base: a shadow on the base behind it, a lit rim on top of it. */
+.sheet, .rim { position: absolute; top: 0; right: 0; bottom: 0; left: 0; border-radius: 0; pointer-events: none; opacity: 0; transition: inset var(--move) var(--glide), border-radius var(--move) var(--glide), opacity var(--move) var(--glide); }
+.sheet { box-shadow: var(--lift); }
+.rim { z-index: 1; border: 1px solid var(--rim); }
+.stage.review .sheet, .stage.review .rim { top: 8px; right: 8px; bottom: 8px; left: 424px; border-radius: 24px; opacity: 1; }
+.mapctl { transition: right var(--move) var(--glide), bottom var(--move) var(--glide); }
+.stage.review .panel { top: 68px; left: 12px; bottom: 12px; max-height: none; border: 0; border-radius: 0; background: none; box-shadow: none; animation: rise 0.6s var(--ease) 0.3s backwards; }
+.stage.review .mapctl { right: 20px; bottom: 20px; }
+.sunlight { position: absolute; z-index: 1; inset: 0; overflow: hidden; pointer-events: none; mix-blend-mode: screen; opacity: var(--power); transition: opacity 0.4s; animation: rise 0.4s var(--ease); }
+.sunlight.glow { background: radial-gradient(70% 90% at var(--x) var(--y), var(--sun), transparent 72%); }
+.sunlight.beams { background: radial-gradient(45% 60% at var(--x) var(--y), var(--sun), transparent 75%), repeating-conic-gradient(from 0deg at var(--x) var(--y), color-mix(in srgb, var(--sun) 55%, transparent) 0deg 3deg, transparent 3deg 11deg); -webkit-mask-image: radial-gradient(95% 120% at var(--x) var(--y), #000 15%, transparent 78%); mask-image: radial-gradient(95% 120% at var(--x) var(--y), #000 15%, transparent 78%); }
+.sunlight.sky { background: linear-gradient(calc(var(--turn) + 180deg), var(--sun), transparent 62%); }
+.sundial { position: absolute; z-index: 2; top: 76px; right: 28px; display: grid; place-items: center; width: 150px; height: 150px; border: 1px solid var(--hud-line-2); border-radius: 50%; background: radial-gradient(circle, var(--hud-fill), var(--hud-panel) 70%); box-shadow: var(--hud-shadow); }
+.sundial b { position: absolute; width: 26px; height: 26px; border-radius: 50%; background: var(--sun); box-shadow: 0 0 22px 6px var(--sun); }
+.sundial .n { position: absolute; top: 6px; font: 600 11px var(--font-mono); font-style: normal; color: var(--hud-ink-2); }
+.sundial small { position: absolute; bottom: 12px; font: 500 11px var(--font-mono); color: var(--hud-ink-2); }
+.chosen .check { align-items: center; width: 100%; min-height: 44px; }
+.sunbar { animation: rise 0.6s var(--ease) 0.5s backwards; position: absolute; z-index: 2; left: 436px; bottom: 20px; display: grid; gap: 10px; padding: 8px; border: 1px solid var(--hud-line); border-radius: 22px; background: var(--hud-panel); box-shadow: var(--hud-shadow); }
+.sunbar.open { right: 80px; padding: 10px 14px; }
+.sunrow { display: flex; align-items: center; gap: 14px; }
+.sunrow .field { flex: 1; min-width: 120px; margin: 0; }
+.sunrow .legend { flex: 1; min-width: 150px; margin: 0; }
+.trial { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.trial span { font: 500 11px var(--font-mono); color: var(--hud-warn); }
+.source { margin: 0; padding: 12px 18px 16px; }
 .panel h3 { margin-bottom: 8px; font: 600 14px var(--font-ui); letter-spacing: 0; text-transform: none; color: var(--hud-ink); }
 .picked { list-style: none; margin: 0; padding: 0 10px 0 18px; max-height: 50dvh; overflow-y: auto; }
 .picked li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; margin: 0; max-width: none; border-top: 1px solid var(--hud-line); }
@@ -90,7 +130,7 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .field-pill svg { flex: none; }
 .field-pill input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--hud-ink); font-weight: 500; font-size: 15px; text-overflow: ellipsis; }
 .field-pill input::placeholder { color: var(--hud-ink-2); font-weight: 400; }
-.suggest { margin-top: 8px; max-height: min(60dvh, 420px); overflow-y: auto; padding: 6px; border: 1px solid var(--hud-line); border-radius: 22px; background: rgba(24, 25, 30, 0.96); box-shadow: var(--hud-shadow); animation: rise 0.2s var(--ease); }
+.suggest { margin-top: 8px; max-height: min(60dvh, 420px); overflow-y: auto; padding: 6px; border: 1px solid var(--hud-line); border-radius: 22px; background: var(--hud-panel); box-shadow: var(--hud-shadow); animation: rise 0.2s var(--ease); }
 .suggest p { margin: 0; padding: 8px 12px; }
 .suggest button { display: block; width: 100%; padding: 8px 12px; border: 0; border-radius: 16px; background: none; text-align: left; }
 .suggest button.on { background: var(--hud-fill); }
@@ -122,7 +162,12 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
   .mapctl { bottom: auto; top: 116px; right: 10px; }
   .map-aerial { right: auto; left: 10px; bottom: 90px; }
   .mapnote { display: none; }
-  .sunbar { right: 64px; bottom: auto; top: 60px; }
-  .sunbox { width: min(300px, calc(100vw - 80px)); }
+  .sunbar, .sunbar.open { left: 16px; right: 16px; bottom: calc(46dvh + 8px); }
+  .sunrow { flex-wrap: wrap; }
+  .stage.review .map3d { clip-path: inset(0 0 46dvh 0 round 0 0 24px 24px); }
+  .stage.review .sunlight { inset: 0 0 46dvh 0; border-radius: 0 0 24px 24px; }
+  .stage.review .sheet, .stage.review .rim { top: 0; right: 0; left: 0; bottom: 46dvh; border-radius: 0 0 24px 24px; }
+  .stage.review .panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 45dvh; overflow-y: auto; }
+  .stage.review .mapctl { right: 16px; top: 70px; bottom: auto; }
   .credits { top: 116px; bottom: auto; right: 64px; left: 10px; max-width: none; }
 }

@@ -14,7 +14,7 @@ function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real 
   return { roofs: polys(answer.roofs), walls: polys(answer.walls) };
 }
 
-export default function FindHome() {
+export default function FindHome({ dark }: { dark: boolean }) {
   const [q, setQ] = useState("");
   const [places, setPlaces] = useState<Place[] | null>(null);
   const [active, setActive] = useState(0);
@@ -29,7 +29,7 @@ export default function FindHome() {
   const [near, setNear] = useState<string | null>(null); // the building under the pointer in the list
   const [face, setFace] = useState<Face | null>(null); // the roof surface under the pointer, on the map or in the list
   const [look, setLook] = useState<{ id: string } | null>(null);
-  const [view, setView] = useState<View>({ layer: "photo", moment: null });
+  const [view, setView] = useState<View>({ layer: "photo", moment: null, style: "glow" });
   const [picks, setPicks] = useState<string[] | null>(null); // null: our suggestion, until the user changes something
   const typed = useRef("");
   const asked = useRef("");
@@ -74,22 +74,22 @@ export default function FindHome() {
     const { id, square, at: origin } = hit;
     setBuildings((list) => [...list, { id, square, label: "Building", origin, real: null, measuring: true }]);
     placeAt(origin[1], origin[0]).then((p) => patch(id, { label: short(p.label) })).catch(() => undefined);
+    // Everything the next step shows is fetched now, so Continue can move at once.
+    sunOf(square, id).then((sun) => patch(id, { sun })).catch(() => patch(id, { sun: null }));
     measured(square, id).then((m) => patch(id, { measuring: false, real: toReal(m, origin) })).catch(() => patch(id, { measuring: false }));
   };
 
   // Move on as soon as the measured models are in.
-  const measuring = buildings.some((b) => b.measuring);
+  const measuring = buildings.some((b) => b.measuring || b.sun === undefined);
   useEffect(() => {
     if (!waiting || measuring) return;
     setWaiting(false); setOpen(buildings[0]?.id ?? null); setStep("review");
-    // Sun data starts here: it needs the exact surfaces.
-    buildings.filter((b) => b.sun === undefined).forEach((b) => sunOf(b.square, b.id).then((sun) => patch(b.id, { sun })).catch(() => patch(b.id, { sun: null })));
   }, [waiting, measuring]);
   const goTo = (id: string) => { setOpen(id); setLook({ id }); };
 
   return (
-    <main className="stage">
-      <HomeMap buildings={buildings} step={step} focus={focus} aerial={aerial} onPick={step === "pick" ? toggle : undefined}
+    <main className={`stage ${step}`}>
+      <HomeMap dark={dark} buildings={buildings} step={step} focus={focus} aerial={aerial} onPick={step === "pick" ? toggle : undefined}
         open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={view} chosen={step === "review" ? chosen : []} onToggle={toggleSurface} />
       {step === "pick" && <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</Button>}
       {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
@@ -117,7 +117,7 @@ export default function FindHome() {
           <button type="button" className="row" onClick={() => goTo(b.id)}><span className="tag">{letter(i)}</span><span className="name">{b.label}</span></button>
           <IconButton label={`Remove ${b.label}`} onClick={() => remove(b.id)}><Close /></IconButton>
         </li>)}</ul>
-        <div className="panelfoot"><Button variant="solid" size="lg" wide disabled={waiting} onClick={() => setWaiting(true)}>{waiting ? "Loading measured roofs…" : "Continue"}</Button></div>
+        <div className="panelfoot"><Button variant="solid" size="lg" wide disabled={waiting} onClick={() => setWaiting(true)}>{waiting ? "Getting your roofs ready…" : "Continue"}</Button></div>
       </aside>}
 
       {step === "review" && <Review buildings={buildings} goTo={goTo} face={face} setFace={setFace} view={view} setView={setView} chosen={chosen} toggle={toggleSurface} suggest={() => setPicks(null)} back={() => { setFace(null); setStep("pick"); }} />}

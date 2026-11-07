@@ -31,5 +31,6 @@ def test_a_wall_touching_a_neighbour_is_found_only_where_the_neighbour_stands():
 
 def test_samples_fill_a_surface_and_face_outward():
     ring = [(0, 0, 0), (4, 0, 0), (4, 4, 0), (0, 4, 0)]
-    points, _, _, n, area = _sample(ring, [], 1.0)
-    assert len(points) == 16 and area == 16 and n[2] == 1 and newell(ring)[2] > 0
+    points, cells, place, n, area = _sample(ring, [], 1.0)
+    assert len(points) == 16 and len(cells) == 16 and area == 16 and n[2] == 1 and newell(ring)[2] > 0
+    assert place(ring)[0] == [-0.5, -0.5]  # the outline sits half a cell outside the first sample
