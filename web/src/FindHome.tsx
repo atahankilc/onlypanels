@@ -1,17 +1,35 @@
 import { useEffect, useRef, useState } from "react";
-import { Place, Poly, Real, RealAnswer, Selected, placeAt, realBuilding, searchPlace } from "./api";
-import { P2, P3, centre, inside, toLocal } from "./geometry";
-import HomeMap, { Picked } from "./HomeMap";
-import { Close, Photo, Search } from "./icons";
+import { Place, Poly, Real, Selected, measured, placeAt, searchPlace } from "./api";
+import { P2, P3, faceFacts, toLocal } from "./geometry";
+import HomeMap, { Picked, Step } from "./HomeMap";
+import { Back, Close, Photo, Search } from "./icons";
 import { Button, IconButton } from "./ui";
 
-/** Bavaria's measured building in the home's metres, with the houses the map drew as one block with it. */
-function toReal(answer: NonNullable<RealAnswer>, origin: P2, footprint: P2[]): Real {
+const MIN_FACE_M2 = 6; // dormers and fragments are drawn, not listed
+const short = (label: string) => label.split(", ").slice(0, 2).join(", ");
+
+function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real {
   const here = (r: P3[]) => r.map((p) => [...toLocal(origin, [p[0], p[1]]), p[2]] as P3);
   const polys = (list: Poly[]): Poly[] => list.map((p) => ({ ring: here(p.ring), holes: p.holes.map(here) }));
-  const flat = (b: NonNullable<RealAnswer>["main"]) => b.ground.map((g) => here(g.ring).map((p) => [p[0], p[1]] as P2));
-  const inBlock = answer.near.filter((b) => { const c = flat(b)[0]; return inside(centre(c), footprint) || c.filter((p) => inside(p, footprint)).length * 2 >= c.length; });
-  return { ground: [...flat(answer.main), ...inBlock.flatMap(flat)], roofs: polys(answer.main.roofs), walls: polys(answer.main.walls), others: inBlock.flatMap((b) => [...polys(b.roofs), ...polys(b.walls)]) };
+  return { roofs: polys(answer.roofs), walls: polys(answer.walls) };
+}
+
+function BuildingFacts({ b }: { b: Selected }) {
+  if (!b.real) return <p className="error small">The measured data could not be loaded.</p>;
+  const faces = b.real.roofs.map((p) => faceFacts(p)).filter((f) => f.m2 >= MIN_FACE_M2).sort((x, y) => y.m2 - x.m2);
+  const top = Math.max(...b.real.roofs.flatMap((p) => p.ring.map((q) => q[2])));
+  return (
+    <>
+      <dl className="facts">
+        <dt>Height</dt><dd>{top.toFixed(1)} m</dd>
+        <dt>Roof area</dt><dd>{Math.round(faces.reduce((s, f) => s + f.m2, 0))} m²</dd>
+      </dl>
+      <table className="faces">
+        <thead><tr><th>Roof side</th><th>Slope</th><th>Area</th></tr></thead>
+        <tbody>{faces.map((f, i) => <tr key={i}><td>{f.side}</td><td>{f.tilt}°</td><td>{Math.round(f.m2)} m²</td></tr>)}</tbody>
+      </table>
+    </>
+  );
 }
 
 export default function FindHome() {
@@ -20,17 +38,19 @@ export default function FindHome() {
   const [active, setActive] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [target, setTarget] = useState<{ at: P2; place: Place } | null>(null);
-  const [home, setHome] = useState<Selected | null>(null);
+  const [focus, setFocus] = useState<P2 | null>(null);
+  const [buildings, setBuildings] = useState<Selected[]>([]);
+  const [step, setStep] = useState<Step>("pick");
+  const [waiting, setWaiting] = useState(false);
   const [aerial, setAerial] = useState(false);
-  const picked = useRef("");
+  const typed = useRef("");
   const asked = useRef("");
 
   // Suggestions as you type. A slow answer to an older text never replaces a newer one.
   useEffect(() => {
     const text = q.trim();
     asked.current = text;
-    if (text.length < 3 || text === picked.current) { setPlaces(null); return; }
+    if (text.length < 3 || text === typed.current) { setPlaces(null); return; }
     const timer = setTimeout(() => {
       setBusy(true);
       searchPlace(text)
@@ -41,10 +61,10 @@ export default function FindHome() {
     return () => clearTimeout(timer);
   }, [q]);
 
-  const show = (text: string) => { picked.current = text; setQ(text); };
-  const choose = (p: Place) => { show(p.label); setPlaces(null); setHome(null); setTarget({ at: [p.lon, p.lat], place: p }); };
-  /** Back to picking: the next click or search starts fresh. */
-  const close = () => { show(""); setPlaces(null); setTarget(null); setError(""); setHome(null); };
+  const show = (text: string) => { typed.current = text; setQ(text); };
+  /** Search only takes you there. Which buildings count is the user's choice. */
+  const choose = (p: Place) => { show(p.label); setPlaces(null); setFocus([p.lon, p.lat]); };
+  const clear = () => { show(""); setPlaces(null); setError(""); setFocus(null); };
 
   const keys = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") setPlaces(null);
@@ -53,36 +73,35 @@ export default function FindHome() {
     if (e.key === "ArrowUp") { e.preventDefault(); setActive((active - 1 + places.length) % places.length); }
     if (e.key === "Enter") { e.preventDefault(); choose(places[active]); }
   };
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && home) close(); };
-    addEventListener("keydown", esc);
-    return () => removeEventListener("keydown", esc);
-  }, [home]);
 
-  const pick = (hit: Picked) => {
-    const origin = centre(hit.ring), ring = hit.ring.map((p) => toLocal(origin, p));
-    const known = target?.place;
-    const place = known ?? { label: "Selected building", lat: origin[1], lon: origin[0] };
-    setHome({ place, origin, homeIds: hit.ids, ring, real: null, measuring: true });
-    if (!known) placeAt(origin[1], origin[0]).then((p) => { setHome((now) => now && { ...now, place: p }); show(p.label.split(", ").slice(0, 3).join(", ")); }).catch(() => undefined);
-    const reach = Math.max(...ring.map((p) => Math.hypot(p[0], p[1])));
-    realBuilding(origin[1], origin[0], reach)
-      .then((answer) => setHome((now) => (now?.origin === origin ? { ...now, measuring: false, real: answer ? toReal(answer, origin, ring) : null } : now)))
-      .catch(() => setHome((now) => (now?.origin === origin ? { ...now, measuring: false } : now)));
+  const patch = (id: string, change: Partial<Selected>) => setBuildings((list) => list.map((b) => (b.id === id ? { ...b, ...change } : b)));
+  const remove = (id: string) => setBuildings((list) => list.filter((b) => b.id !== id));
+
+  /** A click selects a building, a second click lets it go. Its roof loads quietly for the next step. */
+  const toggle = (hit: Picked) => {
+    if (buildings.some((b) => b.id === hit.id)) { remove(hit.id); return; }
+    const { id, square, at: origin } = hit;
+    setBuildings((list) => [...list, { id, square, label: "Building", origin, real: null, measuring: true }]);
+    placeAt(origin[1], origin[0]).then((p) => patch(id, { label: short(p.label) })).catch(() => undefined);
+    measured(square, id).then((m) => patch(id, { measuring: false, real: toReal(m, origin) })).catch(() => patch(id, { measuring: false }));
   };
+
+  // Move on as soon as the measured models are in.
+  const measuring = buildings.some((b) => b.measuring);
+  useEffect(() => { if (waiting && !measuring) { setWaiting(false); setStep("review"); } }, [waiting, measuring]);
 
   return (
     <main className="stage">
-      <HomeMap home={home} focus={target?.at ?? null} aerial={aerial} onPick={home ? undefined : pick} />
+      <HomeMap buildings={buildings} step={step} focus={focus} aerial={aerial} onPick={step === "pick" ? toggle : undefined} />
       <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</Button>
-      {!home && <div className="mapnote">Click your house on the map, or search for it</div>}
+      {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
-      <div className="finder">
+      {step === "pick" && <div className="finder">
         <div className="field-pill">
           <Search />
-          <input id="where" role="combobox" aria-expanded={!!places?.length} aria-controls="places" aria-label="Where is your home?" autoComplete="off"
-            value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={keys} placeholder="Find your home in Munich" />
-          {q && <IconButton label="Clear" onClick={close}><Close /></IconButton>}
+          <input id="where" role="combobox" aria-expanded={!!places?.length} aria-controls="places" aria-label="Go to an address" autoComplete="off"
+            value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={keys} placeholder="Go to an address in Munich" />
+          {q && <IconButton label="Clear" onClick={clear}><Close /></IconButton>}
         </div>
         {(places || error) && <div className="suggest" id="places" role="listbox">
           {error && <p className="error">{error}</p>}
@@ -92,11 +111,18 @@ export default function FindHome() {
             return <button type="button" key={p.label} role="option" aria-selected={i === active} className={i === active ? "on" : ""} onMouseEnter={() => setActive(i)} onClick={() => choose(p)}><b>{name}</b><small>{rest.slice(0, 3).join(", ")}</small></button>;
           })}
         </div>}
-      </div>
+      </div>}
 
-      {home && <aside className="panel">
-        <header className="panelbar"><b>{home.place.label.split(", ").slice(0, 2).join(", ")}</b><IconButton label="Close this building" onClick={close}><Close /></IconButton></header>
-        <p className="panelline muted">{home.measuring ? "Looking for the measured roof…" : home.real ? "Measured roof, from Bavaria's 3D building data." : "No measured model found for this building."}</p>
+      {step === "pick" && buildings.length > 0 && <aside className="panel">
+        <h2>Selected buildings</h2>
+        <ul className="picked">{buildings.map((b) => <li key={b.id}><span>{b.label}</span><IconButton label={`Remove ${b.label}`} onClick={() => remove(b.id)}><Close /></IconButton></li>)}</ul>
+        <div className="panelfoot"><Button variant="solid" size="lg" wide disabled={waiting} onClick={() => setWaiting(true)}>{waiting ? "Loading measured roofs…" : "Continue"}</Button></div>
+      </aside>}
+
+      {step === "review" && <aside className="panel tall">
+        <header className="panelbar"><IconButton label="Back to selecting" onClick={() => setStep("pick")}><Back /></IconButton><b>Your buildings</b></header>
+        {buildings.map((b) => <section key={b.id}><h3>{b.label}</h3><BuildingFacts b={b} /></section>)}
+        <p className="source small muted">Measured data from Bavaria's 3D buildings.</p>
       </aside>}
     </main>
   );

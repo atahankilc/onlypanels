@@ -40,7 +40,7 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 /* ---------- top line ---------- */
 .topbar { position: fixed; z-index: 5; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 16px 0 24px; pointer-events: none; }
 .topbar > * { pointer-events: auto; }
-.blank { display: grid; place-items: center; min-height: 100dvh; }
+.blank { position: fixed; z-index: 4; inset: 0; display: grid; place-items: center; background: var(--hud-land); }
 .blank p { margin: 0; }
 .logo { display: flex; align-items: center; gap: 12px; text-shadow: 0 1px 12px var(--hud-land); }
 .logo h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
@@ -49,8 +49,27 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .stage { position: fixed; inset: 0; overflow: hidden; }
 .map3d { position: absolute; inset: 0; background: var(--hud-land); }
 .panel { position: absolute; z-index: 2; top: 132px; left: 12px; width: 400px; max-height: calc(100dvh - 210px); overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--hud-line); border-radius: 24px; background: rgba(18, 19, 23, 0.93); box-shadow: var(--hud-shadow); } /* no blur: repainting one this large on every map frame makes dragging lag */
-.panelline { margin: 0; padding: 12px 18px 14px; }
-.panelbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 10px 10px 18px; border-bottom: 1px solid var(--hud-line); }
+.panel.tall { top: 76px; max-height: calc(100dvh - 92px); }
+.panel > h2 { margin: 0; padding: 16px 18px 6px; }
+.panel > section { padding: 14px 18px; border-top: 1px solid var(--hud-line); }
+.panel h3 { margin-bottom: 8px; font: 600 14px var(--font-ui); letter-spacing: 0; text-transform: none; color: var(--hud-ink); }
+.picked { list-style: none; margin: 0; padding: 0 10px 0 18px; max-height: 50dvh; overflow-y: auto; }
+.picked li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; margin: 0; max-width: none; border-top: 1px solid var(--hud-line); }
+.picked li:first-child { border-top: 0; }
+.picked span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panelfoot { padding: 12px 14px 14px; border-top: 1px solid var(--hud-line); }
+.facts { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; margin: 0 0 10px; }
+.facts dt { color: var(--hud-ink-2); }
+.facts dd { margin: 0; font: 500 13px var(--font-mono); }
+.faces { width: 100%; border-collapse: collapse; font-size: 13px; }
+.faces th { padding: 6px 0; text-align: left; font: 500 10.5px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--hud-ink-2); }
+.faces td { padding: 6px 0; border-top: 1px solid var(--hud-line); }
+.faces th + th, .faces td + td { text-align: right; }
+.faces td + td { font-family: var(--font-mono); }
+.source { margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--hud-line); }
+.spot { width: 14px; height: 14px; border: 3px solid var(--hud-land); border-radius: 50%; background: var(--hud-warn); box-shadow: var(--hud-shadow); }
+.panelbar b { flex: 1; }
+.panelbar { display: flex; align-items: center; gap: 10px; padding: 10px 18px 10px 10px; border-bottom: 1px solid var(--hud-line); }
 .panelbar b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .finder { position: absolute; z-index: 3; top: 76px; left: 12px; width: 400px; }
 .field-pill { display: flex; align-items: center; gap: 10px; height: var(--btn-lg); padding: 0 4px 0 16px; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); color: var(--hud-ink-2); transition: border-color 0.2s; }
@@ -68,6 +87,7 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 
 
 /* on the map */
+.mapload { position: absolute; z-index: 1; top: 16px; left: 50%; transform: translateX(-50%); padding: 8px 16px; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass-2); box-shadow: var(--hud-shadow); font-size: 13px; color: var(--hud-ink-2); }
 .mapnote { position: absolute; z-index: 1; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; min-height: var(--btn-lg); padding: 6px 8px 6px 18px; white-space: nowrap; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass-2); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); animation: rise 0.35s var(--ease); }
 .mapnote { bottom: 16px; padding: 6px 18px; }
 .mapnote b { font-weight: 600; }
@@ -81,12 +101,12 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .credits a { text-underline-offset: 2px; }
 .me { width: 16px; height: 16px; border: 3px solid var(--hud-solid); border-radius: 50%; background: var(--hud-route); box-shadow: var(--hud-shadow); }
 .map-aerial { position: absolute; z-index: 1; right: 76px; bottom: 16px; }
-.map-home { position: absolute; z-index: 1; left: 12px; bottom: 16px; }
+.map-home { position: absolute; z-index: 1; left: 424px; bottom: 16px; }
 
 @media (max-width: 820px) {
   .topbar { padding: 12px 14px 0; }
   .finder, .panel { left: 10px; right: 10px; width: auto; }
-  .finder { top: 60px; } .panel { top: auto; bottom: 10px; max-height: 40dvh; }
+  .finder { top: 60px; } .panel, .panel.tall { top: auto; bottom: 10px; max-height: 42dvh; }
   .mapctl { bottom: auto; top: 116px; right: 10px; }
   .map-aerial { right: auto; left: 10px; bottom: 90px; }
   .map-home { left: auto; right: 10px; bottom: 90px; }

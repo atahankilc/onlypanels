@@ -2,91 +2,38 @@ import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import * as THREE from "three";
-import { Poly, Selected } from "./api";
-import { P2, P3, centre, inside, normal, toLngLat, toLocal } from "./geometry";
+import { Poly, Selected, squareBuildings, squaresIn } from "./api";
+import { P2, P3, centre, normal, toLocal } from "./geometry";
 import { Home as HomeIcon, Info, Locate, Minus, Needle, Plus } from "./icons";
 import { mapStyle } from "./mapStyle";
 import { MUNICH, REGION_EDGE, REGION_OUTSIDE, VIEW_LIMIT, inRegion } from "./region";
-import { Piece, box, pieceId, stitch } from "./stitch";
 import { Button, IconButton } from "./ui";
 
-const BLOCKS = "buildings-3d"; // the base map's blocks, used only when zoomed out
-const HOMES = "homes"; // the same buildings, one feature each
-const HOMES_FROM_ZOOM = 14; // the tiles carry buildings from here
-const CLOSE_ZOOM = 15; // close enough to pick a house and not lose it
+const BLOCKS = "buildings-3d"; // the base map's blocks: a rough picture from afar, never selected
+const HOMES = "homes"; // measured buildings, one feature each: what people select
+const HOMES_FROM_ZOOM = 15;
+const LOAD_REACH_DEG = 0.018; // about 1.5 km around the view's centre
 const EDGES_FROM_ZOOM = 16, EDGES_FULL_ZOOM = 17; // from afar houses cannot be told apart anyway, so no lines to draw
 const EDGE_OPACITY = 0.8, EDGE_REACH_M = 3000; // past this the tilted view fades out at the closest zoom they show at
-const MAX_HOMES = 40000; // forget what was panned past, so a long trip does not pile up
 const PANEL_W = 424; // room the panel takes on a wide screen
 const PITCH = 50; // steeper tilts make a drag near the horizon cover hundreds of metres
-const ADDRESS_REACH_M = 25; // an address point can sit on the pavement, in front of the house
+const FADE_MS = 900; // from the map's blocks to the measured buildings, and back
 const AERIAL = "https://geoservices.bayern.de/od/wms/dop/v1/dop40?service=WMS&version=1.3.0&request=GetMap&layers=by_dop40c&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=512&height=512&format=image/jpeg";
 const COLORS = { roof: "#3A6FA8", wall: "#1F3A5C", edge: "#8A95A8", ownEdge: "#BFD8F5", hover: "#2F5E94", otherRoof: "#3A3D47", otherWall: "#23252C", limit: "#FFD60A", land: "#0F1013" };
 // One light from the south, so the sides of a roof read apart.
 const lit = (hex: string, n: P3) => new THREE.Color(hex).multiplyScalar(0.95 - 0.35 * n[1]).getHex();
 const wide = () => matchMedia("(min-width: 821px)").matches;
 
-export type Picked = { ids: string[]; ring: P2[]; holes: P2[][]; height: number };
-type Props = { home: Selected | null; focus: P2 | null; aerial: boolean; onPick?: (b: Picked) => void };
+export type Picked = { id: string; square: string; at: P2 };
+export type Step = "pick" | "review";
+type Props = { buildings: Selected[]; step: Step; focus: P2 | null; aerial: boolean; onPick?: (b: Picked) => void };
 
-/** One building: the tiles can merge several into one feature, so a feature is not a building. */
-type Home = Piece & { group?: string };
-type Geometry = { type: string; coordinates: unknown };
-
-function collect(m: maplibregl.Map, pieces: Map<string, Piece>, homes: Map<string, Home>) {
-  let added = 0;
-  for (const f of m.querySourceFeatures("openmaptiles", { sourceLayer: "building" })) {
-    const g = f.geometry as Geometry;
-    const polygons = g.type === "Polygon" ? [g.coordinates as P2[][]] : g.type === "MultiPolygon" ? (g.coordinates as P2[][][]) : [];
-    const height = Number(f.properties.render_height) || 6, base = Number(f.properties.render_min_height) || 0;
-    for (const rings of polygons) {
-      if (!inRegion(rings[0][0])) continue;
-      const pid = pieceId(rings, height, base); // from the shape: neighbouring tiles repeat a building under other ids
-      if (pieces.has(pid)) continue;
-      pieces.set(pid, { pid, rings, height, base, shell: !!f.properties.hide_3d });
-      added++;
-    }
-  }
-  if (!added) return false;
-  homes.clear();
-  for (const h of stitch([...pieces.values()])) homes.set(h.pid, h);
-  // A building mapped in parts has an outline that is not drawn. Its parts belong together.
-  const all = [...homes.values()], shells = all.filter((h) => h.shell);
-  const parts = all.filter((h) => !h.shell).map((h) => ({ h, at: centre(h.rings[0]) }));
-  for (const s of shells) {
-    const [w, south, e, north] = box(s);
-    for (const { h, at } of parts) if (!h.group && at[0] >= w && at[0] <= e && at[1] >= south && at[1] <= north && inside(at, s.rings[0])) h.group = s.pid;
-  }
-  // Here and nowhere else: what is collected is not collected twice, so a caller that skipped this would leave the map empty.
-  (m.getSource(HOMES) as maplibregl.GeoJSONSource).setData(asData(homes));
-  return true;
-}
+type Home = { id: string; square: string; polys: P2[][][]; height: number };
 
 const asData = (homes: Map<string, Home>) => ({
   type: "FeatureCollection" as const,
-  features: [...homes.values()].filter((h) => !h.shell).map((h) => ({ type: "Feature" as const, properties: { pid: h.pid, h: h.height, b: h.base }, geometry: { type: "Polygon" as const, coordinates: h.rings } })),
+  features: [...homes.values()].map((h) => ({ type: "Feature" as const, properties: { id: h.id, h: h.height }, geometry: { type: "MultiPolygon" as const, coordinates: h.polys } })),
 });
-
-const open = (r: P2[]) => (r.length > 1 && r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1] ? r.slice(0, -1) : r);
-
-function resolve(homes: Map<string, Home>, h: Home): Picked {
-  const shell = h.group ? homes.get(h.group) : undefined;
-  const ids = shell ? [...homes.values()].filter((x) => x.group === shell.pid).map((x) => x.pid) : [h.pid];
-  const rings = (shell ?? h).rings.map(open);
-  return { ids, ring: rings[0], holes: rings.slice(1), height: Math.max(...ids.map((id) => homes.get(id)?.height ?? 0)) };
-}
-
-/** The building an address belongs to: the one around the point, else the nearest close by. */
-function homeAt(homes: Map<string, Home>, at: P2) {
-  let best: Home | null = null, reach = ADDRESS_REACH_M;
-  for (const h of homes.values()) {
-    if (h.shell) continue;
-    const local = h.rings[0].map((p) => toLocal(at, p));
-    const d = inside([0, 0], local) ? 0 : Math.min(...local.map((p) => Math.hypot(p[0], p[1])));
-    if (d < reach) { reach = d; best = h; }
-  }
-  return best;
-}
 
 function mesh(points: P3[], faces: number[], color: THREE.ColorRepresentation, opacity = 1) {
   const g = new THREE.BufferGeometry();
@@ -127,41 +74,42 @@ const edgeFade = (zoom: number) => {
   return t * t * (3 - 2 * t);
 };
 
-function outlines(homes: Map<string, Home>, origin: P2, skip: Set<string>) {
+function outlines(homes: Map<string, Home>, origin: P2) {
   // In the map's own projection: `origin` is only near the view, and toLocal holds just close by.
   const o = maplibregl.MercatorCoordinate.fromLngLat(origin, 0), unit = o.meterInMercatorCoordinateUnits();
   const points: number[] = [];
   for (const h of homes.values()) {
-    if (h.shell || skip.has(h.pid) || Math.hypot(...toLocal(origin, h.rings[0][0])) > EDGE_REACH_M) continue;
-    const up = maplibregl.MercatorCoordinate.fromLngLat(h.rings[0][0], 0).meterInMercatorCoordinateUnits() / unit;
-    const top = (h.height + 0.08) * up, base = h.base * up;
-    for (const ring of h.rings) {
+    if (Math.hypot(...toLocal(origin, h.polys[0][0][0])) > EDGE_REACH_M) continue;
+    const top = h.height + 0.08;
+    for (const rings of h.polys) for (const ring of rings) {
       const local = ring.map((p) => { const c = maplibregl.MercatorCoordinate.fromLngLat(p, 0); return [(c.x - o.x) / unit, (o.y - c.y) / unit]; });
-      for (let i = 0; i + 1 < local.length; i++) {
-        const [a, b] = [local[i], local[i + 1]];
-        points.push(a[0], a[1], top, b[0], b[1], top, a[0], a[1], base, a[0], a[1], top);
-      }
+      local.forEach((a, i) => {
+        const b = local[(i + 1) % local.length];
+        points.push(a[0], a[1], top, b[0], b[1], top, a[0], a[1], 0, a[0], a[1], top);
+      });
     }
   }
   return lines(points, COLORS.edge);
 }
 
-export default function HomeMap({ home, focus, aerial, onPick }: Props) {
+export default function HomeMap({ buildings, step, focus, aerial, onPick }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const group = useRef(new THREE.Group());
+  const models = useRef<{ scene: THREE.Scene; at: P2 }[]>([]); // one per building, each around its own origin
   const edges = useRef(new THREE.Group());
-  const pieces = useRef(new Map<string, Piece>());
+  const asked = useRef(new Set<string>());
+  const [loading, setLoading] = useState(0);
   const homes = useRef(new Map<string, Home>());
-  const origin = useRef<P2 | null>(null);
   const edgesAt = useRef<P2 | null>(null);
   const owned = useRef<string[]>([]);
   const ready = useRef(false);
+  const shown = useRef(0); // 0: the map's blocks, 1: the measured buildings
   const needle = useRef<HTMLSpanElement>(null);
   const me = useRef<maplibregl.Marker | null>(null);
   const [credits, setCredits] = useState(false);
-  const live = useRef({ onPick, home });
-  live.current = { onPick, home };
+  const spot = useRef<maplibregl.Marker | null>(null);
+  const live = useRef({ onPick, buildings });
+  live.current = { onPick, buildings };
 
   const locateMe = () => navigator.geolocation?.getCurrentPosition((p) => {
     const m = map.current, at: P2 = [p.coords.longitude, p.coords.latitude];
@@ -174,45 +122,44 @@ export default function HomeMap({ home, focus, aerial, onPick }: Props) {
   }, () => undefined, { enableHighAccuracy: true, timeout: 8000 });
 
   const refreshEdges = useRef(() => {});
-  // The selected building stays the map's own block, recoloured, so its shape cannot change. A measured model replaces
-  // every block that stands on its footprint: the map and the land register do not always cut houses the same way.
+  const fadeLines = useRef(() => {});
+  // A selected building stays the map's own block, recoloured, so its shape cannot change.
   const syncHomes = useRef(() => {
-    const m = map.current, now = live.current.home;
-    if (!m || !ready.current) return;
-    const at = (id: string) => ({ source: HOMES, id });
-    owned.current.forEach((id) => m.setFeatureState(at(id), { picked: false, gone: false }));
-    const picked = now?.homeIds ?? [];
-    const gone = new Set<string>();
-    if (now?.real) {
-      const real = now.real;
-      picked.forEach((id) => gone.add(id));
-      for (const h of homes.current.values()) {
-        const c = toLocal(now.origin, centre(h.rings[0]));
-        if (!h.shell && real.ground.some((g) => inside(c, g))) gone.add(h.pid);
-      }
-    }
-    owned.current = [...new Set([...picked, ...gone])];
-    picked.forEach((id) => m.setFeatureState(at(id), { picked: true }));
-    gone.forEach((id) => m.setFeatureState(at(id), { gone: true }));
-    refreshEdges.current();
-  });
-
-  const redraw = () => {
     const m = map.current;
     if (!m || !ready.current) return;
-    const g = group.current;
-    empty(g);
-    origin.current = home?.origin ?? origin.current;
-    syncHomes.current();
-    if (home?.real) {
-      const { roofs, walls, others } = home.real;
+    const at = (id: string) => ({ source: HOMES, id });
+    owned.current.forEach((id) => m.setFeatureState(at(id), { picked: false }));
+    owned.current = live.current.buildings.map((b) => b.id);
+    owned.current.forEach((id) => m.setFeatureState(at(id), { picked: true }));
+    m.triggerRepaint();
+  });
+
+  const setShown = (t: number) => {
+    shown.current = t;
+    models.current.forEach(({ scene }) => scene.traverse((o) => {
+      const material = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if (!material) return;
+      material.transparent = t < 1;
+      material.depthWrite = t >= 1; // while fading, a wall must not hide the roof behind it
+      material.opacity = t * (material.userData.opacity ?? 1);
+    }));
+    map.current?.triggerRepaint();
+  };
+
+  const clearModels = () => { models.current.forEach(({ scene }) => { scene.children.forEach((g) => empty(g as THREE.Group)); }); models.current = []; };
+  const buildModels = () => {
+    clearModels();
+    models.current = live.current.buildings.map((b) => {
+      const { roofs, walls } = b.real ?? { roofs: [], walls: [] };
+      const g = new THREE.Group(), scene = new THREE.Scene();
       walls.forEach((p) => g.add(polygon(p.ring, p.holes, COLORS.wall)));
       roofs.forEach((p) => g.add(polygon(p.ring, p.holes, lit(COLORS.roof, normal(p.ring)))));
-      others.forEach((p) => g.add(polygon(p.ring, p.holes, normal(p.ring)[2] > 0.1 ? COLORS.otherRoof : COLORS.otherWall)));
-      g.add(lines(edgesOf([...walls, ...roofs]), COLORS.ownEdge, 0.7));
-      g.add(lines(edgesOf(others), COLORS.edge));
-    }
-    m.triggerRepaint();
+      const line = lines(edgesOf([...walls, ...roofs]), COLORS.ownEdge, 0.7);
+      (line.material as THREE.Material).userData.opacity = 0.7;
+      g.add(line);
+      scene.add(g);
+      return { scene, at: b.origin };
+    });
   };
 
   useEffect(() => {
@@ -229,20 +176,20 @@ export default function HomeMap({ home, focus, aerial, onPick }: Props) {
     m.on("rotate", () => { if (needle.current) needle.current.style.rotate = `${-m.getBearing()}deg`; });
     m.once("load", locateMe);
     let renderer: THREE.WebGLRenderer;
-    const scene = new THREE.Scene(), edgeScene = new THREE.Scene(), camera = new THREE.Camera();
-    scene.add(group.current);
+    const edgeScene = new THREE.Scene(), camera = new THREE.Camera();
     edgeScene.add(edges.current);
     m.on("load", () => {
       const paint = (name: "fill-extrusion-color" | "fill-extrusion-opacity") => m.getPaintProperty(BLOCKS, name);
-      m.setLayoutProperty(BLOCKS, "visibility", "none");
-      m.addSource(HOMES, { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "pid" });
+      m.setLayerZoomRange(BLOCKS, 14, HOMES_FROM_ZOOM);
+      m.addSource(HOMES, { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "id" });
       m.addLayer({
         id: HOMES, type: "fill-extrusion", source: HOMES, minzoom: HOMES_FROM_ZOOM,
         paint: {
-          "fill-extrusion-color": ["case", ["boolean", ["feature-state", "gone"], false], "#131418", ["boolean", ["feature-state", "picked"], false], COLORS.roof, ["boolean", ["feature-state", "hover"], false], COLORS.hover, "#2A2C34"],
-          "fill-extrusion-height": ["case", ["boolean", ["feature-state", "gone"], false], 0, ["get", "h"]],
-          "fill-extrusion-base": ["case", ["boolean", ["feature-state", "gone"], false], 0, ["get", "b"]],
+          "fill-extrusion-color": ["case", ["boolean", ["feature-state", "picked"], false], COLORS.roof, ["boolean", ["feature-state", "hover"], false], COLORS.hover, "#2A2C34"],
+          "fill-extrusion-height": ["get", "h"],
+          "fill-extrusion-base": 0,
           "fill-extrusion-opacity": paint("fill-extrusion-opacity") as number,
+          "fill-extrusion-opacity-transition": { duration: FADE_MS, delay: 0 },
         },
       }, BLOCKS);
       m.addLayer({
@@ -262,8 +209,8 @@ export default function HomeMap({ home, focus, aerial, onPick }: Props) {
             camera.projectionMatrix = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix).multiply(local);
             renderer.render(what, camera);
           };
-          draw(scene, origin.current);
-          if (edgeFade(m.getZoom()) > 0) draw(edgeScene, edgesAt.current);
+          if (edgeFade(m.getZoom()) > 0 && shown.current < 1) draw(edgeScene, edgesAt.current);
+          if (shown.current > 0) models.current.forEach(({ scene, at }) => draw(scene, at));
         },
       });
       m.addSource("aerial", { type: "raster", tiles: [AERIAL], tileSize: 512 });
@@ -282,48 +229,54 @@ export default function HomeMap({ home, focus, aerial, onPick }: Props) {
 
       // Edges cover exactly what the solid layer shows: the same buildings, from the same zoom.
       let drawn = "";
-      const fadeEdges = () => edges.current.children.forEach((l) => { ((l as THREE.LineSegments).material as THREE.LineBasicMaterial).opacity = EDGE_OPACITY * edgeFade(m.getZoom()); });
+      const fadeEdges = () => edges.current.children.forEach((l) => { ((l as THREE.LineSegments).material as THREE.LineBasicMaterial).opacity = (1 - shown.current) * EDGE_OPACITY * edgeFade(m.getZoom()); });
       refreshEdges.current = () => {
         if (edgeFade(m.getZoom()) === 0) return; // nothing to see: left for when the view comes close
         const c = m.getCenter();
-        const now = `${pieces.current.size}|${owned.current.join()}|${Math.round(c.lng * 100)}|${Math.round(c.lat * 100)}`; // a joined piece leaves the count of homes as it was
+        const now = `${homes.current.size}|${Math.round(c.lng * 100)}|${Math.round(c.lat * 100)}`; // a joined piece leaves the count of homes as it was
         if (now === drawn) return;
         drawn = now;
         edgesAt.current = [c.lng, c.lat];
         empty(edges.current);
-        edges.current.add(outlines(homes.current, edgesAt.current, new Set(owned.current)));
+        edges.current.add(outlines(homes.current, edgesAt.current));
         fadeEdges();
         m.triggerRepaint();
       };
       m.on("zoom", () => { refreshEdges.current(); fadeEdges(); });
-      // Tiles arrive one by one, so split what has arrived into single buildings, a moment after the last one.
-      let timer = 0;
-      const update = () => {
-        clearTimeout(timer);
-        timer = window.setTimeout(() => {
-          if (pieces.current.size > MAX_HOMES) { pieces.current.clear(); homes.current.clear(); }
-          collect(m, pieces.current, homes.current);
+      fadeLines.current = fadeEdges;
+      // Measured buildings come by the 2 km square, around wherever the view settles. Each square is asked for once.
+      const addSquare = (name: string) => {
+        asked.current.add(name);
+        setLoading((n) => n + 1);
+        squareBuildings(name).then((list) => {
+          list.forEach((b) => { if (inRegion(b.polys[0][0][0])) homes.current.set(b.id, { ...b, square: name }); });
+          (m.getSource(HOMES) as maplibregl.GeoJSONSource).setData(asData(homes.current));
           syncHomes.current();
-        }, 120);
+          refreshEdges.current();
+        }).catch(() => asked.current.delete(name)).finally(() => setLoading((n) => n - 1));
       };
-      m.on("sourcedata", (e) => { if (e.sourceId === "openmaptiles" && e.tile) update(); });
-      m.on("moveend", update);
+      const load = () => {
+        if (m.getZoom() < HOMES_FROM_ZOOM) return;
+        const { lng, lat } = m.getCenter(), r = LOAD_REACH_DEG;
+        squaresIn(lng - r, lat - r * 0.7, lng + r, lat + r * 0.7).then((names) => names.filter((n) => !asked.current.has(n)).forEach(addSquare)).catch(() => undefined);
+      };
+      m.on("moveend", load);
       ready.current = true;
-      redraw();
-      update();
+      syncHomes.current();
+      load();
     });
 
     const under = (p: maplibregl.Point) => {
       if (!m.getLayer(HOMES)) return undefined;
       const hit = m.queryRenderedFeatures(p, { layers: [HOMES] })[0];
-      return hit ? homes.current.get(String(hit.properties.pid)) : undefined;
+      return hit ? homes.current.get(String(hit.properties.id)) : undefined;
     };
     m.on("click", (e) => {
       const pick = live.current.onPick;
       if (!pick) return;
-      if (m.getZoom() < CLOSE_ZOOM) { if (inRegion([e.lngLat.lng, e.lngLat.lat])) m.flyTo({ center: e.lngLat, zoom: 18.2, pitch: PITCH, duration: 1200 }); return; }
+      if (m.getZoom() < HOMES_FROM_ZOOM) { if (inRegion([e.lngLat.lng, e.lngLat.lat])) m.flyTo({ center: e.lngLat, zoom: 18.2, pitch: PITCH, duration: 1200 }); return; }
       const hit = under(e.point);
-      if (hit) pick(resolve(homes.current, hit));
+      if (hit) pick({ id: hit.id, square: hit.square, at: centre(hit.polys[0][0]) });
     });
     // Show what a click would pick: the block itself changes colour, nothing is drawn on top of it.
     let frame = 0, lit: string[] = [];
@@ -340,7 +293,7 @@ export default function HomeMap({ home, focus, aerial, onPick }: Props) {
         if (!live.current.onPick) { hover([]); m.getCanvas().style.cursor = ""; return; }
         const hit = under(e.point);
         m.getCanvas().style.cursor = hit ? "pointer" : "";
-        hover(hit ? resolve(homes.current, hit).ids : []);
+        hover(hit ? [hit.id] : []);
       });
     });
     m.on("mouseout", () => hover([]));
@@ -348,52 +301,62 @@ export default function HomeMap({ home, focus, aerial, onPick }: Props) {
     return () => { ready.current = false; m.remove(); map.current = null; };
   }, []);
 
-  useEffect(redraw, [home]);
+  useEffect(() => syncHomes.current(), [buildings]);
   const frame = (duration: number) => {
-    const m = map.current;
-    if (!m || !home) return;
-    const points = home.ring.map((p) => toLngLat(home.origin, p));
+    const m = map.current, list = live.current.buildings;
+    if (!m || !list.length) return;
+    const points = list.flatMap((b) => homes.current.get(b.id)?.polys[0][0] ?? [b.origin]);
     const area = points.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(points[0], points[0]));
     const side = matchMedia("(min-width: 821px)").matches ? PANEL_W : 0;
     m.fitBounds(area, { padding: { top: 120, bottom: 120, right: 120, left: 120 + side }, maxZoom: 19.5, pitch: PITCH, bearing: m.getBearing(), duration });
   };
-  // Frame the home once, so a large building is not cut off, and keep it close enough not to lose it.
-  const framed = useRef<P2 | null>(null);
-  useEffect(() => {
-    if (!home) { framed.current = null; map.current?.setMinZoom(null); return; }
-    if (framed.current === home.origin || !map.current) return;
-    framed.current = home.origin;
-    map.current.setMinZoom(CLOSE_ZOOM);
-    frame(900);
-  }, [home]);
+
+  // Between the steps the map's blocks fade out while the measured buildings fade in, as the camera settles on them.
   useEffect(() => {
     const m = map.current;
+    if (!m || !ready.current) return;
+    const to = step === "review" ? 1 : 0, from = shown.current;
+    if (to === from) return;
+    if (to) { buildModels(); setShown(0); frame(FADE_MS); }
+    m.setLayoutProperty(HOMES, "visibility", "visible");
+    m.setPaintProperty(HOMES, "fill-extrusion-opacity", to || aerial ? 0 : 1);
+    const start = performance.now();
+    let frameId = 0;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / FADE_MS), eased = t * t * (3 - 2 * t);
+      setShown(from + (to - from) * eased);
+      fadeLines.current();
+      if (t < 1) { frameId = requestAnimationFrame(tick); return; }
+      if (to) m.setLayoutProperty(HOMES, "visibility", "none");
+      else clearModels();
+    };
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [step]);
+
+  // Search goes there and marks the spot. It selects nothing.
+  useEffect(() => {
+    const m = map.current;
+    spot.current?.remove();
+    spot.current = null;
     if (!focus || !m) return;
-    m.flyTo({ center: focus, zoom: 18.6, pitch: PITCH, bearing: 0, duration: 1800 });
-    // The building is only known once the map has arrived and its tiles are in.
-    let tries = 0;
-    const wait = setInterval(() => {
-      if (++tries > 40) clearInterval(wait);
-      if (m.isMoving() || !m.areTilesLoaded() || m.getZoom() < 17) return;
-      if (collect(m, pieces.current, homes.current)) syncHomes.current();
-      const hit = homeAt(homes.current, focus);
-      if (!hit && tries < 12) return;
-      clearInterval(wait);
-      if (hit && !live.current.home) live.current.onPick?.(resolve(homes.current, hit));
-    }, 250);
-    return () => clearInterval(wait);
+    const pin = document.createElement("div");
+    pin.className = "spot";
+    spot.current = new maplibregl.Marker({ element: pin }).setLngLat(focus).addTo(m);
+    m.flyTo({ center: focus, zoom: 18, pitch: PITCH, bearing: 0, duration: 1800 });
   }, [focus]);
   useEffect(() => {
     if (!ready.current) return;
     const m = map.current;
     m?.setLayoutProperty("aerial", "visibility", aerial ? "visible" : "none");
     // See-through, not hidden: buildings must stay clickable over the photo.
-    m?.setPaintProperty(HOMES, "fill-extrusion-opacity", aerial ? 0 : 1);
+    if (step === "pick") m?.setPaintProperty(HOMES, "fill-extrusion-opacity", aerial ? 0 : 1);
   }, [aerial]);
   return (
     <>
       <div ref={box} className="map3d" role="application" aria-label="3D map of the home" />
-      {home && <Button variant="glass" size="lg" className="map-home" onClick={() => frame(700)}><HomeIcon />Back to my home</Button>}
+      {loading > 0 && <div className="mapload" role="status">Loading measured buildings…</div>}
+      {step === "review" && <Button variant="glass" size="lg" className="map-home" onClick={() => frame(700)}><HomeIcon />Show my buildings</Button>}
       <div className="mapctl">
         <IconButton variant="glass" size="lg" label="Go to my location" onClick={locateMe}><Locate /></IconButton>
         <div className="mapstack">

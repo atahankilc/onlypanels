@@ -25,6 +25,15 @@ def read_place(row):
     return {"label": row["display_name"], "lat": float(row["lat"]), "lon": float(row["lon"])}
 
 
+def read_address(row):
+    """Street and number, not the shop that happens to be there."""
+    a = row.get("address", {})
+    street = " ".join(x for x in (a.get("road"), a.get("house_number")) if x)
+    town = " ".join(x for x in (a.get("postcode"), a.get("city") or a.get("town") or a.get("village")) if x)
+    label = ", ".join(x for x in (street, town) if x)
+    return {**read_place(row), "label": label or row["display_name"]}
+
+
 def read_photon(feature):
     p = feature["properties"]
     street = " ".join(x for x in (p.get("street"), p.get("housenumber")) if x)
@@ -58,10 +67,10 @@ def suggest(query):
 
 @lru_cache(maxsize=256)
 def _reverse(lat, lon):
-    params = urllib.parse.urlencode({"lat": lat, "lon": lon, "format": "jsonv2", "zoom": 18})
+    params = urllib.parse.urlencode({"lat": lat, "lon": lon, "format": "jsonv2", "zoom": 18, "addressdetails": 1})
     return json.dumps(_get(f"{REVERSE}?{params}", 10))
 
 
 def reverse(lat, lon):
     """The address at a clicked point."""
-    return read_place(json.loads(_reverse(round(lat, 5), round(lon, 5))))
+    return read_address(json.loads(_reverse(round(lat, 5), round(lon, 5))))

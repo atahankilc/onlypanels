@@ -1,6 +1,6 @@
 import io
 
-from reonic_engine.lod2 import _gap, parse, tile_name
+from reonic_engine.lod2 import parse, squares, tile_name
 
 GML = """<CityModel xmlns:gml="http://www.opengis.net/gml" xmlns:bldg="http://www.opengis.net/citygml/building/1.0">
 <bldg:Building gml:id="a">
@@ -21,6 +21,10 @@ def test_parse_reads_surfaces_and_drops_the_repeated_point():
     assert b["floor"] == 500 and len(b["ground"][0]["ring"]) == 4 and b["roofs"][0]["ring"][2] == (10, 10, 510)
 
 
-def test_gap_is_zero_inside_and_metres_outside():
-    b = parse(io.BytesIO(GML.encode()))[0]
-    assert _gap(5, 5, b) == 0 and _gap(13, 14, b) == 5
+def test_parse_keeps_the_building_id():
+    assert parse(io.BytesIO(GML.encode()))[0]["id"] == "a"
+
+
+def test_squares_cover_a_box():
+    assert squares(11.651, 48.2495, 11.652, 48.2500) == ["696_5346"]
+    assert len(squares(11.64, 48.24, 11.68, 48.28)) >= 4

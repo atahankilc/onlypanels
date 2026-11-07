@@ -1,4 +1,4 @@
-from reonic_engine.site import in_region, read_photon, read_place
+from reonic_engine.site import in_region, read_address, read_photon, read_place
 
 
 def test_region_holds_munich_and_garching_but_not_berlin():
@@ -7,6 +7,12 @@ def test_region_holds_munich_and_garching_but_not_berlin():
 
 def test_read_place():
     assert read_place({"display_name": "A street", "lat": "48.1", "lon": "11.6"}) == {"label": "A street", "lat": 48.1, "lon": 11.6}
+
+
+def test_read_address_prefers_street_over_shop():
+    row = {"display_name": "Bakery, 8, Hauptstr.", "lat": "48.1", "lon": "11.6",
+           "address": {"road": "Hauptstr.", "house_number": "8", "postcode": "85748", "town": "Garching"}}
+    assert read_address(row)["label"] == "Hauptstr. 8, 85748 Garching"
 
 
 def test_read_photon():

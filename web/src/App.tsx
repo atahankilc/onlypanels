@@ -11,7 +11,8 @@ export default function App() {
         <div className="logo"><Mark /><h1>Energy Design Desk</h1></div>
         <Segmented label="Demo only: switch profile" variant="dev" value={view} onChange={setView} options={[{ value: "homeowner", label: "Homeowner" }, { value: "planner", label: "Planner" }]} />
       </header>
-      {view === "homeowner" ? <FindHome /> : <main className="blank"><p className="muted">The planner view comes in a later step.</p></main>}
+      <FindHome />
+      {view === "planner" && <main className="blank"><p className="muted">The planner view comes in a later step.</p></main>}
     </div>
   );
 }
