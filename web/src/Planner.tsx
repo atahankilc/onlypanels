@@ -75,7 +75,8 @@ export default function Planner({ dark, handoff }: { dark: boolean; handoff?: Ha
 function Line({ r, open }: { r: Request; open: () => void }) {
   const [roof] = useState(() => roofOf(r.buildings, r.installed));
   const out = useDesign(r, roof);
-  const assumed = Object.values(r.sources).filter((s) => s === "assumed").length;
+  // The same count Checks shows: only facts this design uses.
+  const assumed = out ? relevant(r, out.d).filter((k) => r.sources[k] === "assumed").length : Object.values(r.sources).filter((s) => s === "assumed").length;
   return <tr tabIndex={0} onClick={open} onKeyDown={(e) => e.key === "Enter" && open()}>
     <th scope="row">{r.label}</th><td>{r.from}</td><td className="mono">{out ? summary(out.d) : "…"}</td><td>{assumed} assumed {assumed === 1 ? "fact" : "facts"}</td>
     <td><span className={`state ${r.status}`}>{r.status === "sent" ? "Offer sent" : "Draft ready"}</span></td>
