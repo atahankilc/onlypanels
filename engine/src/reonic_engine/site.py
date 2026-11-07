@@ -1,48 +1,28 @@
-"""Facts about a location from open services: address search, sun, roof tags.
-
-Only the typed address or coordinates leave this machine, never project data.
-"""
+"""Addresses in the prototype's region. Only the typed text or a clicked point leaves this machine."""
 import json
 import urllib.parse
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 
 AGENT = "energy-design-desk-demo"
+PHOTON = "https://photon.komoot.io/api/"  # made for search-as-you-type; Nominatim's rules forbid that
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 REVERSE = "https://nominatim.openstreetmap.org/reverse"
-PHOTON = "https://photon.komoot.io/api/"  # made for search-as-you-type; Nominatim's rules forbid that
-CENTRE_OF_GERMANY = {"lat": 51.1, "lon": 10.4, "zoom": 6}  # ranks German results first without excluding others
-PVGIS = "https://re.jrc.ec.europa.eu/api/v5_3/PVcalc"
-OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
-SYSTEM_LOSS_PCT = 14  # PVGIS default
-COUNTRIES = {"de": "Germany", "at": "Austria", "ch": "Switzerland", "nl": "Netherlands"}
-FLAT_SHAPES = {"flat"}
+REGION = (11.2, 47.95, 11.95, 48.4)  # west, south, east, north. Keep in step with web/src/region.ts
 
 
-def _get(url, timeout, data=None):
-    request = urllib.request.Request(url, data=data, headers={"User-Agent": AGENT})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+def _get(url, timeout):
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": AGENT}), timeout=timeout) as response:
         return json.load(response)
 
 
-@lru_cache(maxsize=256)
-def _search(query):
-    params = urllib.parse.urlencode({"q": query, "format": "jsonv2", "limit": 5, "addressdetails": 1})
-    return tuple(json.dumps(r) for r in _get(f"{NOMINATIM}?{params}", 10))
+def in_region(lat, lon):
+    west, south, east, north = REGION
+    return west <= lon <= east and south <= lat <= north
 
 
 def read_place(row):
-    address = row.get("address", {})
-    return {
-        "label": row["display_name"], "lat": float(row["lat"]), "lon": float(row["lon"]),
-        "country": COUNTRIES.get(address.get("country_code"), "Other"),
-        "bavaria": address.get("state") == "Bayern",
-    }
-
-
-def geocode(query):
-    return [read_place(row) for row in map(json.loads, _search(query.strip()))]
+    return {"label": row["display_name"], "lat": float(row["lat"]), "lon": float(row["lon"])}
 
 
 def read_photon(feature):
@@ -51,88 +31,37 @@ def read_photon(feature):
     town = " ".join(x for x in (p.get("postcode"), p.get("city") or p.get("county")) if x)
     parts = [p.get("name"), street if street != p.get("name") else None, town]
     lon, lat = feature["geometry"]["coordinates"]
-    return {"label": ", ".join(x for x in parts if x), "lat": lat, "lon": lon,
-            "country": COUNTRIES.get((p.get("countrycode") or "").lower(), "Other"),
-            "bavaria": p.get("state") in ("Bayern", "Bavaria")}
+    return {"label": ", ".join(x for x in parts if x), "lat": lat, "lon": lon}
 
 
 @lru_cache(maxsize=512)
 def _suggest(query):
-    params = urllib.parse.urlencode({"q": query, "limit": 6, **CENTRE_OF_GERMANY})
+    params = urllib.parse.urlencode({"q": query, "limit": 6, "bbox": ",".join(map(str, REGION))})
     return json.dumps(_get(f"{PHOTON}?{params}", 6)["features"])
 
 
+@lru_cache(maxsize=256)
+def _search(query):
+    west, south, east, north = REGION
+    params = urllib.parse.urlencode({"q": query, "format": "jsonv2", "limit": 5, "viewbox": f"{west},{north},{east},{south}", "bounded": 1})
+    return json.dumps(_get(f"{NOMINATIM}?{params}", 10))
+
+
 def suggest(query):
-    """Places for a partly typed address. Falls back to Nominatim if Photon is down."""
+    """Places for a partly typed address, inside the region. Falls back to Nominatim if Photon is down."""
     try:
         places = [read_photon(f) for f in json.loads(_suggest(query.strip()))]
     except (OSError, KeyError, ValueError):
-        return geocode(query)
-    return list({p["label"]: p for p in places}.values())
+        places = [read_place(r) for r in json.loads(_search(query.strip()))]
+    return list({p["label"]: p for p in places if in_region(p["lat"], p["lon"])}.values())
 
 
 @lru_cache(maxsize=256)
 def _reverse(lat, lon):
-    params = urllib.parse.urlencode({"lat": lat, "lon": lon, "format": "jsonv2", "addressdetails": 1, "zoom": 18})
+    params = urllib.parse.urlencode({"lat": lat, "lon": lon, "format": "jsonv2", "zoom": 18})
     return json.dumps(_get(f"{REVERSE}?{params}", 10))
 
 
 def reverse(lat, lon):
     """The address at a clicked point."""
     return read_place(json.loads(_reverse(round(lat, 5), round(lon, 5))))
-
-
-def pvgis_aspect(azimuth):
-    """Compass bearing (180 = south) to PVGIS aspect (0 = south, -90 = east, 90 = west)."""
-    return (azimuth - 180 + 180) % 360 - 180
-
-
-def read_pvgis(payload):
-    totals = payload["outputs"]["totals"]["fixed"]
-    return {"kwh_per_kwp": round(totals["E_y"]), "sun_kwh_m2": round(totals["H(i)_y"]),
-            "monthly": [round(m["E_m"]) for m in payload["outputs"]["monthly"]["fixed"]]}
-
-
-@lru_cache(maxsize=512)
-def _sun(lat, lon, tilt, azimuth):
-    params = urllib.parse.urlencode({
-        "lat": lat, "lon": lon, "peakpower": 1, "loss": SYSTEM_LOSS_PCT, "angle": tilt,
-        "aspect": pvgis_aspect(azimuth), "outputformat": "json",
-    })
-    return json.dumps(read_pvgis(_get(f"{PVGIS}?{params}", 20)))
-
-
-def sun(lat, lon, surfaces):
-    """Yearly yield per kWp for each tilt and compass bearing. Terrain horizon is included by PVGIS."""
-    keys = [(round(lat, 3), round(lon, 3), round(s["tilt"]), round(s["azimuth"] / 5) * 5 % 360) for s in surfaces]
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        return [json.loads(r) for r in pool.map(lambda k: _sun(*k), keys)]
-
-
-def read_overpass(payload):
-    tags, trees = {}, 0
-    for element in payload.get("elements", []):
-        if element.get("type") == "count":
-            trees = int(element["tags"].get("nodes", 0))
-        elif "roof:shape" in element.get("tags", {}) or "roof:angle" in element.get("tags", {}):
-            tags = tags or element["tags"]
-    shape = tags.get("roof:shape")
-    try:
-        angle = float(tags["roof:angle"])
-    except (KeyError, ValueError):
-        angle = None
-    return {"roof": None if shape is None else "flat" if shape in FLAT_SHAPES else "pitched",
-            "shape": shape, "tilt": angle, "trees": trees}
-
-
-def building(lat, lon):
-    """Best effort: public Overpass servers are often busy, so an empty answer is normal."""
-    query = (f'[out:json][timeout:6];way(around:12,{lat},{lon})["building"];out tags;'
-             f'node(around:30,{lat},{lon})["natural"="tree"];out count;')
-    data = urllib.parse.urlencode({"data": query}).encode()
-    for url in OVERPASS:
-        try:
-            return read_overpass(_get(url, 8, data))
-        except (OSError, ValueError):
-            continue
-    return {"roof": None, "shape": None, "tilt": None, "trees": None}

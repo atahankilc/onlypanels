@@ -2,7 +2,7 @@
 
 thinc! München 2026 hackathon. An AI system that learns from real installer decisions and proposes the right mix of PV, battery and heat pump for a home, which planners can refine.
 
-**Status:** The app runs locally. See `docs/project-state.md`.
+**Status:** Step 1 runs locally: find and select a home in Munich. See `docs/project-state.md`.
 
 ## Setup
 
