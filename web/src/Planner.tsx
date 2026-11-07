@@ -157,7 +157,7 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
       <div className="deskbody">
         {!d && <p className="muted">The engine is working…</p>}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
-        {d && tab === "design" && <><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} /></>}
+        {d && tab === "design" && <><Brief d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} /></>}
         {tab === "home" && <><h3>Facts</h3><Facts r={r} setI={setI} />{d && <><h3>Roof</h3><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "checks" && <>
           <h3>Confirm before sending</h3>
@@ -175,6 +175,21 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
       </div>
     </aside>
   </main>;
+}
+
+/** The first ten seconds: what is proposed, why in three lines, and what is still open. Written from the engine's numbers by template, no language model. */
+function Brief({ d, assumed, points, site, open }: { d: Design; assumed: number; points: number; site: number; open: () => void }) {
+  const s = d.similar, why: string[] = [];
+  why.push(d.pv.locked ? `Solar is fixed by you at ${d.pv.modules} modules.` : d.pv.capped ? `The roof limits solar to ${d.pv.modules} modules; the engine wanted more.` : `Solar sized for ${d.energy.total_mwh.toFixed(1)} MWh a year. In ${s.n} similar homes, experts chose ${s.kwp_low}–${s.kwp_high} kWp.`);
+  if (d.pv.max_modules) why.push(`${d.pv.modules} of ${d.pv.max_modules} modules that fit on the measured roof, best sun first. Makes about ${d.energy.production_mwh.toFixed(1)} MWh a year.`);
+  why.push(d.battery.locked ? (d.battery.kwh ? `Battery set by you at ${d.battery.kwh} kWh.` : "No battery, your choice.") : d.battery.kwh ? `${d.battery.kwh} kWh battery: ${s.battery_rate}% of similar homes bought one${d.battery.unsure ? ", but this call is open" : ""}.` : `No battery proposed, though ${s.battery_rate}% of similar homes bought one.`);
+  const items = [assumed && `${assumed} assumed ${assumed === 1 ? "fact" : "facts"} to confirm`, points && `${points} review ${points === 1 ? "point" : "points"}`, site && `${site} site ${site === 1 ? "check" : "checks"}`].filter(Boolean);
+  return <section className="brief">
+    <small>Design · summary written from the engine's numbers</small>
+    <b>{d.pv.kwp.toFixed(1)} kWp · {d.battery.kwh ? `${d.battery.kwh} kWh battery` : "no battery"}{d.wallbox.included ? " · wallbox" : ""}{d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}</b>
+    <ul>{why.map((w) => <li key={w}>{w}</li>)}</ul>
+    {items.length > 0 && <Button variant="plain" onClick={open}>Open: {items.join(" · ")} →</Button>}
+  </section>;
 }
 
 function checkList(r: Request, d: Design) {

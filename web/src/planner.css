@@ -125,3 +125,10 @@
 .option dl div.moved dd { color: var(--hud-route); font-weight: 600; }
 .option small { flex: 1; color: var(--hud-ink-2); }
 .option-tag { align-self: center; padding: 9px 0; font: 500 10.5px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--hud-route); }
+
+/* The opening brief. */
+.brief { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 16px; background: var(--hud-fill); }
+.brief small { font: 500 10.5px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--hud-ink-2); }
+.brief > b { font-size: 16px; font-weight: 600; }
+.brief ul { margin: 0; padding-left: 16px; font-size: 13.5px; color: var(--hud-ink-2); } .brief li { max-width: none; margin: 2px 0; }
+.brief .btn { align-self: flex-start; margin-left: -10px; color: var(--hud-warn); }
