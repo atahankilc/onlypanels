@@ -52,20 +52,27 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .panel.tall { top: 76px; max-height: calc(100dvh - 92px); }
 .panel > h2 { margin: 0; padding: 16px 18px 6px; }
 .panel > section { padding: 14px 18px; border-top: 1px solid var(--hud-line); }
+/* a letter for a building, a number for a roof surface: the same mark on the map and in the panel */
+.tag, .pin { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--hud-solid); color: var(--hud-solid-ink); font: 600 12px var(--font-mono); }
+.pin { padding: 0; border: 0; box-shadow: var(--hud-shadow); cursor: pointer; }
+.pin.small { width: 22px; height: 22px; font-size: 11px; }
+.row { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; width: 100%; padding: 0; border: 0; background: none; color: var(--hud-ink); font: 500 14px var(--font-ui); text-align: left; cursor: pointer; }
+.name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+section.open .row { font-weight: 600; margin-bottom: 10px; }
+.faces { list-style: none; margin: 0; padding: 0; }
+.faces li { margin: 0; max-width: none; }
+.faces button { display: grid; grid-template-columns: 24px 1fr 40px 64px; align-items: center; gap: 10px; width: calc(100% + 16px); margin: 0 -8px; padding: 5px 8px; border: 0; border-radius: 12px; background: none; color: var(--hud-ink); font: 400 13px var(--font-ui); text-align: left; cursor: default; }
+.faces button.on { background: var(--hud-fill-2); }
+.faces button.on .tag { background: var(--hud-sun); }
+.faces small { font: 500 12px var(--font-mono); color: var(--hud-ink-2); text-align: right; }
 .panel h3 { margin-bottom: 8px; font: 600 14px var(--font-ui); letter-spacing: 0; text-transform: none; color: var(--hud-ink); }
 .picked { list-style: none; margin: 0; padding: 0 10px 0 18px; max-height: 50dvh; overflow-y: auto; }
 .picked li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; margin: 0; max-width: none; border-top: 1px solid var(--hud-line); }
 .picked li:first-child { border-top: 0; }
-.picked span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panelfoot { padding: 12px 14px 14px; border-top: 1px solid var(--hud-line); }
 .facts { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; margin: 0 0 10px; }
 .facts dt { color: var(--hud-ink-2); }
 .facts dd { margin: 0; font: 500 13px var(--font-mono); }
-.faces { width: 100%; border-collapse: collapse; font-size: 13px; }
-.faces th { padding: 6px 0; text-align: left; font: 500 10.5px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--hud-ink-2); }
-.faces td { padding: 6px 0; border-top: 1px solid var(--hud-line); }
-.faces th + th, .faces td + td { text-align: right; }
-.faces td + td { font-family: var(--font-mono); }
 .source { margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--hud-line); }
 .spot { width: 14px; height: 14px; border: 3px solid var(--hud-land); border-radius: 50%; background: var(--hud-warn); box-shadow: var(--hud-shadow); }
 .panelbar b { flex: 1; }

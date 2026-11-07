@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Place, Poly, Real, Selected, measured, placeAt, searchPlace } from "./api";
-import { P2, P3, faceFacts, toLocal } from "./geometry";
-import HomeMap, { Picked, Step } from "./HomeMap";
+import { P2, P3, listedFaces, toLocal } from "./geometry";
+import HomeMap, { Face, Picked, Step, letter } from "./HomeMap";
 import { Back, Close, Photo, Search } from "./icons";
 import { Button, IconButton } from "./ui";
 
-const MIN_FACE_M2 = 6; // dormers and fragments are drawn, not listed
 const short = (label: string) => label.split(", ").slice(0, 2).join(", ");
 
 function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real {
@@ -14,9 +13,11 @@ function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real 
   return { roofs: polys(answer.roofs), walls: polys(answer.walls) };
 }
 
-function BuildingFacts({ b }: { b: Selected }) {
+const faceName = (side: string) => (side === "Flat" ? "Flat roof" : `Faces ${side.toLowerCase()}`);
+
+function BuildingFacts({ b, face, setFace }: { b: Selected; face: Face | null; setFace: (f: Face | null) => void }) {
   if (!b.real) return <p className="error small">The measured data could not be loaded.</p>;
-  const faces = b.real.roofs.map((p) => faceFacts(p)).filter((f) => f.m2 >= MIN_FACE_M2).sort((x, y) => y.m2 - x.m2);
+  const faces = listedFaces(b.real.roofs);
   const top = Math.max(...b.real.roofs.flatMap((p) => p.ring.map((q) => q[2])));
   return (
     <>
@@ -24,10 +25,15 @@ function BuildingFacts({ b }: { b: Selected }) {
         <dt>Height</dt><dd>{top.toFixed(1)} m</dd>
         <dt>Roof area</dt><dd>{Math.round(faces.reduce((s, f) => s + f.m2, 0))} m²</dd>
       </dl>
-      <table className="faces">
-        <thead><tr><th>Roof side</th><th>Slope</th><th>Area</th></tr></thead>
-        <tbody>{faces.map((f, i) => <tr key={i}><td>{f.side}</td><td>{f.tilt}°</td><td>{Math.round(f.m2)} m²</td></tr>)}</tbody>
-      </table>
+      <ol className="faces">
+        {faces.map((f, i) => {
+          const me = { building: b.id, poly: f.poly };
+          const on = face?.building === b.id && face.poly === f.poly;
+          return <li key={f.poly}><button type="button" className={on ? "on" : ""} onMouseEnter={() => setFace(me)} onMouseLeave={() => setFace(null)} onFocus={() => setFace(me)} onBlur={() => setFace(null)}>
+            <span className="tag">{i + 1}</span><span>{faceName(f.side)}</span><small>{f.tilt}°</small><small>{Math.round(f.m2)} m²</small>
+          </button></li>;
+        })}
+      </ol>
     </>
   );
 }
@@ -43,6 +49,10 @@ export default function FindHome() {
   const [step, setStep] = useState<Step>("pick");
   const [waiting, setWaiting] = useState(false);
   const [aerial, setAerial] = useState(false);
+  const [open, setOpen] = useState<string | null>(null); // the building shown in detail
+  const [near, setNear] = useState<string | null>(null); // the building under the pointer in the list
+  const [face, setFace] = useState<Face | null>(null); // the roof surface under the pointer, on the map or in the list
+  const [look, setLook] = useState<{ id: string } | null>(null);
   const typed = useRef("");
   const asked = useRef("");
 
@@ -88,11 +98,13 @@ export default function FindHome() {
 
   // Move on as soon as the measured models are in.
   const measuring = buildings.some((b) => b.measuring);
-  useEffect(() => { if (waiting && !measuring) { setWaiting(false); setStep("review"); } }, [waiting, measuring]);
+  useEffect(() => { if (waiting && !measuring) { setWaiting(false); setOpen(buildings[0]?.id ?? null); setStep("review"); } }, [waiting, measuring]);
+  const goTo = (id: string) => { setOpen(id); setLook({ id }); };
 
   return (
     <main className="stage">
-      <HomeMap buildings={buildings} step={step} focus={focus} aerial={aerial} onPick={step === "pick" ? toggle : undefined} />
+      <HomeMap buildings={buildings} step={step} focus={focus} aerial={aerial} onPick={step === "pick" ? toggle : undefined}
+        open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} />
       <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</Button>
       {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
@@ -115,13 +127,19 @@ export default function FindHome() {
 
       {step === "pick" && buildings.length > 0 && <aside className="panel">
         <h2>Selected buildings</h2>
-        <ul className="picked">{buildings.map((b) => <li key={b.id}><span>{b.label}</span><IconButton label={`Remove ${b.label}`} onClick={() => remove(b.id)}><Close /></IconButton></li>)}</ul>
+        <ul className="picked">{buildings.map((b, i) => <li key={b.id} onMouseEnter={() => setNear(b.id)} onMouseLeave={() => setNear(null)}>
+          <button type="button" className="row" onClick={() => goTo(b.id)}><span className="tag">{letter(i)}</span><span className="name">{b.label}</span></button>
+          <IconButton label={`Remove ${b.label}`} onClick={() => remove(b.id)}><Close /></IconButton>
+        </li>)}</ul>
         <div className="panelfoot"><Button variant="solid" size="lg" wide disabled={waiting} onClick={() => setWaiting(true)}>{waiting ? "Loading measured roofs…" : "Continue"}</Button></div>
       </aside>}
 
       {step === "review" && <aside className="panel tall">
         <header className="panelbar"><IconButton label="Back to selecting" onClick={() => setStep("pick")}><Back /></IconButton><b>Your buildings</b></header>
-        {buildings.map((b) => <section key={b.id}><h3>{b.label}</h3><BuildingFacts b={b} /></section>)}
+        {buildings.map((b, i) => <section key={b.id} className={open === b.id ? "open" : ""}>
+          <button type="button" className="row" aria-expanded={open === b.id} onClick={() => goTo(b.id)}><span className="tag">{letter(i)}</span><span className="name">{b.label}</span></button>
+          {open === b.id && <BuildingFacts b={b} face={face} setFace={setFace} />}
+        </section>)}
         <p className="source small muted">Measured data from Bavaria's 3D buildings.</p>
       </aside>}
     </main>

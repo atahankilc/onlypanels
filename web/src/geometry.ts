@@ -27,6 +27,13 @@ export function faceFacts({ ring, holes }: { ring: P3[]; holes: P3[][] }) {
   return { m2, tilt, side: tilt < 8 ? "Flat" : COMPASS[Math.round(facing / 45) % 8] };
 }
 
+const MIN_FACE_M2 = 6; // smaller pieces are drawn, not listed
+
+/** Roof surfaces worth naming, largest first. Their place in this list is their number on the map. */
+export const listedFaces = (roofs: { ring: P3[]; holes: P3[][] }[]) => roofs
+  .map((p, poly) => ({ poly, ...faceFacts(p), at: p.ring.reduce<P3>((s, q) => [s[0] + q[0] / p.ring.length, s[1] + q[1] / p.ring.length, s[2] + q[2] / p.ring.length], [0, 0, 0]) }))
+  .filter((f) => f.m2 >= MIN_FACE_M2).sort((a, b) => b.m2 - a.m2);
+
 export function inside(p: P2, r: P2[]) {
   let hit = false;
   for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
