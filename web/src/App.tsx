@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Request, START } from "./api";
 import Homeowner from "./Homeowner";
+import { Mark, Out, Undo } from "./icons";
 import Planner from "./Planner";
 
 const KEY = "energy-desk-v1";
@@ -40,19 +41,22 @@ export default function App() {
   const update = (id: string, patch: Partial<Request>) =>
     setSaved((s) => ({ ...s, requests: s.requests.map((r) => (r.id === id ? { ...r, ...patch } : r)) }));
 
+  const open = view === "planner";
   return (
     <div className="app">
-      <header>
-        <h1>Energy Design Desk</h1>
-        <div className="switch" role="group" aria-label="Choose who you are">
-          {(["homeowner", "planner"] as const).map((v) => (
-            <button key={v} className={view === v ? "on" : ""} aria-pressed={view === v} onClick={() => setView(v)}>
-              {v === "homeowner" ? "Homeowner" : "Planner"}
-            </button>
-          ))}
+      <header className={`topbar${open ? " solid" : ""}`}>
+        <div className="logo"><Mark /><h1>Energy Design Desk</h1></div>
+        <div className="topright">
+          <div className="switch glass" role="group" aria-label="Choose who you are">
+            {(["homeowner", "planner"] as const).map((v) => (
+              <button key={v} className={view === v ? "on" : ""} aria-pressed={view === v} onClick={() => setView(v)}>
+                {v === "homeowner" ? "Homeowner" : "Planner"}
+              </button>
+            ))}
+          </div>
+          <a className="pill glass" href={BACK_OFFICE}>Back office<Out size={14} /></a>
+          <button className="round glass big" aria-label="Reset demo" title="Reset demo" onClick={() => { setSaved({ requests: EXAMPLES, mine: null }); setOpenId(null); }}><Undo size={18} /></button>
         </div>
-        <a className="out" href={BACK_OFFICE}>Back office</a>
-        <button className="link quiet" onClick={() => { setSaved({ requests: EXAMPLES, mine: null }); setOpenId(null); }}>Reset demo</button>
       </header>
       {view === "planner"
         ? <Planner requests={requests} openId={openId} setOpenId={setOpenId} add={(r) => add(r, false)} update={update} />

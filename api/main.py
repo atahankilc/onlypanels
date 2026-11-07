@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from reonic_engine.data import load_dataset
 from reonic_engine.design import Engine
 from reonic_engine.refine import refine
+from reonic_engine import site
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 SCORES = Path(__file__).resolve().parents[1] / "data" / "processed" / "scores.json"
@@ -19,6 +20,12 @@ dev = projects[projects.split == "dev"].reset_index(drop=True)
 unseen = projects[projects.split == "test"].reset_index(drop=True)
 engine = Engine().fit(dev, options[options.project_id.isin(dev.project_id)])
 app = FastAPI(title="Home energy design")
+
+
+class Surface(BaseModel):
+    kind: str = "roof"
+    max_modules: int
+    kwh_per_kwp: float | None = None
 
 
 class Inputs(BaseModel):
@@ -34,6 +41,7 @@ class Inputs(BaseModel):
     ev_km: float = 15000
     mount: str = "roof"
     area_m2: float | None = None
+    surfaces: list[Surface] | None = None
 
 
 class Overrides(BaseModel):
@@ -78,6 +86,38 @@ class RefineRequest(BaseModel):
 @app.post("/api/refine")
 def refine_text(req: RefineRequest):
     return refine(req.text, req.mount)
+
+
+class SunSurface(BaseModel):
+    tilt: float
+    azimuth: float
+
+
+class SunRequest(BaseModel):
+    lat: float
+    lon: float
+    surfaces: list[SunSurface]
+
+
+@app.get("/api/site/search")
+def site_search(q: str):
+    try:
+        return site.geocode(q)
+    except OSError:
+        raise HTTPException(502, "Address search is not reachable")
+
+
+@app.post("/api/site/sun")
+def site_sun(req: SunRequest):
+    try:
+        return site.sun(req.lat, req.lon, [s.model_dump() for s in req.surfaces])
+    except (OSError, KeyError, ValueError):
+        raise HTTPException(502, "Sun data is not reachable")
+
+
+@app.get("/api/site/building")
+def site_building(lat: float, lon: float):
+    return site.building(lat, lon)
 
 
 @app.get("/api/projects")

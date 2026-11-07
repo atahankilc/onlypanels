@@ -30,6 +30,7 @@ const en = {
   r_pv_capped: "The model would suggest {wanted} kWp, but only {modules} panels fit on {area} m².",
   r_pv_locked: "The planner fixed {modules} panels. The rest adapts around that.",
   r_battery_yes: "{kwh} kWh for {kwp} kWp of panels, or {per_kwp} kWh per kWp. {rate}% of similar homes have a battery, most often {common} kWh.",
+  r_site_sun: "Sun data for this address and these surfaces gives about {kwh} kWh per kWp a year (PVGIS).",
   r_battery_existing: "The home already has a battery, so none is proposed.",
   r_balance: "Panels produce about {production} MWh a year, {ratio} times the need.",
   r_battery_no: "No battery proposed for this home. {rate}% of similar homes bought one.",

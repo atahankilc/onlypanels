@@ -1,17 +1,21 @@
 :root {
-  --ink: oklch(0.27 0.03 255); --muted: oklch(0.47 0.025 255); --line: oklch(0.9 0.008 255);
-  --bg: oklch(0.985 0.003 255); --panel: oklch(1 0 0); --accent: oklch(0.42 0.13 255); --soft: oklch(0.95 0.025 255);
-  --green: oklch(0.42 0.11 155); --green-soft: oklch(0.95 0.04 155); --amber: oklch(0.45 0.1 75); --amber-soft: oklch(0.95 0.05 85);
-  --red: oklch(0.48 0.15 30); --red-soft: oklch(0.95 0.03 30);
+  --ink: #F3F4F6; --muted: #A2A6AE; --line: rgba(255, 255, 255, 0.12);
+  --bg: #0F1013; --panel: rgba(255, 255, 255, 0.04); --accent: #F3F4F6; --soft: rgba(255, 255, 255, 0.1);
+  --green: #7CF0C6; --green-soft: rgba(124, 240, 198, 0.12); --amber: #FFB547; --amber-soft: rgba(255, 181, 71, 0.12);
+  --red: #FF8A7A; --red-soft: rgba(255, 138, 122, 0.12);
+  --font-ui: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
-::selection { background: var(--soft); }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 "Inter Variable", sans-serif; }
+::selection { background: rgba(75, 133, 255, 0.4); }
+* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.22) transparent; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--font-ui); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
 h1 { font-size: 24px; font-weight: 680; letter-spacing: -0.015em; margin: 0 0 6px; }
 h2 { font-size: 19px; font-weight: 650; margin: 0; }
 p { margin: 0; max-width: 72ch; }
 button { font: inherit; color: inherit; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+:focus-visible { outline: 2px solid #4B85FF; outline-offset: 1px; }
 .lead { color: var(--muted); font-size: 16px; margin-bottom: 22px; }
 .muted { color: var(--muted); font-size: 14px; font-weight: 400; margin-left: 6px; }
 
@@ -76,7 +80,29 @@ tbody th { font-weight: 550; }
 .n { text-align: right; }
 .error { color: var(--red); } .muted-text { color: var(--muted); }
 .note-line { margin-bottom: 8px; color: var(--muted); }
-.open { margin-top: 12px; } a { color: var(--accent); text-underline-offset: 2px; }
+.open { margin-top: 12px; } a { color: var(--ink); text-underline-offset: 3px; }
+
+/* Quiet HUD, after the Steward project: same tokens as the app. Hairlines instead of boxes, mono labels, round controls. */
+h1 { font-size: 28px; font-weight: 650; }
+h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+aside { margin: 12px 0 12px 12px; height: calc(100vh - 24px); top: 12px; border: 1px solid var(--line); border-radius: 24px; background: rgba(18, 19, 23, 0.74); }
+.shell { grid-template-columns: 232px minmax(0, 1fr); }
+.brand { font-size: 16px; letter-spacing: -0.01em; margin: 4px 0 16px; }
+aside nav button { min-height: 36px; padding: 0 14px; border-radius: 999px; }
+aside nav button:hover { background: rgba(255, 255, 255, 0.08); }
+aside nav button.on { background: #F3F4F6; color: #0E0F11; }
+.source { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; margin-top: auto; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: var(--ink); text-decoration: none; font-size: 13px; font-weight: 500; }
+.pair section, .grid4 section { border-radius: 24px; }
+.tension, .steps { background: none; border: 0; border-top: 1px solid var(--line); }
+.tension div:last-child, .steps li:last-child { border-bottom: 1px solid var(--line); }
+.tagline { padding: 3px 10px; border-radius: 999px; color: var(--ink); font-size: 12.5px; font-weight: 500; }
+.st, .real em { font: 500 11px var(--font-mono); padding: 3px 9px; border-radius: 999px; }
+.real em.b { color: var(--ink); }
+.real li::before { font-family: var(--font-mono); }
+table { background: none; border: 0; }
+thead th { font: 500 10.5px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; background: var(--bg); }
+.pickrow:hover > * { background: var(--panel); }
+td { font-variant-numeric: tabular-nums; }
 
 @media (max-width: 860px) {
   .compare { grid-template-columns: minmax(0, 1fr); }
@@ -84,7 +110,7 @@ tbody th { font-weight: 550; }
   .grid4 { grid-template-columns: minmax(0, 1fr); }
   table { display: block; overflow-x: auto; }
   .shell, .pair { grid-template-columns: minmax(0, 1fr); }
-  aside { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  aside { position: static; height: auto; margin: 10px; }
   aside { min-width: 0; }
   aside nav { grid-auto-flow: column; justify-content: start; overflow-x: auto; }
   aside nav button { white-space: nowrap; }

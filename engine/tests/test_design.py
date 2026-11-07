@@ -38,6 +38,15 @@ def test_area_limit_caps_panels_and_ground_needs_more_area(engine):
     assert ground["pv"]["modules"] == 4
 
 
+def test_surfaces_fill_in_homeowner_order_and_set_the_yield(engine):
+    surfaces = [{"kind": "roof", "max_modules": 6, "kwh_per_kwp": 1100},
+                {"kind": "carport", "max_modules": 4, "kwh_per_kwp": 900}]
+    d = engine.design({**HOME, "surfaces": surfaces})
+    assert d["pv"]["modules"] == 10 and d["pv"]["placed"] == [6, 4] and d["pv"]["capped"]
+    assert d["energy"]["production_mwh"] == round((6 * 1100 + 4 * 900) * 0.45 / 1000, 1)
+    assert engine.design({**HOME, "surfaces": surfaces}, {"modules": 3})["pv"]["placed"] == [3, 0]
+
+
 def test_planner_locks_are_kept(engine):
     d = engine.design({**HOME, "area_m2": 10}, {"modules": 14, "battery_kwh": 0, "wallbox": True})
     assert d["pv"]["modules"] == 14 and d["battery"]["kwh"] == 0 and d["wallbox"]["included"]

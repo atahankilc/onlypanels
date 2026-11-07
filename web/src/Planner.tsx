@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Allowed, Design, Inputs, Overrides, Refined, Request, START, designFor, refine } from "./api";
+import HomeMap from "./HomeMap";
+import { Back } from "./icons";
 import { t } from "./i18n";
 
 const num = (v: string) => (v === "" ? null : Number(v));
@@ -84,7 +86,7 @@ function Workspace({ request, update, back }: { request: Request; update: (id: s
   return (
     <main className="split">
       <form onSubmit={(e) => e.preventDefault()}>
-        <button type="button" className="link" onClick={back}>Back to requests</button>
+        <button type="button" className="ghost small" onClick={back}><Back size={14} />Back to requests</button>
         <h2>{request.title}</h2>
         <Field label={t("demand")}><input type="number" min={500} step={100} value={inputs.demand_kwh || ""} onChange={(e) => set("demand_kwh", Number(e.target.value))} /></Field>
         <Field label={t("heating")}>
@@ -96,12 +98,14 @@ function Workspace({ request, update, back }: { request: Request; update: (id: s
         {fossil && <Field label={t("heat")}><input type="number" min={0} step={500} value={inputs.heat_kwh ?? ""} onChange={(e) => set("heat_kwh", num(e.target.value))} /></Field>}
         <label className="check"><input type="checkbox" checked={inputs.ev} onChange={(e) => set("ev", e.target.checked)} />{t("ev")}</label>
         {inputs.ev && <Field label={t("evKm")}><input type="number" min={0} step={1000} value={inputs.ev_km} onChange={(e) => set("ev_km", Number(e.target.value))} /></Field>}
+        {!request.site && <>
         <Field label={t("where")}>
           <select value={inputs.mount} onChange={(e) => set("mount", e.target.value)}>
             {["roof", "ground", "carport", "facade"].map((m) => <option key={m} value={m}>{t(m)}</option>)}
           </select>
         </Field>
         <Field label={t("area")} hint={t("areaHint")}><input type="number" min={0} step={5} value={inputs.area_m2 ?? ""} onChange={(e) => set("area_m2", num(e.target.value))} /></Field>
+        </>}
         <details>
           <summary>More details</summary>
           <Field label={t("installer")}>
@@ -131,10 +135,28 @@ function Workspace({ request, update, back }: { request: Request; update: (id: s
         <Ask mount={inputs.mount} onChange={(r) => update(request.id, { inputs: { ...inputs, ...r.inputs }, overrides: { ...overrides, ...r.overrides } })} />
         {failed && <p className="error">{t("apiError")}</p>}
         {!design && !failed && <p className="muted">{t("loading")}</p>}
+        {request.site && <SiteView request={request} placed={design?.pv.placed ?? null} />}
         {design && <Proposal d={design} prev={previous} overrides={overrides} setOverrides={setOverrides} />}
         {design && <Send d={design} request={request} update={update} />}
       </section>
     </main>
+  );
+}
+
+function SiteView({ request, placed }: { request: Request; placed: number[] | null }) {
+  const site = request.site as NonNullable<Request["site"]>;
+  return (
+    <div className="plannermap">
+      <div className="offermap"><HomeMap site={site} placed={placed} /></div>
+      <div>
+        <h3>Homeowner's site wishes</h3>
+        <p className="small muted">{site.place.label}</p>
+        <ol className="plainlist">{site.surfaces.filter((s) => s.wanted).map((s) => <li key={s.id}>{s.name}: {s.panels.length} panels fit, {s.tilt}°{s.sun ? `, ${s.sun.kwh_per_kwp} kWh per kWp` : ""}</li>)}</ol>
+        {site.surfaces.some((s) => !s.wanted) && <p>Not here: {site.surfaces.filter((s) => !s.wanted).map((s) => s.name).join(", ")}</p>}
+        {site.noGarden && <p>No panels in the garden.</p>}
+        <p className="small warn-text">Roof shape and fit are estimates from the map. Check on site.</p>
+      </div>
+    </div>
   );
 }
 

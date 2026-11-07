@@ -40,6 +40,10 @@ Researched 2026-11-07. Status means the Reonic export we hold today. Web figures
 | Payback | When does it pay off? | Needs prices. Guides say about 8 to 14 years | No |
 | Independence benchmark | Are the estimates credible? | HTW Berlin calculator | No |
 
+## Now in use
+
+Address search (Nominatim), building shape and height (OpenStreetMap through OpenFreeMap), sun per surface with terrain horizon (PVGIS) and aerial photos in Bavaria (CC BY 4.0). Roof tags and nearby trees come from Overpass when it answers. Roof slope is still an estimate. Garden size is drawn by the homeowner, not detected.
+
 ## Priorities
 
 Ask Reonic first: postcode, roof data, delivered option, prices, lost offers.

@@ -27,6 +27,17 @@ MIN_SIMILAR = 30
 UNSURE_BATTERY = 0.8  # below this, tell the planner the battery decision is open
 
 
+def place(modules, surfaces):
+    """Fill surfaces in the homeowner's order. Anything beyond capacity lands on the last one."""
+    placed, left = [], modules
+    for s in surfaces:
+        n = min(left, s["max_modules"])
+        placed.append(n)
+        left -= n
+    placed[-1] += left
+    return placed
+
+
 def _x(d, demand=None):
     x = pd.DataFrame(index=d.index)
     x["demand_mwh"] = d.demand_mwh if demand is None else demand
@@ -114,7 +125,10 @@ class Engine:
             "has_storage": bool(i.get("has_storage")),
         }])
         area = i.get("area_m2")
+        surfaces = i.get("surfaces") or None
         max_modules = int(area // mount["m2_per_module"]) if area else None
+        if surfaces:
+            max_modules = sum(s["max_modules"] for s in surfaces)
         locked_modules = o.get("modules")
         lock = locked_modules * ASSUMED_KWP_PER_MODULE if locked_modules is not None else None
 
@@ -161,7 +175,7 @@ class Engine:
             warnings.append({"code": "not_germany"})
         if i.get("mount", "roof") != "roof":
             warnings.append({"code": "non_roof"})
-        if not area:
+        if not area and not surfaces:
             warnings.append({"code": "no_area"})
         if hp_wanted and not heat_mwh:
             warnings.append({"code": "hp_assumed_heat"})
@@ -169,12 +183,20 @@ class Engine:
             warnings.append({"code": "battery_unsure", "share": round((1 - float(p_battery[0])) * 100)})
 
         country = i.get("country", "Germany")
-        production = kwp_final * KWH_PER_KWP.get(country, KWH_PER_KWP["Other"]) * mount["yield"] / 1000
+        typical = KWH_PER_KWP.get(country, KWH_PER_KWP["Other"])
+        production = kwp_final * typical * mount["yield"] / 1000
+        placed = None
+        if surfaces:
+            placed = place(modules, surfaces)
+            production = sum(
+                n * ASSUMED_KWP_PER_MODULE * (s.get("kwh_per_kwp") or typical * MOUNTS[s["kind"]]["yield"])
+                for n, s in zip(placed, surfaces)) / 1000
+            reasons.append({"code": "site_sun", "kwh": round(production * 1000 / kwp_final)})
         estimate = simulate(base * 1000, ev_mwh * 1000, hp_mwh * 1000, production * 1000, battery_kwh,
                             i.get("price_ct_kwh", 32.0))
         reasons.append({"code": "balance", "production": round(production, 1), "ratio": round(production / total, 1)})
         return {
-            "pv": {"modules": modules, "kwp": round(kwp_final, 2), "max_modules": max_modules,
+            "pv": {"modules": modules, "kwp": round(kwp_final, 2), "max_modules": max_modules, "placed": placed,
                    "locked": lock is not None, "capped": bool(capped)},
             "battery": {"kwh": battery_kwh, "locked": o.get("battery_kwh") is not None,
                         "probability": round(float(p_battery[0]) * 100),

@@ -1,28 +1,39 @@
 import { useEffect, useState } from "react";
-import { Design, Inputs, Overrides, Request, START, designFor } from "./api";
+import { Design, Inputs, Overrides, Request, START, Site, designFor, siteInputs } from "./api";
+import HomeMap from "./HomeMap";
 import { t } from "./i18n";
+import SitePicker from "./SitePicker";
 
 type Props = { request: Request | null; add: (r: Request) => void; update: (id: string, p: Partial<Request>) => void };
 
 export default function Homeowner({ request, add, update }: Props) {
   if (!request) return <RequestForm add={add} />;
-  if (!request.offer) return <Waiting />;
+  if (!request.offer) return <Waiting site={request.site ?? null} />;
   return <Offer key={JSON.stringify(request.offer)} request={request} update={update} />;
 }
 
 function RequestForm({ add }: { add: (r: Request) => void }) {
   const [i, setI] = useState<Inputs>(START);
+  const [site, setSite] = useState<Site | null>(null);
+  const [preview, setPreview] = useState<Design | null>(null);
+  const [manual, setManual] = useState(false);
+  const full = site ? { ...i, ...siteInputs(site) } : i;
+  useEffect(() => {
+    if (!site || !i.demand_kwh) { setPreview(null); return; }
+    const timer = setTimeout(() => designFor(full).then(setPreview).catch(() => setPreview(null)), 200);
+    return () => clearTimeout(timer);
+  }, [JSON.stringify(full.surfaces), i.demand_kwh, i.ev, i.heating, i.heat_kwh]);
   const set = <K extends keyof Inputs>(k: K, v: Inputs[K]) => setI({ ...i, [k]: v });
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    add({ id: crypto.randomUUID(), title: "New homeowner request", from: "homeowner", status: "draft", inputs: i, overrides: {} });
+    add({ id: crypto.randomUUID(), title: "New homeowner request", from: "homeowner", status: "draft", inputs: full, overrides: {}, site });
   };
   const fossil = i.heating === "Gas" || i.heating === "Oil";
   return (
-    <main className="home">
-      <h2 className="big">Request a solar system for your home</h2>
-      <p className="lead">Tell us a little about your home. Your installer will send you an offer. A rough answer is fine.</p>
-      <form className="request" onSubmit={submit}>
+    <SitePicker site={site} setSite={setSite} placed={preview?.pv.placed ?? null} note={preview && <><b>{preview.pv.modules} panels</b> would suit your home</>}>
+      {!site && !manual && <section><button type="button" className="ghost small" onClick={() => setManual(true)}>Can't find your home? Continue without the map</button></section>}
+      {(site || manual) && <form className="request" onSubmit={submit}>
+        <h2>Your energy use</h2>
         <label className="field"><span>How much electricity do you use in a year? (kWh)</span>
           <input type="number" min={500} step={100} required value={i.demand_kwh || ""} onChange={(e) => set("demand_kwh", Number(e.target.value))} />
           <small>You can find this on your electricity bill. A typical family uses around 4,500 kWh.</small></label>
@@ -34,28 +45,29 @@ function RequestForm({ add }: { add: (r: Request) => void }) {
           <input type="number" min={0} step={500} value={i.heat_kwh ?? ""} onChange={(e) => set("heat_kwh", e.target.value === "" ? null : Number(e.target.value))} />
           <small>This helps us check whether a heat pump makes sense.</small></label>}
         <label className="check"><input type="checkbox" checked={i.ev} onChange={(e) => set("ev", e.target.checked)} />We have, or plan to buy, an electric car</label>
-        <label className="field"><span>Where could the panels go?</span>
-          <select value={i.mount} onChange={(e) => set("mount", e.target.value)}>
-            <option value="roof">On the roof</option><option value="ground">In the garden</option><option value="carport">On a carport</option><option value="facade">On the facade</option>
-          </select></label>
-        <label className="field"><span>How much space is there? (m², optional)</span>
-          <input type="number" min={0} step={5} value={i.area_m2 ?? ""} onChange={(e) => set("area_m2", e.target.value === "" ? null : Number(e.target.value))} /></label>
-        <label className="field"><span>Country</span>
-          <select value={i.country} onChange={(e) => set("country", e.target.value)}>
-            {["Germany", "Austria", "Switzerland", "Netherlands", "Other"].map((c) => <option key={c} value={c}>{t(c)}</option>)}
-          </select></label>
+        {!site && <>
+          <label className="field"><span>Where could the panels go?</span>
+            <select value={i.mount} onChange={(e) => set("mount", e.target.value)}>
+              <option value="roof">On the roof</option><option value="ground">In the garden</option><option value="carport">On a carport</option><option value="facade">On the facade</option>
+            </select></label>
+          <label className="field"><span>How much space is there? (m², optional)</span>
+            <input type="number" min={0} step={5} value={i.area_m2 ?? ""} onChange={(e) => set("area_m2", e.target.value === "" ? null : Number(e.target.value))} /></label>
+        </>}
         <button type="submit" className="primary wide">Send my request</button>
-      </form>
-    </main>
+      </form>}
+    </SitePicker>
   );
 }
 
-function Waiting() {
+function Waiting({ site }: { site: Site | null }) {
   return (
-    <main className="home">
-      <h2 className="big">We have your request</h2>
-      <p className="lead">Your installer is checking the design for your home. You will see your offer here as soon as it is ready.</p>
-      <p className="muted">For this demo, switch to Planner to review the request and send the offer.</p>
+    <main className="stage">
+      <HomeMap site={site} placed={null} />
+      <div className="dialog" role="status">
+        <h2 className="big">We have your request</h2>
+        <p>Your installer is checking the design for your home. You will see your offer here as soon as it is ready.</p>
+        <p className="small muted">For this demo, switch to Planner to review the request and send the offer.</p>
+      </div>
     </main>
   );
 }
@@ -99,31 +111,43 @@ function Offer({ request, update }: { request: Request; update: (id: string, p: 
   useEffect(() => { designFor(request.inputs, offer).then(setBase).catch(() => setFailed(true)); }, []);
   useEffect(() => { designFor(request.inputs, mine).then(setVariant).catch(() => setFailed(true)); }, [mine]);
 
-  if (failed) return <main className="home"><p className="error">{t("apiError")}</p></main>;
-  if (!base || !variant) return <main className="home"><p className="muted">{t("loading")}</p></main>;
+  if (failed) return <main className="page"><p className="error">{t("apiError")}</p></main>;
+  if (!base || !variant) return <main className="page"><p className="muted">{t("loading")}</p></main>;
   const max = base.pv.max_modules ?? (offer.modules as number) + 8;
   const asked = request.status === "change";
   const none = !allowed.battery && !allowed.panels && !allowed.wallbox && !allowed.heatpump;
 
   return (
-    <main className="home">
-      <h2 className="big">Your home energy offer</h2>
-      <p className="lead">From your installer. Here is what they propose and what it means for you.</p>
+    <main className="stage">
+      <HomeMap site={request.site ?? null} placed={(changed ? variant : base).pv.placed} />
+      <aside className="panel">
+      <header className="panelhead">
+        <h1>Your home energy offer</h1>
+        <p className="muted">From your installer. Here is what they propose and what it means for you.</p>
+      </header>
 
-      <h3>What you get</h3>
+      <section>
+      <h2>What you get</h2>
       <ul className="plainlist">{included(base).map((x) => <li key={x}>{x}</li>)}</ul>
 
-      <h3>What it means for you</h3>
+      </section>
+
+      <section>
+      <h2>What it means for you</h2>
       <dl className="mean">
         <dt>Electricity you make and use yourself</dt><dd>about {base.energy.self_sufficiency_pct}%</dd>
         <dt>Saved on your electricity each year</dt><dd>about €{base.energy.saving_eur}</dd>
       </dl>
 
-      <h3>Is this right for a home like mine?</h3>
-      <p>{typical(base)}</p>
+      </section>
 
-      {!none && <>
-        <h3>Try a change</h3>
+      <section>
+      <h2>Is this right for a home like mine?</h2>
+      <p>{typical(base)}</p>
+      </section>
+
+      {!none && <section>
+        <h2>Try a change</h2>
         <p className="muted">Your installer lets you try these. Nothing changes until you ask.</p>
         <div className="variants">
           {allowed.battery && <label className="field"><span>Battery</span>
@@ -140,11 +164,12 @@ function Offer({ request, update }: { request: Request; update: (id: string, p: 
           <p><b>What this change means:</b> {meaning(base, variant)}</p>
           <div className="actions">
             <button className="primary" disabled={asked} onClick={() => update(request.id, { status: "change", change: mine })}>{asked ? "Sent to your installer" : "Ask my installer for this"}</button>
-            <button className="link" onClick={() => setMine(offer)}>Back to my offer</button>
+            <button className="ghost small" onClick={() => setMine(offer)}>Back to my offer</button>
           </div>
         </div>}
-      </>}
-      <p className="small muted">All figures are estimates based on typical homes. The offer does not include prices in this demo.</p>
+      </section>}
+      <section><p className="small muted">All figures are estimates based on typical homes. The offer does not include prices in this demo.</p></section>
+      </aside>
     </main>
   );
 }
