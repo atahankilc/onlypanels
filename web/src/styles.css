@@ -126,4 +126,3 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
   .sunbox { width: min(300px, calc(100vw - 80px)); }
   .credits { top: 116px; bottom: auto; right: 64px; left: 10px; max-width: none; }
 }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

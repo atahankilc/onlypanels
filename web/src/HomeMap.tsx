@@ -12,19 +12,19 @@ import { Button, IconButton } from "./ui";
 const BLOCKS = "buildings-3d"; // the base map's blocks: a rough picture from afar, never selected
 const homesOf = (square: string) => `homes-${square}`; // measured buildings, one feature each: what people select. A source and layer per square
 const squareOf = (source: string) => source.slice(homesOf("").length);
-const PENDING = "pending-blocks"; // the base map's blocks, blinking blue, where measured buildings are still on their way
+const PENDING = "pending-blocks"; // the base map's blocks, slowly brightening and dimming, where measured buildings are still on their way
 const HOMES_FROM_ZOOM = 15;
 const LOAD_REACH_DEG = 0.018; // about 1.5 km around the view's centre
 const MAX_LOADS = 3; // at once, nearest first: a quick trip across town must not queue behind places already left
 const KEEP_SQUARES = 16; // the farthest beyond this leave the map, so a long session stays as light as a short one
-const MOVE_CHECK_MS = 300, PULSE_MS = 700;
+const MOVE_CHECK_MS = 300, PULSE_MS = 1100;
 const EDGES_FROM_ZOOM = 16, EDGES_FULL_ZOOM = 17; // from afar houses cannot be told apart anyway, so no lines to draw
 const EDGE_OPACITY = 0.8;
 const PANEL_W = 424; // room the panel takes on a wide screen
 const PITCH = 50; // steeper tilts make a drag near the horizon cover hundreds of metres
 const FADE_MS = 900; // from the map's blocks to the measured buildings, and back
 const AERIAL = "https://geoservices.bayern.de/od/wms/dop/v1/dop20?service=WMS&version=1.3.0&request=GetMap&layers=by_dop20c&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=512&height=512&format=image/jpeg";
-const COLORS = { roof: "#3A6FA8", wall: "#1F3A5C", edge: "#8A95A8", ownEdge: "#BFD8F5", hover: "#2F5E94", pending: "#4C9BFF", face: "#FF9F0A", otherRoof: "#3A3D47", otherWall: "#23252C", limit: "#FFD60A", land: "#0F1013" };
+const COLORS = { roof: "#3A6FA8", wall: "#1F3A5C", edge: "#8A95A8", ownEdge: "#BFD8F5", hover: "#2F5E94", pendingDim: "#2A2C34", pendingBright: "#6F93BF", face: "#FF9F0A", otherRoof: "#3A3D47", otherWall: "#23252C", limit: "#FFD60A", land: "#0F1013" };
 // One light from the south, so the sides of a roof read apart.
 const lit = (hex: string, n: P3) => new THREE.Color(hex).multiplyScalar(0.95 - 0.35 * n[1]).getHex();
 const wide = () => matchMedia("(min-width: 821px)").matches;
@@ -292,7 +292,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   useEffect(() => {
     const m = new maplibregl.Map({
       container: box.current as HTMLDivElement, style: mapStyle(true), attributionControl: false, center: MUNICH, zoom: 11, pitch: 30, maxPitch: 60, bearing: 0,
-      maxBounds: VIEW_LIMIT, clickTolerance: 8, canvasContextAttributes: { antialias: true },
+      maxBounds: VIEW_LIMIT, clickTolerance: 8, canvasContextAttributes: { antialias: true }, reduceMotion: false,
       // By default tiles are cut into smaller ones when zooming in, which cuts every building along a grid.
       zoomLevelsToOverscale: 16,
     });
@@ -359,13 +359,13 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       fadeLines.current = () => { edgeLook.current.opacity = (1 - shown.current) * EDGE_OPACITY * edgeFade(m.getZoom()); };
       m.on("zoom", () => fadeLines.current());
 
-      // Where measured buildings are missing, the base map's blocks blink. They get a source of their own, so changing
+      // Where measured buildings are missing, the base map's blocks breathe from the resting dark to a soft blue. They get a source of their own, so changing
       // which ones blink does not make the map read its other layers again.
       const block = m.getStyle().layers.find((l) => l.id === BLOCKS) as maplibregl.FillExtrusionLayerSpecification;
       m.addSource(PENDING, m.getStyle().sources[block.source]);
       m.addLayer({
         ...block, id: PENDING, source: PENDING, minzoom: HOMES_FROM_ZOOM, maxzoom: 24, layout: { visibility: "none" },
-        paint: { ...block.paint, "fill-extrusion-color": COLORS.pending, "fill-extrusion-opacity": 0.6, "fill-extrusion-opacity-transition": { duration: PULSE_MS, delay: 0 } },
+        paint: { ...block.paint, "fill-extrusion-color": COLORS.pendingDim, "fill-extrusion-color-transition": { duration: PULSE_MS, delay: 0 }, "fill-extrusion-opacity": 0.9 },
       }, BLOCKS);
       const failed = new Set<string>();
       const missing = () => around.current.filter((s) => !squares.current.get(s.name)?.done && !failed.has(s.name));
@@ -378,13 +378,11 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
         m.setLayoutProperty(PENDING, "visibility", list.length ? "visible" : "none");
         if (list.length) m.setFilter(PENDING, ["all", BUILDINGS_3D_FILTER, ["<", ["distance", { type: "MultiPolygon", coordinates: list.map((s) => [s.ring]) }], 1]] as maplibregl.FilterSpecification);
       };
-      if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        let bright = false;
-        pulse = window.setInterval(() => {
-          bright = !bright;
-          if (blinking) m.setPaintProperty(PENDING, "fill-extrusion-opacity", bright ? 0.8 : 0.15);
-        }, PULSE_MS);
-      }
+      let bright = false;
+      pulse = window.setInterval(() => {
+        bright = !bright;
+        if (blinking) m.setPaintProperty(PENDING, "fill-extrusion-color", bright ? COLORS.pendingBright : COLORS.pendingDim);
+      }, PULSE_MS);
 
       // Measured buildings come by the 2 km square. The page only starts each load: MapLibre's worker fetches, reads and
       // cuts the buildings, and the lines arrive ready for the GPU. Nothing of this runs where the map draws its frames.
