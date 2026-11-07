@@ -6,6 +6,7 @@ import { Design, Handoff, Inputs, Overrides, Request, Source, Spot, design, faci
 import { Change, ChangeCard, Trace, touched } from "./Trace";
 import "./planner.css";
 import ProofPage from "./Proof";
+import Offer from "./Offer";
 import { Button, Check, Field, Input, Segmented, Select, Slider } from "./ui";
 
 const LEFT = 620;
@@ -80,7 +81,20 @@ function Line({ r, open }: { r: Request; open: () => void }) {
 }
 
 type Scores = { scores: Record<string, { kwp_within20: number; n: number; batt_exact_closest: number }> };
-type Tab = "design" | "roof" | "facts" | "energy" | "checks";
+type Tab = "home" | "design" | "checks" | "offer";
+type Req = Request & { allowed?: string[] };
+const fmt = (r: Request, k: string, d: Design): string => {
+  const i = r.inputs as unknown as Record<string, unknown>, v = i[k];
+  if (k === "demand_kwh") return v == null ? `${(d.energy.base_mwh * 1000).toLocaleString("en")} kWh (stand-in)` : `${Number(v).toLocaleString("en")} kWh`;
+  if (k === "heat_kwh") return v == null ? "15,000 kWh (stand-in)" : `${Number(v).toLocaleString("en")} kWh`;
+  if (k === "price_ct_kwh") return `${v} ct per kWh`;
+  if (k === "ev_km") return `${Number(v).toLocaleString("en")} km a year`;
+  if (k === "heating") return v == null ? "unknown" : v === "OtherNonRenewable" ? "other fossil" : v === "Heatpump" ? "heat pump" : String(v).toLowerCase();
+  return v ? "yes" : "no";
+};
+/** Facts that matter for this design and were not given by anyone: they must be confirmed before the offer leaves. */
+const relevant = (r: Request, d: Design) => Object.keys(r.sources).filter((k) => (k !== "heat_kwh" || d.heatpump.included) && (k !== "ev_km" || r.inputs.ev));
+const SOURCE_LONG: Record<Source, string> = { customer: "from the customer", assumed: "assumed", planner: "confirmed by the planner" };
 
 function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null }) {
   const [tab, setTab] = useState<Tab>("design");
@@ -110,7 +124,7 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
   }, [d]);
   useEffect(() => { if (!lit.length) return; const t = setTimeout(() => setLit([]), 2600); return () => clearTimeout(t); }, [lit]);
   const mark = (label: string) => { pending.current = { label, was: { inputs: r.inputs, overrides: r.overrides, sources: r.sources, off: r.off } }; };
-  useEffect(() => { if (tab !== "roof") { setView({ layer: "photo", moment: null }); setFace(null); } }, [tab]);
+  useEffect(() => { if (tab !== "home") { setView({ layer: "photo", moment: null }); setFace(null); } }, [tab]);
 
   const setI = (change: Partial<Inputs>, by: Source = "planner", label?: string) => { mark(label ?? `${Object.keys(change).map((k) => FACT[k] ?? k).join(", ")} changed`); update(r.id, { inputs: { ...r.inputs, ...change }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(change).map((k) => [k, by])) } }); };
   const setO = (change: Overrides, label?: string) => { mark(label ?? describe(change)); update(r.id, { overrides: { ...r.overrides, ...change } }); };
@@ -118,31 +132,45 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
   const walls = r.buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => s.kind === "wall").map((s) => surfaceKey(b, s)));
   const chosen = [...walls, ...roof.filter((x) => !r.off.includes(x.key)).map((x) => x.key)];
   const checks = d ? checkList(r, d) : [];
-  const left = checks.filter((c) => !done.includes(c.id)).length;
+  const confirm = d ? relevant(r, d).filter((k) => r.sources[k] === "assumed") : [];
+  const warns = d ? d.review.filter((n) => n.level === "warn") : [];
+  const left = confirm.length + checks.filter((c) => !done.includes(c.id)).length;
+  const allowed = (r as Req).allowed ?? ["no_battery", "battery_size"];
+  const send = () => { update(r.id, { status: "sent" }); back(); };
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
-    <HomeMap dark={dark} buildings={r.buildings} installed={r.installed} step={step} focus={null} aerial={false} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "roof"}
-      panels={tab === "roof" && view.layer === "sun" ? {} : out?.panels} panelW={LEFT} turn={turnTo(roof)} onReady={() => setStep("review")} />
+    <HomeMap dark={dark} buildings={r.buildings} installed={r.installed} step={step} focus={null} aerial={false} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
+      panels={tab === "home" && view.layer === "sun" ? {} : out?.panels} panelW={LEFT} turn={turnTo(roof)} onReady={() => setStep("review")} />
     <aside className="panel tall desk">
       <header className="deskhead">
         <Button variant="fill" aria-label="Back to requests" onClick={back}><Back /></Button>
         <div className="grow"><b>{r.label}</b><small>{r.from} request · {r.status === "sent" ? "offer sent" : "draft"}</small></div>
-        <Button variant="solid" disabled={!d || r.status === "sent"} onClick={() => { update(r.id, { status: "sent" }); back(); }}>{r.status === "sent" ? "Sent" : "Send offer"}</Button>
+        <Button variant="solid" disabled={!d || r.status === "sent" || confirm.length > 0} title={confirm.length ? "Confirm the assumed facts in Checks first" : undefined} onClick={send}>{r.status === "sent" ? "Sent" : "Send offer"}</Button>
       </header>
       {d && <dl className="kpis">
         <div><dt>Solar</dt><dd>{d.pv.kwp.toFixed(1)}<small> kWp</small></dd></div><div><dt>Modules</dt><dd>{d.pv.modules}</dd></div>
         <div><dt>Battery</dt><dd>{d.battery.kwh || "–"}{d.battery.kwh ? <small> kWh</small> : null}</dd></div>
         <div><dt>Need</dt><dd>{d.energy.total_mwh.toFixed(1)}<small> MWh</small></dd></div><div><dt>Makes</dt><dd>{d.energy.production_mwh.toFixed(1)}<small> MWh</small></dd></div>
       </dl>}
-      <div className="desktabs"><Segmented wide label="Sections" value={tab} onChange={setTab} options={[{ value: "design", label: "Design" }, { value: "roof", label: "Roof" }, { value: "facts", label: "Facts" }, { value: "energy", label: "Energy" }, { value: "checks", label: left ? `Checks ${left}` : "Checks" }]} /></div>
+      <div className="desktabs"><Segmented wide label="Sections" value={tab} onChange={setTab} options={[{ value: "home", label: "Home" }, { value: "design", label: "Design" }, { value: "checks", label: left ? `Checks ${left}` : "Checks" }, { value: "offer", label: "Offer" }]} /></div>
       <div className="deskbody">
         {!d && <p className="muted">The engine is working…</p>}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
-        {d && tab === "design" && <DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} />}
-        {d && tab === "roof" && <RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} />}
-        {tab === "facts" && <Facts r={r} setI={setI} />}
-        {d && tab === "energy" && <Energy d={d} inputs={r.inputs} />}
-        {d && tab === "checks" && <ul className="tasks">{checks.map((c) => <li key={c.id}><Check checked={done.includes(c.id)} onChange={(v) => setDone(v ? [...done, c.id] : done.filter((x) => x !== c.id))}><b>{c.title}</b><small>{c.why}</small></Check></li>)}</ul>}
+        {d && tab === "design" && <><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} /></>}
+        {tab === "home" && <><h3>Facts</h3><Facts r={r} setI={setI} />{d && <><h3>Roof</h3><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
+        {d && tab === "checks" && <>
+          <h3>Confirm before sending</h3>
+          {confirm.length ? <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm"><div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>Assumed: nobody gave this. {k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : "It changes the design."}</small></div>
+            <Button onClick={() => update(r.id, { sources: { ...r.sources, [k]: "planner" } })}>Confirm</Button><Button variant="plain" onClick={() => setTab("home")}>Change</Button></li>)}</ul>
+            : <p className="small muted">Every fact the design uses is from the customer or confirmed by you.</p>}
+          {warns.length > 0 && <><h3>Points from the review</h3>{warns.map((n) => <p key={n.code} className="flag">{n.text}</p>)}</>}
+          <h3>To check before installation</h3>
+          <p className="small muted">Open items print on the offer as conditions. Tick what you have checked.</p>
+          <ul className="tasks">{checks.map((c) => <li key={c.id}><Check checked={done.includes(c.id)} onChange={(v) => setDone(v ? [...done, c.id] : done.filter((x) => x !== c.id))}><b>{c.title}</b><small>{c.why}</small></Check></li>)}</ul>
+        </>}
+        {d && tab === "offer" && <Offer r={r} d={d} first={first.current} roof={roof} panels={out?.panels ?? {}} toConfirm={confirm.length} allowed={allowed} setAllowed={(a) => update(r.id, { allowed: a } as Partial<Request>)} send={send}
+          conditions={checks.filter((c) => !done.includes(c.id)).map((c) => c.title)}
+          facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]), ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"]]} />}
       </div>
     </aside>
   </main>;
@@ -150,11 +178,6 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
 
 function checkList(r: Request, d: Design) {
   const list: { id: string; title: string; why: string }[] = [];
-  if (r.sources.demand_kwh === "assumed") list.push({ id: "use", title: "Get the real yearly electricity use", why: `${(d.energy.base_mwh * 1000).toLocaleString("en")} kWh is not from a bill. PV and battery follow it.` });
-  if (d.heatpump.included && r.sources.heat_kwh === "assumed") list.push({ id: "heat", title: "Get the real heat use", why: `${(r.inputs.heat_kwh ?? 15000).toLocaleString("en")} kWh is a stand-in. It sets the heat pump and adds ${d.energy.hp_mwh.toFixed(1)} MWh of electricity.` });
-  if (r.sources.price_ct_kwh === "assumed") list.push({ id: "price", title: "Confirm the electricity price", why: `${r.inputs.price_ct_kwh} ct is a starting value. It drives the saving.` });
-  if (r.sources.has_solar === "assumed") list.push({ id: "existing", title: "Ask about existing solar or a battery", why: "The customer was not asked." });
-  if (d.battery.unsure) list.push({ id: "batt", title: "Discuss the battery", why: `Open decision: the engine is ${d.battery.probability}% sure.` });
   if (d.heatpump.included) list.push({ id: "flow", title: "Check radiators and flow temperature", why: "Not in our data. Usually needs a site visit." });
   const blind = roofOf(r.buildings, r.installed).filter((x) => x.s.kwh_per_kwp == null).length;
   if (blind) list.unshift({ id: "sun", title: `Sun data is missing for ${blind} ${blind === 1 ? "surface" : "surfaces"}`, why: "PVGIS did not answer. A typical yield stands in, so production is less certain. Reopen the request to try again." });
@@ -164,6 +187,7 @@ function checkList(r: Request, d: Design) {
   list.push({ id: "monument", title: "Check monument status", why: "Not in our data." });
   list.push({ id: "grid", title: "Check the grid connection and meter cabinet", why: "Not in our data." });
   list.push({ id: "grants", title: "Check grants", why: "They depend on the customer. Not in our data." });
+  list.push({ id: "meter", title: "Smart meter and grid feed limit", why: "Without a smart meter, a new system may feed at most 60% of its power to the grid." });
   return list;
 }
 

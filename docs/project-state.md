@@ -23,6 +23,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - Planner desk: request list, Design, Roof with fitted modules, Facts, Energy, Checks (`web/src/Planner.tsx`)
 - Planner sees the engine's decision trace, reviewer notes against similar homes, and a change card with undo after every edit (D67)
 - Proof page in the planner: past projects predicted by an engine trained without them, next to the expert design, and results per installer against simple methods and the expert's own spread (D68). Prepare with `uv run python scripts/build_proof.py`
+- Planner tabs Home, Design, Checks, Offer (D70). Assumed facts must be confirmed before sending. The Offer tab is a printable one-page offer: system, yearly estimates with their assumptions, facts with sources, open site checks as conditions, what the homeowner may change, and changes from the AI draft
 
 ## Not done
 
