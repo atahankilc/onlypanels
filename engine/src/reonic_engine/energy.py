@@ -16,7 +16,7 @@ WEATHER_AT = (48.14, 11.58)  # the app covers Munich, so one place's weather yea
 YEARS = (2018, 2019, 2020)
 AGENT = "energy-design-desk-demo"
 
-FEED_IN_CT_KWH = 7.5  # assumed; check the current tariff before quoting it
+FEED_IN_CT_KWH = 7.7  # EEG, systems up to 10 kWp commissioned 1 Aug to 31 Dec 2026 (Bundesnetzagentur); open after 2026
 BATTERY_USABLE = 0.9
 ROUND_TRIP = 0.9
 WAY = ROUND_TRIP ** 0.5  # lost on the way in and again on the way out

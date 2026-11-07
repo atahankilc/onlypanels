@@ -7,6 +7,7 @@ export const CHOICES: [string, string][] = [
   ["wallbox", "Add or leave out the wallbox"], ["fewer_modules", "Use fewer modules"],
 ];
 
+const FEED = 7.7; // ct, as in the engine: EEG for systems up to 10 kWp switched on by 31 December 2026
 const kwh = (v: number) => `${v.toLocaleString("en")} kWh`;
 const row = (a: Design) => ({
   Solar: `${a.pv.modules} modules, ${a.pv.kwp.toFixed(1)} kWp`, Battery: a.battery.kwh ? `${a.battery.kwh} kWh` : "none",
@@ -47,7 +48,7 @@ export default function Offer({ r, d, first, roof, panels, facts, conditions, to
           <tr><th scope="row">Share of your use from your own panels</th><td>about {e.self_sufficiency_pct}%</td></tr>
           <tr><th scope="row">Saving</th><td>about €{e.saving_eur.toLocaleString("en")} at {r.inputs.price_ct_kwh} ct per kWh</td></tr>
         </tbody></table>
-        <p className="fine">Estimates, not promises: measured sun and shade for this roof, assumed hourly use, 7.5 ct for electricity sold to the grid. The home stays connected to the grid. Without a smart meter, the grid feed is limited to 60% of the system's power.</p>
+        <p className="fine">Estimates, not promises: measured sun and shade for this roof, assumed hourly use, {FEED} ct for electricity sold to the grid; the rate for systems switched on from 2027 is not settled yet. The home stays connected to the grid. Without a smart meter, the grid feed is limited to 60% of the system's power.</p>
       </section>
 
       <section><h4>Based on</h4>
