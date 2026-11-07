@@ -42,6 +42,11 @@ def test_panels_that_fit_become_an_area_limit_not_a_lock():
     assert r["inputs"] == {"mount": "roof", "area_m2": 32} and r["overrides"] == {}
 
 
+def test_same_site_is_not_reported_as_a_change():
+    assert "c_mount" not in {u["code"] for u in refine("Çatıya 16 panel sığıyor")["understood"]}
+    assert "c_mount" in {u["code"] for u in refine("Bahçede 60 m2 yer var")["understood"]}
+
+
 def test_exact_panels_lock_the_design():
     assert refine("20 panel olsun")["overrides"] == {"modules": 20}
 

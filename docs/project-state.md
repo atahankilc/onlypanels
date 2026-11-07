@@ -3,7 +3,7 @@
 Living document. Update it whenever the phase, blockers or next steps change.
 
 **Last updated:** 2026-11-07, before build start
-**Phase:** App runs locally (design, compare, results). User and flow analysis is in the back office. Next steps follow from it.
+**Phase:** App (5173) holds the planner flow. Back office (5174) holds analysis, expert comparison and results.
 **Deadline:** Sunday 8 November 2026, 15:00
 
 ## Done
@@ -24,8 +24,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 1. Ask Reonic the blocking questions in `docs/open-questions.md` (Q1 to Q4, Q23)
 2. Agree the proposed decisions and split roles
 3. Add an Anthropic key to `.env` and test the Claude path
-4. Split compare and results into the back office
-5. Unusual-choice warnings
+4. Unusual-choice warnings
 
 ## Proposed timeline
 

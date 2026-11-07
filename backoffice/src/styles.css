@@ -66,7 +66,21 @@ thead th { font-size: 13px; font-weight: 600; color: var(--muted); background: v
 td b { font-weight: 600; }
 .plain { margin: 0; padding-left: 18px; } .plain li { margin-bottom: 5px; max-width: 72ch; }
 
+.compare { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 20px; align-items: start; }
+.scroll { max-height: calc(100vh - 170px); overflow: auto; }
+.scroll thead th { position: sticky; top: 0; }
+.pickrow { cursor: pointer; }
+.pickrow:hover > * { background: var(--bg); }
+.pickrow.on > *, tr.ours > * { background: var(--soft); }
+tbody th { font-weight: 550; }
+.n { text-align: right; }
+.error { color: var(--red); } .muted-text { color: var(--muted); }
+.note-line { margin-bottom: 8px; color: var(--muted); }
+.open { margin-top: 12px; } a { color: var(--accent); text-underline-offset: 2px; }
+
 @media (max-width: 860px) {
+  .compare { grid-template-columns: minmax(0, 1fr); }
+  .scroll { max-height: 280px; }
   .grid4 { grid-template-columns: minmax(0, 1fr); }
   table { display: block; overflow-x: auto; }
   .shell, .pair { grid-template-columns: minmax(0, 1fr); }

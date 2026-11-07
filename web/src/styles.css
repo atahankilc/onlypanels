@@ -15,7 +15,7 @@ button, input, select { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 header { display: flex; align-items: center; gap: 28px; padding: 10px 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
-nav { display: flex; gap: 4px; flex: 1; }
+.out { flex: 1; color: var(--muted); text-underline-offset: 2px; font-size: 13px; }
 .lang { display: flex; gap: 2px; }
 .tab { border: 0; background: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--muted); }
 .tab:hover { color: var(--ink); }

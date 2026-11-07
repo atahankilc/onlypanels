@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { Compare, Results } from "./quality";
 import { ASK, CANNOT, FLOWS, REAL, STATUS, Status, TENSION, USERS, VALUE } from "./content";
 
-const PAGES = [["istenen", "Bizden istenen"], ["kullanicilar", "Kullanıcılar"], ["gercek", "Bugünkü akış"], ["deger", "Kattığımız değer"], ["akislar", "Ürün akışları"]] as const;
+const PAGES = [["istenen", "The ask"], ["kullanicilar", "Users"], ["gercek", "Today's flow"], ["deger", "Our value"], ["akislar", "Product flows"], ["karsilastir", "Compare with expert"], ["sonuclar", "Overall results"]] as const;
 type Page = (typeof PAGES)[number][0];
 const Chip = ({ s }: { s: Status }) => <span className={`st ${s}`}>{STATUS[s]}</span>;
 
@@ -11,12 +12,12 @@ export default function App() {
     <div className="shell">
       <aside>
         <p className="brand">Back Office</p>
-        <nav aria-label="Bölümler">
+        <nav aria-label="Sections">
           {PAGES.map(([id, label]) => (
             <button key={id} className={page === id ? "on" : ""} aria-current={page === id ? "page" : undefined} onClick={() => setPage(id)}>{label}</button>
           ))}
         </nav>
-        <p className="source">Kaynak: Reonic brief</p>
+        <a className="source" href="http://127.0.0.1:5173">Go to the app</a>
       </aside>
       <main>
         {page === "istenen" && <Ask />}
@@ -24,6 +25,8 @@ export default function App() {
         {page === "gercek" && <RealFlow />}
         {page === "deger" && <Value />}
         {page === "akislar" && <Flows />}
+        {page === "karsilastir" && <Compare />}
+        {page === "sonuclar" && <Results />}
       </main>
     </div>
   );
@@ -32,8 +35,8 @@ export default function App() {
 function Users() {
   return (
     <>
-      <h1>İki kullanıcı</h1>
-      <p className="lead">Çözüm iki kişiye hizmet ediyor. İhtiyaçları örtüşüyor ama aynı değil.</p>
+      <h1>Two users</h1>
+      <p className="lead">The solution serves two people whose needs overlap but are not the same.</p>
       <div className="pair">
         {USERS.map((u) => (
           <section key={u.id}>
@@ -41,15 +44,15 @@ function Users() {
             <p className="role">{u.role}</p>
             <p className="tagline">{u.focus}</p>
             <dl>
-              <dt>Kim</dt><dd>{u.who}</dd>
-              <dt>İster</dt><dd>{u.wants}</dd>
-              <dt>İhtiyacı</dt><dd>{u.needs}</dd>
-              <dt>Korkar</dt><dd>{u.fears}</dd>
+              <dt>Who</dt><dd>{u.who}</dd>
+              <dt>Wants</dt><dd>{u.wants}</dd>
+              <dt>Needs</dt><dd>{u.needs}</dd>
+              <dt>Fears</dt><dd>{u.fears}</dd>
             </dl>
           </section>
         ))}
       </div>
-      <h2 className="gap">Aralarındaki gerilim</h2>
+      <h2 className="gap">The tension</h2>
       <dl className="tension">
         {TENSION.map((t) => <div key={t.label}><dt>{t.label}</dt><dd>{t.text}</dd></div>)}
       </dl>
@@ -60,8 +63,8 @@ function Users() {
 function Flows() {
   return (
     <>
-      <h1>Ürün akışları</h1>
-      <p className="lead">Brief'teki üç senaryo: ikisi planlayıcının, biri ev sahibinin. Sağda bugünkü durumumuz var.</p>
+      <h1>Product flows</h1>
+      <p className="lead">The brief's three use cases: two for the planner, one for the homeowner. Current status is on the right.</p>
       {FLOWS.map((f) => (
         <section key={f.name} className="flow">
           <h2>{f.name} <span className="muted">{f.who} · {f.need}</span></h2>
@@ -78,7 +81,7 @@ function Flows() {
 function Ask() {
   return (
     <>
-      <h1>Bizden istenen</h1>
+      <h1>The ask</h1>
       <p className="lead">{ASK.core}</p>
       <div className="grid4">
         {ASK.groups.map((g) => (
@@ -92,8 +95,8 @@ function Ask() {
 function RealFlow() {
   return (
     <>
-      <h1>Bugünkü akış</h1>
-      <p className="lead">Çözümümüz olmadan işin gerçekte nasıl yürüdüğü. İki yol, ev sahibi soru sorduğunda birleşir: her soru planlayıcıya iş olarak döner.</p>
+      <h1>Today's flow</h1>
+      <p className="lead">How the work runs without our solution. The two paths meet when the homeowner asks a question: each question returns to the planner as work.</p>
       <div className="pair">
         {REAL.map((r) => (
           <section key={r.who}>
@@ -114,13 +117,13 @@ function RealFlow() {
 function Value() {
   return (
     <>
-      <h1>Kattığımız değer</h1>
-      <p className="lead">Hedefimiz planlayıcının saatlerini alan karar işini dakikalara indirmek. Son söz yine planlayıcıda kalıyor.</p>
+      <h1>Our value</h1>
+      <p className="lead">Our goal is to turn hours of decision work into minutes, while the planner keeps the final say.</p>
       <table>
-        <thead><tr><th>Bugün</th><th>Bizimle</th><th>Kime</th><th>Kazanç</th><th>Durum</th></tr></thead>
+        <thead><tr><th>Today</th><th>With us</th><th>For</th><th>Gain</th><th>Status</th></tr></thead>
         <tbody>{VALUE.map((v) => <tr key={v.today}><td>{v.today}</td><td>{v.ours}</td><td>{v.who}</td><td><b>{v.gain}</b></td><td>{v.state}</td></tr>)}</tbody>
       </table>
-      <h2 className="gap">Şu an söyleyemeyeceklerimiz</h2>
+      <h2 className="gap">What we cannot claim yet</h2>
       <ul className="plain">{CANNOT.map((c) => <li key={c}>{c}</li>)}</ul>
     </>
   );

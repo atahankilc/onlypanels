@@ -2,7 +2,7 @@ export type Lang = "tr" | "en";
 type Params = Record<string, unknown>;
 
 const tr = {
-  title: "Enerji Tasarım Masası",
+  title: "Enerji Tasarım Masası", backOffice: "Back office",
   design: "Tasarım", compare: "Uzmanla karşılaştır", results: "Genel sonuçlar",
   home: "Ev bilgileri", installer: "Kurulumcu kataloğu", installerA: "Kurulumcu A", installerB: "Kurulumcu B",
   country: "Ülke", Germany: "Almanya", Austria: "Avusturya", Switzerland: "İsviçre", Netherlands: "Hollanda", Other: "Diğer",
@@ -54,7 +54,7 @@ const tr = {
 };
 
 const en: typeof tr = {
-  title: "Energy Design Desk",
+  title: "Energy Design Desk", backOffice: "Back office",
   design: "Design", compare: "Compare with expert", results: "Overall results",
   home: "Home facts", installer: "Installer catalog", installerA: "Installer A", installerB: "Installer B",
   country: "Country", Germany: "Germany", Austria: "Austria", Switzerland: "Switzerland", Netherlands: "Netherlands", Other: "Other",

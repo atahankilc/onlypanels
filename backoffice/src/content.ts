@@ -1,116 +1,116 @@
 export type Status = "var" | "kismen" | "yok";
-export const STATUS: Record<Status, string> = { var: "Var", kismen: "Kısmen", yok: "Yok" };
+export const STATUS: Record<Status, string> = { var: "Done", kismen: "Partly", yok: "Missing" };
 
 export const USERS = [
   {
-    id: "planner", name: "Planlayıcı", role: "Kurulumcu firmasında tasarımı ve teklifi hazırlayan kişi",
-    focus: "Minimum sonuç bu kullanıcı için",
-    who: "Orta ölçekli bir kurulum firmasında çalışır. Günde birkaç teklif hazırlar, çoğu zaman saha ziyaretleri arasında. Ürünleri iyi bilir ama sürekli zaman baskısı altındadır.",
-    wants: "Hemen, güvenebileceği ve üzerine teklif kurabileceği sağlam bir ilk tasarım.",
-    needs: "Kontrol: tasarımın her parçasını değiştirebilmek ve teklifte son sözü söylemek.",
-    fears: "Ev sahibine savunamayacağı bir şey öneren kara kutu.",
+    id: "planner", name: "Planner", role: "Designs systems and writes offers at an installer",
+    focus: "The minimum result serves this user",
+    who: "Works at a mid-sized installation company and creates several offers per day, often between site visits. Knows the products well, but is under constant time pressure.",
+    wants: "A solid first design right away that they can trust and build an offer on.",
+    needs: "Control: can override any part of the design and keeps the final say over the offer.",
+    fears: "A black box that proposes something they cannot justify to the homeowner.",
   },
   {
-    id: "homeowner", name: "Ev sahibi", role: "Teklifi alan ve imzalayıp imzalamayacağına karar veren kişi",
-    focus: "Stretch hedef, aynı motorun üstüne eklenir",
-    who: "Müstakil bir evin sahibidir. Kurulumcudan güneş paneli, belki batarya veya ısı pompası içeren bir teklif almıştır. Şimdi imzalayıp imzalamayacağına karar vermelidir.",
-    wants: "Teklifi anlamak, daha büyük batarya veya ısı pompası olmadan gibi varyantlar denemek ve her değişikliğin kendisi için ne demek olduğunu görmek.",
-    needs: "Sadelik: teknik veri sayfaları yerine sade dil.",
-    fears: "Gereğinden fazla satılmak veya yanlış sisteme bağlanmak.",
+    id: "homeowner", name: "Homeowner", role: "Receives the offer and decides whether to sign",
+    focus: "Stretch goal, on top of the same engine",
+    who: "Owns a single-family home and has received an offer for a solar system, possibly with a battery or heat pump. Now has to decide whether to sign.",
+    wants: "To understand the offer, try variants such as a larger battery or no heat pump, and see what each change means for them.",
+    needs: "Simplicity: plain language instead of technical data sheets.",
+    fears: "Being oversold, or committing to the wrong system.",
   },
 ];
 
 export const TENSION = [
-  { label: "Planlayıcı ister", text: "Hız ve teknik ile ticari olarak sağlam bir teklif üzerinde tam kontrol." },
-  { label: "Ev sahibi ister", text: "Şeffaflık ve deneme alanı, ama sadece kurulumcunun izin verdiği seçeneklerde." },
-  { label: "Sınır", text: "Örneğin batarya açıp kapatmak veya bir parçayı boyutlandırmak serbest. Evin verisi sabit kalır." },
+  { label: "Planner wants", text: "Speed and full control over a technically and commercially sound offer." },
+  { label: "Homeowner wants", text: "Transparency and room to explore, but only within the options the installer allows." },
+  { label: "Boundary", text: "For example, switching a battery on or off or resizing a component. The home's data stays fixed." },
 ];
 
 export type Step = { who: string; does: string; status: Status };
 export const FLOWS: { name: string; who: string; need: string; goal: string; steps: Step[] }[] = [
   {
-    name: "Hızlı teklif", who: "Planlayıcı", need: "Minimum",
-    goal: "Yeni projenin temel bilgilerini girer, teklif için başlangıç olacak tam tasarımı alır.",
+    name: "Faster offers", who: "Planner", need: "Minimum",
+    goal: "Enters the basics of a new project and receives a complete design as the starting point for the offer.",
     steps: [
-      { who: "Planlayıcı", does: "Ev hakkında birkaç temel bilgi girer", status: "var" },
-      { who: "Sistem", does: "Panel, batarya ve ısı pompasını gerektiği kadar önerir, gerekmiyorsa önermez", status: "kismen" },
-      { who: "Sistem", does: "Kısa bir gerekçe gösterir", status: "var" },
-      { who: "Planlayıcı", does: "Bir bilgiyi veya parçayı değiştirir, örneğin \"aile gelecek yıl elektrikli araba alıyor\"", status: "var" },
-      { who: "Sistem", does: "Tasarımın geri kalanı uzmanın beklediği gibi uyum sağlar ve nedenini anlatır", status: "var" },
-      { who: "Planlayıcı", does: "Öneriyi uzmanın o projedeki tasarımıyla karşılaştırır", status: "var" },
+      { who: "Planner", does: "Enters a few basic facts about the home", status: "var" },
+      { who: "System", does: "Proposes PV, battery and heat pump as appropriate", status: "kismen" },
+      { who: "System", does: "Shows a short explanation of why", status: "var" },
+      { who: "Planner", does: "Changes an input or component, for example \"the family is buying an electric car next year\"", status: "var" },
+      { who: "System", does: "Adapts the rest of the design as an expert would expect, and explains why", status: "var" },
+      { who: "Planner", does: "Compares the proposal with the expert design for the same project, in the back office", status: "var" },
     ],
   },
   {
-    name: "Tasarım doğrulama", who: "Planlayıcı", need: "Stretch",
-    goal: "Teklif çıkmadan önce kendi tasarımını uzmanların benzer evlerde yaptıklarıyla karşılaştırır.",
+    name: "Design validation", who: "Planner", need: "Stretch",
+    goal: "Before an offer goes out, their own design is compared with what experts delivered for similar homes.",
     steps: [
-      { who: "Planlayıcı", does: "Kendi tasarımını girer", status: "var" },
-      { who: "Sistem", does: "Benzer evlerde uzmanların ne yaptığıyla karşılaştırır", status: "kismen" },
-      { who: "Sistem", does: "Alışılmadık seçimi işaretler, örneğin çok büyük bir batarya", status: "yok" },
+      { who: "Planner", does: "Enters their own design", status: "var" },
+      { who: "System", does: "Compares it with what experts did for similar homes", status: "kismen" },
+      { who: "System", does: "Flags unusual choices, such as an oversized battery", status: "yok" },
     ],
   },
   {
-    name: "Teklifi keşfetme", who: "Ev sahibi", need: "Stretch",
-    goal: "Teklifi alan ev sahibi izin verilen varyantları dener ve imzadan önce her değişikliği anlar.",
+    name: "Exploring the offer", who: "Homeowner", need: "Stretch",
+    goal: "Tries variants within the options the installer allows, and understands each change before signing.",
     steps: [
-      { who: "Ev sahibi", does: "Teklifini sade dille görür", status: "yok" },
-      { who: "Ev sahibi", does: "Kurulumcunun izin verdiği seçenekleri dener", status: "yok" },
-      { who: "Sistem", does: "Her değişikliğin ne anlama geldiğini açıklar", status: "yok" },
+      { who: "Homeowner", does: "Sees the offer in plain language", status: "yok" },
+      { who: "Homeowner", does: "Tries the options the installer allows", status: "yok" },
+      { who: "System", does: "Explains what each change means", status: "yok" },
     ],
   },
 ];
 
 export const ASK = {
-  core: "Birkaç bilgiden, deneyimli bir planlayıcının vereceği kararı veren bir sistem. Amaç en iyi sistemi hesaplamak değil, uzmanın gerçekte yapacağını yapmak.",
+  core: "A system that takes a few facts about a home and decides the way an experienced planner would. The goal is not to calculate the ideal system, but to do what an expert actually does.",
   groups: [
-    { title: "Üç hedef", items: ["Tam sistem öner: panel, batarya, ısı pompası gerekiyorsa ve boyutlarıyla", "Kullanıcı değiştirebilsin: gerisi uzman gibi uyum sağlasın", "Uzman gibi karar verdiğini görülmemiş projelerde kanıtla"] },
-    { title: "Demoda görmek istedikleri", items: ["Ev anlatılır", "Tam sistem açıklamasıyla çıkar", "Tasarım değişir, örneğin elektrikli araba", "Uzmanla ve çok sayıda projeyle karşılaştırılır"] },
-    { title: "Teslim", items: ["Çalışan demo, yedek olarak video", "Kod ve kısa README", "Kısa sunum"] },
-    { title: "Puanlama", items: ["Teknik derinlik", "Kullanıcıya uyum", "İş değeri", "Uygulama ve demo"] },
+    { title: "Three goals", items: ["Propose a complete system: PV, battery and heat pump as appropriate, with sizes", "Let the user refine it, with the rest adapting as an expert would expect", "Prove it decides like an expert on unseen projects"] },
+    { title: "The demo", items: ["A home is described", "A complete system appears, with an explanation", "The design is refined, for example an electric car", "It is checked against the expert and across many projects"] },
+    { title: "Deliverables", items: ["Working demo, with a recording as fallback", "Code and a short README", "Short pitch deck"] },
+    { title: "Judging", items: ["Technical depth", "User fit", "Business impact", "Execution and demo"] },
   ],
 };
 
-export type Real = { step: string; pain: string; src: "Brief" | "Çıkarım" };
+export type Real = { step: string; pain: string; src: "Brief" | "Inferred" };
 export const REAL: { who: string; intro: string; steps: Real[] }[] = [
   {
-    who: "Planlayıcı", intro: "Bugün her ev için bu yolu baştan yürüyor.",
+    who: "Planner", intro: "Walks this path from scratch for every home.",
     steps: [
-      { step: "Talep gelir", pain: "Aynı anda birçok iş var", src: "Brief" },
-      { step: "Evin bilgilerini toplar: tüketim, ısıtma, araba, fiyat, bütçe", pain: "Bilgi eksik veya yaklaşık gelir", src: "Çıkarım" },
-      { step: "Evi veya çatıyı kontrol eder", pain: "Ofisle saha arasında gidip gelir", src: "Çıkarım" },
-      { step: "Paneli boyutlandırır", pain: "Her ev farklı, sıfırdan başlar", src: "Brief" },
-      { step: "Batarya karşılığını verir mi, ne kadar olmalı, karar verir", pain: "Panele bağlı, biri değişince diğeri de değişir", src: "Brief" },
-      { step: "Isı pompası mantıklı mı, kontrol eder", pain: "Tüketimi değiştirir, panele geri döner", src: "Brief" },
-      { step: "Hepsini müşterinin bütçesiyle dengeler", pain: "Bilgi kişinin kafasında, herkes farklı uygular", src: "Brief" },
-      { step: "Teklifi yazar ve gönderir", pain: "Saatler geçmiştir, müşteri başkasına gidebilir", src: "Brief" },
-      { step: "Müşterinin sorularına cevap verir, değişiklik yapar", pain: "Bir değişiklik tüm hesabı yeniden açar", src: "Çıkarım" },
+      { step: "A request arrives", pain: "Many jobs run at the same time", src: "Brief" },
+      { step: "Gathers home facts: use, heating, car, price, budget", pain: "Information is missing or approximate", src: "Inferred" },
+      { step: "Checks the home or roof", pain: "Moves between office and site", src: "Inferred" },
+      { step: "Sizes the PV system", pain: "Every home differs, so it starts from zero", src: "Brief" },
+      { step: "Decides whether a battery pays off and how large", pain: "Depends on PV: change one and the other moves", src: "Brief" },
+      { step: "Checks whether a heat pump makes sense", pain: "Changes consumption, which leads back to PV", src: "Brief" },
+      { step: "Balances everything against the budget", pain: "The knowledge lives in people's heads and is applied inconsistently", src: "Brief" },
+      { step: "Writes and sends the offer", pain: "Hours have passed and the customer may go elsewhere", src: "Brief" },
+      { step: "Answers questions and makes changes", pain: "One change reopens the whole calculation", src: "Inferred" },
     ],
   },
   {
-    who: "Ev sahibi", intro: "Aynı süreci diğer taraftan yaşıyor.",
+    who: "Homeowner", intro: "Lives the same process from the other side.",
     steps: [
-      { step: "Daha düşük fatura ve bağımsızlık ister", pain: "Neye ihtiyacı olduğunu bilmez", src: "Brief" },
-      { step: "Birkaç kurulumcuya başvurur", pain: "Beklerken ilk güvenilir teklife yönelir", src: "Brief" },
-      { step: "Evinin bilgilerini verir", pain: "Tüketimini tam bilmeyebilir", src: "Çıkarım" },
-      { step: "Teklifi alır ve anlamaya çalışır", pain: "Teknik sayfalar, neden bu boyut belli değil", src: "Brief" },
-      { step: "Teklifleri karşılaştırır", pain: "Fazla satılıyor olmaktan korkar", src: "Brief" },
-      { step: "Planlayıcıya soru sorar, varyant ister", pain: "Her soru için cevap beklemek zorunda", src: "Çıkarım" },
-      { step: "İmzalar veya vazgeçer", pain: "Yanlış sisteme bağlanmaktan korkar", src: "Brief" },
+      { step: "Wants lower bills and more independence", pain: "Does not know what they need", src: "Brief" },
+      { step: "Contacts several installers", pain: "The first credible offer often wins", src: "Brief" },
+      { step: "Gives the home's facts", pain: "May not know their exact consumption", src: "Inferred" },
+      { step: "Receives the offer and tries to understand it", pain: "Data sheets, and no clear reason for the size", src: "Brief" },
+      { step: "Compares offers", pain: "Fears being oversold", src: "Brief" },
+      { step: "Asks the planner questions and requests variants", pain: "Has to wait for every answer", src: "Inferred" },
+      { step: "Signs or walks away", pain: "Fears committing to the wrong system", src: "Brief" },
     ],
   },
 ];
 
 export const VALUE = [
-  { today: "Her tasarım sıfırdan başlar", ours: "Temel bilgilerden tam tasarım çıkar", who: "Planlayıcı", gain: "Daha hızlı teklif", state: "Çalışıyor" },
-  { today: "Bir değişiklik tüm hesabı açar", ours: "Değişince gerisi kendiliğinden uyum sağlar", who: "Planlayıcı", gain: "Daha hızlı revizyon", state: "Çalışıyor" },
-  { today: "Neden bu boyut, açıklamak zor", ours: "Her öneride kısa gerekçe ve benzer evler", who: "Planlayıcı", gain: "Savunulabilir teklif", state: "Çalışıyor" },
-  { today: "Bilgi deneyimli kişilerin kafasında", ours: "Geçmiş uzman kararlarından öğrenir", who: "Kurulumcu", gain: "Yeni çalışan da tutarlı tasarlar", state: "Sınırlı, doğruluk düşük" },
-  { today: "Hata teklif çıktıktan sonra fark edilir", ours: "Alışılmadık seçim önceden işaretlenir", who: "Kurulumcu", gain: "Daha az yanlış teklif", state: "Yapılmadı" },
-  { today: "Ev sahibi her soruda bekler", ours: "İzin verilen varyantları kendisi dener", who: "İkisi de", gain: "Daha az soru, daha güvenli karar", state: "Yapılmadı" },
+  { today: "Every design starts from scratch", ours: "A complete design from the basics", who: "Planner", gain: "Faster offers", state: "Working" },
+  { today: "One change reopens the whole calculation", ours: "The rest adapts automatically", who: "Planner", gain: "Faster revisions", state: "Working" },
+  { today: "\"Why this size?\" is hard to answer", ours: "A short reason and similar homes with every proposal", who: "Planner", gain: "A defensible offer", state: "Working" },
+  { today: "Knowledge lives in experienced heads", ours: "Learns from past expert decisions", who: "Installer", gain: "New staff design consistently", state: "Limited, accuracy is low" },
+  { today: "Mistakes surface after the offer goes out", ours: "Unusual choices are flagged first", who: "Installer", gain: "Fewer wrong offers", state: "Not built" },
+  { today: "The homeowner waits on every question", ours: "Tries the allowed variants themselves", who: "Both", gain: "Fewer questions, safer decisions", state: "Not built" },
 ];
 
 export const CANNOT = [
-  "Kazanma oranı ölçülemez, çünkü veride sadece imzalanmış projeler var.",
-  "Kazanılan süreyi söyleyemeyiz. Bugün bir tasarımın kaç dakika sürdüğünü Reonic'ten öğrenmeliyiz.",
-  "\"Uzman kadar doğru\" diyemeyiz. İlk öneri basit yöntemlerden sadece biraz daha iyi.",
+  "Win rate cannot be measured, because the data only contains signed projects.",
+  "We cannot state time saved yet. We need to learn from Reonic how long a design takes today.",
+  "We cannot say \"as accurate as an expert\". First proposals only slightly beat simple methods.",
 ];

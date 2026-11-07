@@ -140,7 +140,8 @@ def to_patches(c, current_mount="roof"):
     mount = c.mount if c.mount in MOUNTS else None
     if mount:
         inputs["mount"] = mount
-        note("c_mount", mount=mount)
+        if mount != current_mount:
+            note("c_mount", mount=mount)
     if c.area_m2:
         inputs["area_m2"] = c.area_m2
         note("c_area", area=round(c.area_m2))

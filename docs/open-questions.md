@@ -45,4 +45,3 @@ Resolved: Q24 (hidden test): there is none. See D21.
 | Q19 | Do we agree the Proposed decisions, especially the stack (D13)? |
 | Q20 | Refinement style: natural language, sliders, or both? Recommendation: both, on the same typed changes |
 | Q21 | Which stretch goal first? Recommendation: validation view, because it reuses the engine and answers use case 2 |
-| Q22 | UI language: English or German? Reonic's data here is anonymised into English; the planners are German |

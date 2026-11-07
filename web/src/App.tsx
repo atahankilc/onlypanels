@@ -35,32 +35,31 @@ const refine = (text: string, mount: string): Promise<Refined> =>
 
 const num = (v: string) => (v === "" ? null : Number(v));
 
+const BACK_OFFICE = "http://127.0.0.1:5174";
+
 export default function App() {
-  const [lang, setLang] = useState<Lang>("tr");
-  const [page, setPage] = useState<"design" | "compare" | "results">("design");
+  const [lang, setLang] = useState<Lang>("en");
   const [inputs, setInputs] = useState(START);
   const [overrides, setOverrides] = useState<Overrides>({});
   const t = makeT(lang);
-  const open = (i: Inputs) => { setInputs(i); setOverrides({}); setPage("design"); };
+
+  useEffect(() => {
+    const id = new URLSearchParams(location.search).get("project");
+    if (id) fetch(`/api/projects/${id}`).then((r) => r.json()).then((d) => setInputs(d.inputs)).catch(() => undefined);
+  }, []);
 
   return (
     <div className="app">
       <header>
         <h1>{t("title")}</h1>
-        <nav>
-          {(["design", "compare", "results"] as const).map((p) => (
-            <button key={p} className={page === p ? "tab on" : "tab"} onClick={() => setPage(p)}>{t(p)}</button>
-          ))}
-        </nav>
+        <a className="out" href={BACK_OFFICE}>{t("backOffice")}</a>
         <div className="lang">
           {(["tr", "en"] as const).map((l) => (
             <button key={l} className={lang === l ? "tab on" : "tab"} onClick={() => setLang(l)}>{l.toUpperCase()}</button>
           ))}
         </div>
       </header>
-      {page === "design" && <DesignPage t={t} inputs={inputs} setInputs={setInputs} overrides={overrides} setOverrides={setOverrides} />}
-      {page === "compare" && <ComparePage t={t} onOpen={open} />}
-      {page === "results" && <ResultsPage t={t} />}
+      <DesignPage t={t} inputs={inputs} setInputs={setInputs} overrides={overrides} setOverrides={setOverrides} />
     </div>
   );
 }
@@ -243,100 +242,5 @@ function Proposal({ t, d, prev, overrides, setOverrides }: { t: T; d: Design; pr
         </div>
       </div>
     </>
-  );
-}
-
-type Row = { id: string; installer: string; demand_mwh: number | null; heating: string | null; options: number };
-type Expert = { modules: number; kwp: number; battery_kwh: number; wallbox: boolean; hp_kw: number };
-type Detail = { inputs: Inputs; design: Design; expert: Expert[] };
-
-function ComparePage({ t, onOpen }: { t: T; onOpen: (i: Inputs) => void }) {
-  const [rows, setRows] = useState<Row[] | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
-
-  useEffect(() => { fetch("/api/projects").then((r) => r.json()).then(setRows).catch(() => setFailed(true)); }, []);
-  const pick = (id: string) => { setSelected(id); fetch(`/api/projects/${id}`).then((r) => r.json()).then(setDetail).catch(() => setFailed(true)); };
-
-  if (failed) return <main className="page"><p className="error">{t("apiError")}</p></main>;
-  return (
-    <main className="split wide">
-      <div className="list">
-        <h2>{t("unseenTitle")}</h2>
-        {!rows && <p className="muted">{t("loading")}</p>}
-        <div className="scroll">
-          <table>
-            <thead><tr><th>{t("installerShort")}</th><th>{t("demandShort")}</th><th>{t("heatShort")}</th></tr></thead>
-            <tbody>
-              {rows?.map((r) => (
-                <tr key={r.id} className={selected === r.id ? "pick on" : "pick"} tabIndex={0} onClick={() => pick(r.id)} onKeyDown={(e) => e.key === "Enter" && pick(r.id)}>
-                  <td>{r.installer}</td><td>{r.demand_mwh ?? "–"} MWh</td><td>{r.heating ? t(r.heating) : "–"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <section className="result">
-        {!detail && <p className="muted">{t("pick")}</p>}
-        {detail && <Comparison t={t} d={detail} onOpen={onOpen} />}
-      </section>
-    </main>
-  );
-}
-
-function Comparison({ t, d, onOpen }: { t: T; d: Detail; onOpen: (i: Inputs) => void }) {
-  const o = d.design;
-  const fmt = (v: number, u: string) => (v ? `${v} ${u}` : t("none"));
-  return (
-    <>
-      <div className="row"><h2>{t("compare")}</h2><button className="link" onClick={() => onOpen(d.inputs)}>{t("openInDesign")}</button></div>
-      <table>
-        <thead><tr><th></th><th>{t("pv")}</th><th>{t("battery")}</th><th>{t("wallbox")}</th><th>{t("heatpump")}</th></tr></thead>
-        <tbody>
-          <tr className="ours"><th scope="row">{t("ours")}</th><td>{o.pv.kwp.toFixed(1)} kWp</td><td>{fmt(o.battery.kwh, "kWh")}</td><td>{t(o.wallbox.included ? "included" : "none")}</td><td>{fmt(o.heatpump.kw, "kW")}</td></tr>
-          {d.expert.map((e, i) => (
-            <tr key={i}>
-              <th scope="row">{t("expert")}{d.expert.length > 1 ? ` · ${t("option")} ${i + 1}` : ""}</th>
-              <td>{fmt(e.kwp, "kWp")}</td><td>{fmt(e.battery_kwh, "kWh")}</td><td>{t(e.wallbox ? "included" : "none")}</td><td>{fmt(e.hp_kw, "kW")}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <h3>{t("why")}</h3>
-      <ul>{o.reasons.map((r) => <li key={r.code}>{t(`r_${r.code}`, r)}</li>)}</ul>
-    </>
-  );
-}
-
-type Scores = { dev_projects: number; check_homes: number; scores: Record<string, Record<string, number>>; checks: Record<string, number> };
-
-function ResultsPage({ t }: { t: T }) {
-  const [data, setData] = useState<Scores | null>(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => { fetch("/api/scores").then((r) => { if (!r.ok) throw new Error(); return r.json(); }).then(setData).catch(() => setFailed(true)); }, []);
-  if (failed) return <main className="page"><p className="error">{t("apiError")}</p></main>;
-  if (!data) return <main className="page"><p className="muted">{t("loading")}</p></main>;
-  const methods: [string, string][] = [["m_engine", "engine"], ["m_median", "median design"], ["m_mode", "installer mode"], ["m_rule", "rule of thumb"]];
-  return (
-    <main className="page">
-      <h2>{t("results")}</h2>
-      <p>{t("resultsIntro", { n: data.dev_projects })}</p>
-      <table>
-        <thead><tr><th>{t("method")}</th><th className="n">{t("pvError")}</th><th className="n">{t("batError")}</th><th className="n">{t("tier")}</th></tr></thead>
-        <tbody>
-          {methods.map(([label, key]) => {
-            const s = data.scores[key];
-            return <tr key={key} className={key === "engine" ? "ours" : ""}><th scope="row">{t(label)}</th><td className="n">{s.kwp_mae_last.toFixed(2)}</td><td className="n">{s.batt_mae_last.toFixed(2)}</td><td className="n">%{(s.batt_exact_closest * 100).toFixed(0)}</td></tr>;
-          })}
-        </tbody>
-      </table>
-      <h2>{t("checks")}</h2>
-      <p>{t("checksIntro", { n: data.check_homes })}</p>
-      <table>
-        <tbody>{Object.entries(data.checks).map(([k, v]) => <tr key={k}><th scope="row">{t(k)}</th><td className="n">%{(v * 100).toFixed(1)}</td></tr>)}</tbody>
-      </table>
-    </main>
   );
 }
