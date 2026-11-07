@@ -82,21 +82,3 @@ def test_existing_battery_means_no_new_battery_unless_planner_asks(engine):
 def test_unknown_heat_demand_is_flagged_when_a_heat_pump_is_forced(engine):
     d = engine.design(HOME, {"heatpump": True})
     assert "hp_assumed_heat" in {w["code"] for w in d["warnings"]}
-
-
-def test_rough_gives_ranges_inside_the_roof():
-    from reonic_engine.design import rough
-    d = {"similar": {"kwp_low": 8.0, "kwp_high": 19.5, "battery_common": [10.0, 15.0]}, "pv": {"kwp": 12.0, "max_modules": 30},
-         "battery": {"kwh": 14.0}, "wallbox": {"included": True}, "heatpump": {"included": False}, "reasons": [], "warnings": []}
-    r = rough(d)
-    assert r["pv"] == {"low": 8.0, "high": 13.5}
-    assert r["battery"] == {"yes": True, "low": 10.0, "high": 15.0}
-    assert r["wallbox"] and not r["heatpump"]
-
-
-def test_rough_says_no_battery_without_sizes():
-    from reonic_engine.design import rough
-    d = {"similar": {"kwp_low": 5.0, "kwp_high": 9.0, "battery_common": [10.0]}, "pv": {"kwp": 3.1, "max_modules": None},
-         "battery": {"kwh": 0.0}, "wallbox": {"included": False}, "heatpump": {"included": False}, "reasons": [], "warnings": []}
-    assert rough(d)["battery"] == {"yes": False, "low": None, "high": None}
-    assert rough(d)["pv"]["low"] == 3.1

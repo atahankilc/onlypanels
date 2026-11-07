@@ -40,11 +40,6 @@ export const squareEdges = (name: string) => fetch(`/api/site/edges/${name}`).th
   .then((b) => ({ at: [...new Float64Array(b, 0, 2)] as P2, points: new Float32Array(b, 16) }));
 export const sunOf = (square: string, id: string) => get<SunData>(`/api/site/sun/${square}/${encodeURIComponent(id)}`);
 /** What the engine proposes, as ranges. */
-export type Draft = { pv: { low: number; high: number }; battery: { yes: boolean; low: number; high: number }; wallbox: boolean; heatpump: boolean; assumed: Record<string, unknown> | string[] };
-export const draftFor = (answers: Answers, buildings: Selected[], chosen: string[]) => {
-  const surfaces = buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => chosen.includes(surfaceKey(b, s))).map((s) => ({ kind: s.kind, m2: s.m2, kwh_per_kwp: s.kwh_per_kwp, sun: meanSun(s) }))).sort((x, y) => y.sun - x.sun); // the sunniest fill first
-  return fetch("/api/draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answers, surfaces }) }).then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<Draft>; });
-};
 export const homeParts = (square: string, home: string) => get<{ id: string; at: P2 }[]>(`/api/site/home/${square}/${encodeURIComponent(home)}`);
 /** The chosen homes. A home can be several measured parts. */
 export const homesIn = (list: Selected[]) => [...new Set(list.map((b) => b.home))].map((home) => ({ home, parts: list.filter((b) => b.home === home), label: list.find((b) => b.home === home)?.label ?? "Building" }));

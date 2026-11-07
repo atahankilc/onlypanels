@@ -3,7 +3,7 @@
 Living document. Update it whenever the phase, blockers or next steps change.
 
 **Last updated:** 2026-11-07, evening
-**Phase:** Homeowner flow and planner desk work end to end in Munich. The homeowner answers one topic per page and gets a rough draft (D62). The planner opens that request, with every fact marked by source, and decides. Uncommitted until the user asks.
+**Phase:** Homeowner flow and planner desk work end to end in Munich. The homeowner only gives information, one topic per page, and sends it to an installer (D62). The planner opens that request, with every fact marked by source, and decides.
 **Deadline:** Sunday 8 November 2026, 15:00
 
 ## Done
@@ -20,7 +20,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - Map starts at the browser location. A typed address selects its building by itself. Clicking works without a search. Hover shows what a click picks
 
 - Homes: touching parts with the same house number, or without an address, count as one home (`lod2.group`)
-- `/api/draft` for the homeowner, `/api/design` for the planner, both with skipped answers allowed. PVGIS answers retry and stay on disk
+- `/api/design` for the planner, with skipped homeowner answers allowed. PVGIS answers retry and stay on disk
 - Planner desk: request list, Design, Roof with fitted modules, Facts, Energy, Checks (`web/src/Planner.tsx`)
 
 ## Not done
@@ -32,7 +32,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 
 1. User tries the full flow in the browser
 2. Check the engine fixes in `reports/`: 2 m² per panel, price in sizing, roof area as limit. They change scored numbers
-3. Check the own-electricity share and saving before showing them to homeowners
+3. Check the own-electricity share and saving before a planner quotes them
 4. Decide where expert comparison and results go
 5. Pitch deck and demo recording, with `docs/demo-script.md` rewritten for this flow
 
