@@ -144,7 +144,7 @@ function ghostsOf(b: Selected, skip: Set<string>) {
   const points: P3[] = [], alpha: number[] = [], faces: number[] = [];
   const add = (p: P3, a: number) => { points.push(p); alpha.push(1, 1, 1, a); return points.length - 1; };
   for (const near of b.sun?.around ?? []) {
-    if (skip.has(near.id)) continue;
+    if (skip.has(near.id) || near.solid) continue; // a building touching this one is drawn with its real roof
     const ring = near.ring.map((p) => toLocal(b.origin, [p[0], p[1]])), fade = near.ring.map((p) => p[2] ** 1.3 * 0.92);
     ring.forEach((p, i) => {
       const j = (i + 1) % ring.length, q = ring[j];
@@ -161,6 +161,26 @@ function ghostsOf(b: Selected, skip: Set<string>) {
   const material = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, side: THREE.DoubleSide, depthWrite: false });
   material.userData.alpha = true;
   return new THREE.Mesh(g, material);
+}
+
+/** The buildings that share a wall with one, as they are measured, in plain tones: a flat block beside a real roof looks wrong. */
+function touchingOf(b: Selected, skip: Set<string>) {
+  const g = new THREE.Group();
+  g.name = "neighbours";
+  for (const near of b.sun?.around ?? []) {
+    if (skip.has(near.id) || !near.solid) continue;
+    skip.add(near.id); // once, even when it touches two parts of the home
+    const here = (r: P3[]) => r.map((p) => [...toLocal(b.origin, [p[0], p[1]]), p[2]] as P3);
+    const polys = (list: Poly[]) => list.map((p) => ({ ring: here(p.ring), holes: p.holes.map(here) }));
+    const roofs = polys(near.solid.roofs), walls = polys(near.solid.walls);
+    walls.forEach((p) => { const m = polygon(p.ring, p.holes, "#FFFFFF"); m.userData = { part: "wall", n: normal(p.ring) }; g.add(m); });
+    roofs.forEach((p) => { const m = polygon(p.ring, p.holes, "#FFFFFF"); m.userData = { part: "roof", n: normal(p.ring) }; g.add(m); });
+    const line = lines(edgesOf([...walls, ...roofs]), COLORS.edge, 0.3);
+    line.name = "outline";
+    (line.material as THREE.Material).userData.opacity = 0.3;
+    g.add(line);
+  }
+  return g;
 }
 
 /** Rings of growing opacity around the buildings: what is further out is covered. */
@@ -321,6 +341,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   const clearModels = () => { models.current.forEach(({ scene }) => { scene.children.forEach((g) => empty(g as THREE.Group)); }); models.current = []; };
   const buildModels = () => {
     clearModels();
+    const drawn = new Set(live.current.buildings.map((x) => x.id));
     models.current = live.current.buildings.map((b) => {
       const { roofs, walls } = b.real ?? { roofs: [], walls: [] };
       const g = new THREE.Group(), scene = new THREE.Scene();
@@ -337,6 +358,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       const ghosts = ghostsOf(b, new Set(live.current.buildings.map((x) => x.id)));
       ghosts.renderOrder = -1;
       g.add(ghosts);
+      g.add(touchingOf(b, drawn));
       scene.add(g);
       return { scene, at: b.origin, id: b.id, polys: [...roofs, ...walls], surfaces: (b.sun?.surfaces ?? []).map((x) => ({ s: x, poly: polyOf(b, x) })), skins, ghosts };
     });
@@ -378,6 +400,11 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     const { dark } = live.current, t = TONES[dark ? "dark" : "light"];
     models.current.forEach((x) => {
       (x.ghosts.material as THREE.MeshBasicMaterial).color.set(t.ghost);
+      x.scene.getObjectByName("neighbours")?.children.forEach((o) => {
+        const material = (o as THREE.Mesh).material as THREE.MeshBasicMaterial, n = o.userData.n as P3;
+        if (o.name === "outline") material.color.set(t.line);
+        else material.color.set(o.userData.part === "roof" ? lit(t.ghost, n) : litWall(t.block, n));
+      });
       (x.scene.children[0] as THREE.Group).children.forEach((o) => {
         const material = (o as THREE.Mesh).material as THREE.MeshBasicMaterial;
         if (o.name === "outline") material.color.set(t.line);

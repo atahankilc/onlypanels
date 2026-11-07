@@ -32,6 +32,7 @@ LIFT_M = 0.35  # samples sit just off the surface
 PROBE_M = 1.5  # a wall is free where nothing stands this far in front of it
 MIN_FREE_M2 = 10  # a wall with less open area than this is left out
 CONTEXT_M = 26  # neighbours are shown up to this far from the building, fading out
+TOUCH_M = 1.0  # a neighbour this close shares a wall: roof overhangs and survey noise stay under it
 CONTEXT_STEP_M = 3  # their outlines get a point this often, so the fade runs along long walls
 CLEARANCE_M = 0.5  # what a ray must clear, so a surface does not shade itself by rounding
 DIFFUSE_SHARE = 0.5  # of yearly sunlight on a surface: assumed, roughly right for central Europe
@@ -201,7 +202,7 @@ def _surroundings(name, centre_x, centre_y):
         for f in json.loads(lod2.path(square, "homes").read_bytes())["features"]:
             x, y = lod2.TO_UTM.transform(f["properties"]["lon"], f["properties"]["lat"])
             if abs(x - centre_x) < LOOK_M + 60 and abs(y - centre_y) < LOOK_M + 60:
-                found.append((f["properties"]["id"], f["properties"]["h"], f["geometry"]["coordinates"]))
+                found.append((f["properties"]["id"], f["properties"]["h"], f["geometry"]["coordinates"], square))
     return found
 
 
@@ -225,6 +226,15 @@ def context(neighbours, own):
     return found
 
 
+def touches(ring, own):
+    """Whether a closed ring of (x, y) comes within TOUCH_M of any point in `own`, measured to its edges, not its corners."""
+    a, b = ring, np.roll(ring, -1, axis=0)
+    d = b - a
+    t = np.clip((((own[:, None, :] - a[None]) * d[None]).sum(2)) / np.maximum((d * d).sum(1), 1e-9)[None], 0, 1)
+    gap = np.sqrt(((own[:, None, :] - (a[None] + t[..., None] * d[None])) ** 2).sum(2))
+    return bool(gap.min() < TOUCH_M or inside(own[:, 0], own[:, 1], [tuple(p) for p in ring]).any())
+
+
 def surfaces(name, building_id):
     """Every sizeable surface of a building, sampled: sun over the year and hour by hour. None if there is no such building."""
     b = lod2.building(name, building_id)
@@ -235,9 +245,10 @@ def surfaces(name, building_id):
     ox, oy = lod2.TO_UTM.transform(lon, lat)
     origin = (ox, oy)
     heights = Heights(LOOK_M + 60)
-    nearby = []
-    for other, h, polys in _surroundings(name, round(ox, -1), round(oy, -1)):
+    nearby, squares = [], {}
+    for other, h, polys, square in _surroundings(name, round(ox, -1), round(oy, -1)):
         if other != building_id:
+            squares[other] = square
             for rings in polys:
                 ring = _metres([[p[0], p[1], 0] for p in rings[0]], origin)
                 heights.add(ring, h)
@@ -295,8 +306,13 @@ def surfaces(name, building_id):
         s["at"] = [round(float(v), 7 if i % 3 < 2 else 2) for i, v in enumerate(s["at"].ravel())]
         s["seen"] = base64.b64encode(np.packbits(s["seen"], axis=1).tobytes()).decode()
     own = np.concatenate([_dense([(p[0], p[1]) for p in _metres(r["ring"], origin)]) for r in b["roofs"]])
-    around = []
+    around, solids = [], {}
     for other, h, pts, fade in context(nearby, own):
         lons, lats = lod2.TO_LONLAT.transform(pts[:, 0] + ox, pts[:, 1] + oy)
-        around.append({"id": other, "h": h, "ring": [[round(a, 7), round(c, 7), round(float(f), 2)] for a, c, f in zip(lons, lats, fade)]})
+        item = {"id": other, "h": h, "ring": [[round(a, 7), round(c, 7), round(float(f), 2)] for a, c, f in zip(lons, lats, fade)]}
+        if touches(pts, own):  # a building sharing a wall is part of the picture: it gets its measured roof, not a block
+            if other not in solids:
+                solids[other] = lod2.building(squares[other], other)
+            item["solid"] = solids[other]
+        around.append(item)
     return {"around": around, "step": round(step, 2), "suns": [{k: s[k] for k in ("month", "hour", "az", "el", "vector", "strength")} for s in suns], "surfaces": out, "sunny": bool(any(yearly)), "missing": sum(y is None for y in yearly)}
