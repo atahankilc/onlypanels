@@ -21,9 +21,17 @@ Technical depth is judged on how well we reproduce experts and how convincingly 
 | Range (D17) | Coverage: share of held-out expert designs inside the range. Always reported with mean range width and the point metrics above |
 | Confidence | Do the 80% intervals contain 80% of held-out experts? |
 
-## Hidden test readiness
+## Sensible reactions (D22)
 
-If Reonic scores us on a hidden set (Q24), inputs will be limited to the status quo fields. Keep a batch command that takes those columns and writes one design per project, and keep our own held-out split untouched so we can estimate that score.
+Accuracy cannot show whether refinement behaves like an expert, so test it directly on held-out homes:
+
+- More demand or an added EV never shrinks the system
+- A wallbox appears when an EV is added
+- A heat pump raises effective demand, and PV does not fall
+- A planner's locked value is never changed
+- A battery never appears oversized for the PV system
+
+Report the share of homes passing each check.
 
 ## Scoring ranges honestly
 

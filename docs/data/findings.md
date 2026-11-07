@@ -94,15 +94,22 @@ From `uv run python scripts/evaluate.py`: 5-fold cross-validation grouped by cus
 | Battery as catalog choice | 2.68 | 2.95 | 43.2% |
 | Installer's most common battery | 2.89 | 2.82 | **44.7%** |
 | **Planner fixes PV (true kWp)** | given | **2.43** | 27.9% |
+| **Engine** (behind the UI) | **2.65** | 2.85 | 22.0% |
 
 What this shows:
 
 - **Coupling does not help the first proposal.** Predicted PV comes from the same inputs, so it adds no information. This corrects our earlier reading of the baseline.
 - **Coupling helps refinement.** Once a planner fixes PV, battery error falls 11%, from 2.75 to 2.43 kWh.
-- **Our model does not beat the installer's habit on exact battery tier.** The best metric depends on the scoring rule, so Q24 matters.
+- **Our model does not beat the installer's habit on exact battery tier.** We report both tier match and size error.
 - **Our learned kWp range is no better than a fixed one yet:** 7.35 kWp wide against 7.20 at the same 74.5% coverage, which also falls short of the 80% target.
 - **"No battery" is rarely found:** recall is 5% to 10%.
 - **Heat pump rule:** finds 7 of 8 dev projects, but only 37% of its recommendations match a sold heat pump.
+
+Sensible reaction checks on 192 unseen homes: adding a car never shrinks PV (100%) and grows it in 96.9%; never shrinks the battery (99.5%); a heat pump never shrinks PV (100%); more PV never shrinks the battery (100%); area limits hold (100%).
+
+## Mounting sites
+
+About 1,300 projects carry substructure lines and they are almost all rooftop: 1 facade line and no clear ground mount. "Garden Work" lines appear in about 19 projects but look like cable trenching (*hypothesis*). So garden, carport and facade behaviour in the engine is a stated assumption, not learned.
 
 ## Noise floor
 

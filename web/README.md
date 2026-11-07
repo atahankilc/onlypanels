@@ -1,3 +1,3 @@
 # web
 
-Frontend. Not started. Stack is proposed in docs/decisions.md (D13).
+Back-office UI: React and Vite, Turkish and English. Run commands are in the root README.

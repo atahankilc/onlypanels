@@ -27,11 +27,12 @@ Resolve by moving the answer into `docs/decisions.md` and striking the row here.
 | Q14 | What are the folder names? We assume two installers | Sanity check |
 | Q23 | A Reonic team member said verbally that our output could be a range. Does that replace a single recommendation or sit next to it? How would you judge a range: must the expert value fall inside, and how wide is acceptable? Does it apply to PV, battery, or both? | Sets the output format and the headline metric (D17) |
 
+Resolved: Q24 (hidden test): there is none. See D21.
+
 ## For organisers
 
 | # | Question | Why it matters |
 |---|---|---|
-| Q24 | Is there a hidden test set? The user understands decisions will be scored on one, but the brief only says to measure on unseen projects ourselves. If so: what input format, what output format, which metric, and is a range accepted? | Decides whether we need a batch prediction command and what to optimise |
 | Q15 | How is the demo submitted and presented? Is a live URL needed, or is a recording enough? Pitch length? Where do we submit? | Hosting effort and rehearsal |
 | Q16 | Is sponsor tool usage scored anywhere, including side prizes? | The brief's criteria do not mention it, so it decides how much effort voice and Lovable deserve |
 | Q17 | How do we claim Anthropic, Supabase, Lovable and ElevenLabs credits, and what are the limits? | Setup |

@@ -10,7 +10,6 @@ Order confirmed by the user (D18). Do not start a later phase until the one befo
 - Refinement: change an input or component and get an updated design
 - Short explanation of why
 - Plain back-office UI: enter a home, see the design, refine it, compare with the expert, see overall scores
-- Batch prediction command, in case a hidden test needs it (Q24)
 
 ## Phase 2: stretch goals in the brief
 

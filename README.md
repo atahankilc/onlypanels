@@ -2,7 +2,7 @@
 
 thinc! München 2026 hackathon. An AI system that learns from real installer decisions and proposes the right mix of PV, battery and heat pump for a home, which planners can refine.
 
-**Status:** Setup complete, build not started. See `docs/project-state.md`.
+**Status:** First back-office version runs locally. See `docs/project-state.md`.
 
 ## Setup
 
@@ -12,7 +12,16 @@ Requires [uv](https://docs.astral.sh/uv/).
 uv sync
 cp .env.example .env                 # add your keys
 # Copy the Reonic CSVs to data/raw/<installer>/ (they are not in git)
-uv run python scripts/profile_data.py
+uv run python scripts/evaluate.py        # writes the scores the results page shows
+```
+
+## Run
+
+Two terminals, then open http://127.0.0.1:5173
+
+```bash
+uv run uvicorn main:app --app-dir api --port 8000
+cd web && pnpm install && pnpm dev
 ```
 
 ## Docs
@@ -29,6 +38,7 @@ uv run python scripts/profile_data.py
 | [Evaluation](docs/evaluation.md) | How we prove it decides like an expert |
 | [Sponsor tools](docs/sponsor-tools.md) | Anthropic, Supabase, ElevenLabs, Lovable |
 | [Demo script](docs/demo-script.md) | Five-minute story |
+| [Requirements](docs/requirements.md) | Every requirement in the brief, with status |
 | [Roadmap](docs/roadmap.md) | Core scope, then features beyond the brief |
 
 ## Approach

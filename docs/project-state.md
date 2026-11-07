@@ -3,7 +3,7 @@
 Living document. Update it whenever the phase, blockers or next steps change.
 
 **Last updated:** 2026-11-07, before build start
-**Phase:** Measurement in place. Engine v0 scored on dev. No API or UI yet.
+**Phase:** First back-office version runs locally: design, compare, results.
 **Deadline:** Sunday 8 November 2026, 15:00
 
 ## Done
@@ -16,15 +16,16 @@ Living document. Update it whenever the phase, blockers or next steps change.
 
 ## Not done
 
-- API, web app, pitch deck: not started
+- Pitch deck, demo recording, free-text refinement, final test-set run: not started
 - Team decisions in `docs/decisions.md` marked Proposed are not yet agreed
 
 ## Next steps
 
-1. Ask Reonic the blocking questions in `docs/open-questions.md` (Q1 to Q4, Q23, Q24)
+1. Ask Reonic the blocking questions in `docs/open-questions.md` (Q1 to Q4, Q23)
 2. Agree the proposed decisions and split roles
-3. Improve "no battery" and range quality, using dev scores only
-4. Expose the engine through the API and back-office UI
+3. User reviews the UI and says what to change
+4. Improve "no battery" and range quality, using dev scores only
+5. Free-text refinement with Claude, once data sharing (Q2) is answered
 
 ## Proposed timeline
 

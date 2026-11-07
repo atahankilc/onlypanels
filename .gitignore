@@ -31,3 +31,6 @@ dist/
 .idea/
 .vscode/
 .DS_Store
+
+# Vite
+web/dist/

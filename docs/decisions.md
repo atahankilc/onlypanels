@@ -16,11 +16,15 @@
 | D10 | Heat pump by rules and physics, not ML | Proposed | Only 17 projects |
 | D11 | Add a planner input for maximum modules or roof capacity | Proposed | Probably the largest missing driver, and a natural refinement control |
 | D12 | Models per installer catalog; shared logic across installers | Proposed | Different catalogs and sales styles |
-| D13 | Stack: FastAPI engine and a React web app | Proposed | Python ML stays in-process; simple to demo locally |
+| D13 | Stack: FastAPI engine and a React web app | Confirmed (built, user asked for the UI) | Python ML stays in-process; simple to demo locally |
 | D14 | Run locally or on one simple host; Supabase only if a feature needs it | Proposed, needs Q2 | Brief warns against infrastructure work |
 | D15 | Natural-language refinement uses `claude-opus-5-5`, with structured output into typed changes | Proposed | The engine stays the source of numbers |
 | D16 | ElevenLabs voice is a late add-on, after feature freeze criteria are met | Proposed | Fits "between site visits" but is not needed for the minimum |
 | D17 | Each size is output as a recommended value plus a plausible range, snapped to real catalog products | Proposed, based on a verbal comment from a Reonic team member on 2026-11-07, needs Q23 | Experts differ for the same home, so a range is the honest output. Also serves the planner: a starting value and how much room there is |
-| D18 | Build order: core decision accuracy first, behind a plain back-office UI. Polished UI and extra features come only after the minimum works | Confirmed (user) | Accuracy on unseen projects comes first. Extras go beyond the brief |
-| D19 | The core model uses only fields that exist in `projects_status_quo.csv`. Anything else, such as a roof limit (D11), stays optional and must not be required | Proposed, needs Q24 | A hidden test can only supply the fields in the data |
+| D18 | Build order: the brief's minimum first, behind a plain back-office UI. Polished UI and extra features come only after the minimum works | Confirmed (user) | Brief: "Reach the minimum first, then aim higher". Extras go beyond the brief |
+| D19 | Superseded by D21. It assumed a hidden test | Superseded | User confirmed there is no hidden test |
 | D20 | Work only on `main`, no feature branches | Confirmed (user) | User does not want to deal with branches |
+| D21 | No hidden test: we run our own evaluation on held-out projects. Measured scores use only fields in the data; a planner-entered roof limit can exist in the product but cannot be scored | Confirmed (user, no hidden test) | Data has no roof field to score against |
+| D22 | First-proposal coherence is judged by rules, not error alone: designs must be physically consistent and react sensibly to input changes | Proposed | Brief requires a proposal that makes sense as a whole and adapts as an expert would expect |
+| D23 | Site input is general, not roof only: roof, garden, carport or facade, plus usable area. Reonic said we may add such inputs. Non-roof sites are shown as assumptions | Confirmed (user) | Data is almost all rooftop, so these cannot be learned |
+| D24 | Germany is the default and the training base. Other countries are selectable with a clear warning | Confirmed (user) | User: focus on Germany without being limited to it |
