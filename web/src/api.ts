@@ -52,6 +52,7 @@ export const designFor = (inputs: Inputs, overrides: Overrides = {}) => post<Des
 export const refine = (text: string, mount: string) => post<Refined>("/api/refine", { text, mount });
 
 export const searchPlace = (q: string) => fetch(`/api/site/search?q=${encodeURIComponent(q)}`).then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<Place[]>; });
+export const placeAt = (lat: number, lon: number) => fetch(`/api/site/reverse?lat=${lat}&lon=${lon}`).then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<Place>; });
 export const sunFor = (lat: number, lon: number, surfaces: { tilt: number; azimuth: number }[]) => post<Sun[]>("/api/site/sun", { lat, lon, surfaces });
 export const buildingFacts = (lat: number, lon: number) => fetch(`/api/site/building?lat=${lat}&lon=${lon}`).then((r) => r.json() as Promise<BuildingFacts>);
 

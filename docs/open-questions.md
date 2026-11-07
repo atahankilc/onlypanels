@@ -28,7 +28,7 @@ Resolve by moving the answer into `docs/decisions.md` and striking the row here.
 | Q25 | Can you add postcode, roof data, the delivered option, prices and lost offers for these projects? Reonic said roof inputs are fine, but it is unclear whether historic values exist | They would let us learn and measure the main drivers. See `docs/data-needs.md` |
 | Q23 | A Reonic team member said verbally that our output could be a range. Does that replace a single recommendation or sit next to it? How would you judge a range: must the expert value fall inside, and how wide is acceptable? Does it apply to PV, battery, or both? | Sets the output format and the headline metric (D17) |
 
-| Q26 | The 3D step sends the address a homeowner types to Nominatim, and coordinates to PVGIS, Overpass, OpenFreeMap and the Bavarian aerial photo service. No project data goes out. Is that fine for the demo, and what would a real product need? | Privacy of real addresses |
+| Q26 | The 3D step sends the address a homeowner types, or the point they click, to Nominatim, and coordinates to PVGIS, Overpass, OpenFreeMap and the Bavarian aerial photo service. No project data goes out. Is that fine for the demo, and what would a real product need? | Privacy of real addresses |
 
 Resolved: Q24 (hidden test): there is none. See D21.
 

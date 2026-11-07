@@ -68,7 +68,7 @@ h1, .big { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: 
 /* ---------- stage: the map fills the screen, the panel floats on it ---------- */
 .stage { position: fixed; inset: 0; overflow: hidden; }
 .map3d { position: absolute; inset: 0; background: var(--hud-land); }
-.panel { position: absolute; z-index: 2; top: 76px; left: 12px; bottom: 12px; width: 400px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--hud-line); border-radius: 24px; background: var(--hud-glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); }
+.panel { position: absolute; z-index: 2; top: 76px; left: 12px; bottom: 12px; width: 400px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--hud-line); border-radius: 24px; background: rgba(18, 19, 23, 0.93); box-shadow: var(--hud-shadow); } /* no blur: repainting one this large on every map frame makes dragging lag */
 .panelhead { padding: 18px 18px 14px; }
 .panel > section, .panel > form { padding: 16px 18px; border-top: 1px solid var(--hud-line); }
 .panel > section > :last-child, .panel > form > :last-child { margin-bottom: 0; }
@@ -104,6 +104,7 @@ h1, .big { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: 
 .tools { display: flex; gap: 3px; align-items: center; flex: none; }
 
 /* on the map */
+.mapbtn.home { right: auto; left: 424px; }
 .mapbtn { position: absolute; z-index: 1; right: 76px; bottom: 16px; display: inline-flex; align-items: center; gap: 8px; height: var(--btn-lg); padding: 0 16px; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); font-weight: 500; }
 .maphint, .mapnote { position: absolute; z-index: 1; left: calc(50% + 206px); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; min-height: var(--btn-lg); padding: 6px 8px 6px 18px; white-space: nowrap; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass-2); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); animation: rise 0.35s var(--ease); }
 .maphint { top: 76px; }
@@ -124,6 +125,9 @@ h1, .big { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: 
 .map3d .maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E"); }
 .map3d .maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E"); }
 .map3d .maplibregl-ctrl-compass .maplibregl-ctrl-icon { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l4 9h-8z' fill='black'/%3E%3Cpath d='M8 12h8l-4 9z' stroke-width='1.6'/%3E%3C/svg%3E"); }
+.map3d .maplibregl-ctrl-geolocate .maplibregl-ctrl-icon { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 4L4 11l7 2 2 7z'/%3E%3C/svg%3E"); }
+.map3d .maplibregl-ctrl-geolocate-active, .map3d .maplibregl-ctrl-geolocate-background { color: var(--hud-route); }
+.map3d .maplibregl-ctrl-geolocate-active-error, .map3d .maplibregl-ctrl-geolocate-background-error { color: var(--hud-warn); }
 .map3d .maplibregl-ctrl.maplibregl-ctrl-attrib { display: flex; align-items: center; min-height: var(--btn-md); max-width: calc(100vw - 460px); padding: 0 40px 0 14px; border: 1px solid var(--hud-line); border-radius: 18px; background: var(--hud-glass); color: var(--hud-ink-2); font: 500 12px/1.35 var(--font-ui); }
 .map3d .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) { width: var(--btn-md); padding: 0; }
 .map3d .maplibregl-ctrl-attrib a { color: inherit; }
@@ -188,6 +192,7 @@ summary { cursor: pointer; color: var(--hud-ink-2); margin-bottom: 10px; }
 .boxes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; margin-bottom: 8px; }
 .plannermap { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 20px; margin-bottom: 8px; }
 .offermap .maplibregl-ctrl-compass { display: none; }
+.offermap .mapbtn.home { left: 12px; bottom: 12px; }
 .offermap { position: relative; height: 340px; border: 1px solid var(--hud-line); border-radius: 24px; overflow: hidden; }
 
 /* ---------- offer ---------- */
@@ -205,7 +210,8 @@ summary { cursor: pointer; color: var(--hud-ink-2); margin-bottom: 10px; }
   .map3d { position: sticky; top: 0; height: 52dvh; }
   .offermap .map3d, .plannermap .map3d { position: absolute; height: 100%; }
   .panel { position: relative; top: auto; left: auto; bottom: auto; width: 100%; margin-top: -24px; border-width: 1px 0 0; border-radius: 24px 24px 0 0; overflow: visible; }
-  .mapbtn { top: calc(52dvh - 60px); bottom: auto; right: auto; left: 12px; }
+  .mapbtn { top: calc(52dvh - 84px); bottom: auto; right: auto; left: 12px; }
+  .mapbtn.home { left: 12px; top: 64px; }
   .maphint { left: 50%; top: 64px; }
   .mapnote { display: none; }
   .map3d .maplibregl-ctrl-bottom-right { padding-bottom: 36px; }

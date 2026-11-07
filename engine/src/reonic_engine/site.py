@@ -10,6 +10,7 @@ from functools import lru_cache
 
 AGENT = "energy-design-desk-demo"
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
+REVERSE = "https://nominatim.openstreetmap.org/reverse"
 PVGIS = "https://re.jrc.ec.europa.eu/api/v5_3/PVcalc"
 OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
 SYSTEM_LOSS_PCT = 14  # PVGIS default
@@ -29,16 +30,28 @@ def _search(query):
     return tuple(json.dumps(r) for r in _get(f"{NOMINATIM}?{params}", 10))
 
 
+def read_place(row):
+    address = row.get("address", {})
+    return {
+        "label": row["display_name"], "lat": float(row["lat"]), "lon": float(row["lon"]),
+        "country": COUNTRIES.get(address.get("country_code"), "Other"),
+        "bavaria": address.get("state") == "Bayern",
+    }
+
+
 def geocode(query):
-    places = []
-    for row in map(json.loads, _search(query.strip())):
-        address = row.get("address", {})
-        places.append({
-            "label": row["display_name"], "lat": float(row["lat"]), "lon": float(row["lon"]),
-            "country": COUNTRIES.get(address.get("country_code"), "Other"),
-            "bavaria": address.get("state") == "Bayern",
-        })
-    return places
+    return [read_place(row) for row in map(json.loads, _search(query.strip()))]
+
+
+@lru_cache(maxsize=256)
+def _reverse(lat, lon):
+    params = urllib.parse.urlencode({"lat": lat, "lon": lon, "format": "jsonv2", "addressdetails": 1, "zoom": 18})
+    return json.dumps(_get(f"{REVERSE}?{params}", 10))
+
+
+def reverse(lat, lon):
+    """The address at a clicked point."""
+    return read_place(json.loads(_reverse(round(lat, 5), round(lon, 5))))
 
 
 def pvgis_aspect(azimuth):

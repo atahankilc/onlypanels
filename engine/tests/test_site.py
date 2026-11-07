@@ -1,8 +1,13 @@
-from reonic_engine.site import pvgis_aspect, read_overpass, read_pvgis
+from reonic_engine.site import pvgis_aspect, read_overpass, read_place, read_pvgis
 
 
 def test_compass_bearing_becomes_pvgis_aspect():
     assert [pvgis_aspect(a) for a in (180, 90, 270, 0)] == [0, -90, 90, -180]
+
+
+def test_read_place():
+    row = {"display_name": "A street", "lat": "48.1", "lon": "11.6", "address": {"country_code": "de", "state": "Bayern"}}
+    assert read_place(row) == {"label": "A street", "lat": 48.1, "lon": 11.6, "country": "Germany", "bavaria": True}
 
 
 def test_read_pvgis():

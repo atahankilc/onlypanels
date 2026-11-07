@@ -107,6 +107,14 @@ def site_search(q: str):
         raise HTTPException(502, "Address search is not reachable")
 
 
+@app.get("/api/site/reverse")
+def site_reverse(lat: float, lon: float):
+    try:
+        return site.reverse(lat, lon)
+    except (OSError, KeyError, ValueError):
+        raise HTTPException(502, "Address search is not reachable")
+
+
 @app.post("/api/site/sun")
 def site_sun(req: SunRequest):
     try:

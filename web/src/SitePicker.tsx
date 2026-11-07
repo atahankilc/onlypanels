@@ -1,5 +1,5 @@
 import { ReactNode, useState } from "react";
-import { Building, Place, Site, SiteSurface, Sun, buildingFacts, searchPlace, sunFor } from "./api";
+import { Building, Place, Site, SiteSurface, Sun, buildingFacts, placeAt, searchPlace, sunFor } from "./api";
 import HomeMap, { Picked } from "./HomeMap";
 import { Close, Down, Pen, Photo, Search, Turn, Up } from "./icons";
 import { Face, P2, area, centre, flatFace, groundFace, inside, pitchedFaces, toLocal } from "./geometry";
@@ -52,6 +52,7 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
   const [q, setQ] = useState("");
   const [places, setPlaces] = useState<Place[] | null>(null);
   const [place, setPlace] = useState<Place | null>(site?.place ?? null);
+  const [target, setTarget] = useState<P2 | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [aerial, setAerial] = useState(false);
@@ -69,7 +70,7 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
     } catch { setError("Address search is not reachable right now."); }
     setBusy(false);
   };
-  const choose = (p: Place) => { setPlace(p); setPlaces(null); setAerial(false); setSite(() => null); };
+  const choose = (p: Place) => { setPlace(p); setTarget([p.lon, p.lat]); setPlaces(null); setAerial(false); setSite(() => null); };
 
   /** Adds sun figures to surfaces that lack them, then ranks by sun until the homeowner reorders. */
   const loadSun = (s: Site) => {
@@ -91,13 +92,23 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
   const change = (next: Site) => { setSite(() => next); loadSun(next); };
 
   const addBuilding = (hit: Picked) => {
-    if (!place) return;
+    // A click works without a search: the address follows from the point.
+    const here = place ?? { label: "Your home", lat: hit.at[1], lon: hit.at[0], country: "Germany", bavaria: false };
+    if (!place) {
+      setPlace(here);
+      placeAt(here.lat, here.lon).then((p) => { setPlace(p); setSite((now) => now && { ...now, place: p }); setQ(p.label.split(", ").slice(0, 3).join(", ")); }).catch(() => undefined);
+    }
     const origin = site?.origin ?? centre(hit.ring);
     const ring = hit.ring.map((p) => toLocal(origin, p));
-    if (site?.buildings.some((b) => inside(toLocal(origin, hit.at), b.ring))) return;
+    const clicked = site?.buildings.find((b) => inside(toLocal(origin, hit.at), b.ring));
+    if (clicked) {
+      // A second click takes an added building away again.
+      if (!clicked.main && site) setSite(() => ({ ...site, buildings: site.buildings.filter((b) => b !== clicked), surfaces: site.surfaces.filter((x) => x.owner !== clicked.id) }));
+      return;
+    }
     const main = !site?.buildings.length;
     const b: Building = { id: crypto.randomUUID(), ring, eave: hit.height, roof: area(ring) > LARGE_M2 ? "flat" : "pitched", tilt: DEFAULT_TILT, flip: false, source: "Assumed", main };
-    const base: Site = site ?? { place, origin, buildings: [], surfaces: [], noGarden: false, shade: null, trees: null, sorted: false };
+    const base: Site = site ?? { place: here, origin, buildings: [], surfaces: [], noGarden: false, shade: null, trees: null, sorted: false };
     change({ ...base, buildings: [...base.buildings, b], surfaces: [...base.surfaces, ...surfacesOf(b, [])], shade: main ? shadeNote(b, origin, hit.neighbours) : base.shade });
     if (main) buildingFacts(hit.at[1], hit.at[0]).then((f) => {
       setSite((now) => {
@@ -139,11 +150,10 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
 
   const best = site?.surfaces.reduce<Sun | null>((a, x) => (x.sun && (!a || x.sun.kwh_per_kwp > a.kwh_per_kwp) ? x.sun : a), null) ?? null;
   const main = site?.buildings.find((b) => b.main);
-  const focus: P2 | null = place ? [place.lon, place.lat] : null;
 
   return (
     <main className="stage">
-      <HomeMap site={site} placed={placed} focus={focus} aerial={aerial} draft={draft ?? []} drawing={draft !== null}
+      <HomeMap locate={!site} site={site} placed={placed} focus={target} aerial={aerial} draft={draft ?? []} drawing={draft !== null}
         onBuilding={addBuilding} onPoint={(p) => setDraft((d) => [...(d ?? []), p])} />
       {place?.bavaria && <button type="button" className="mapbtn" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</button>}
       {draft !== null && <div className="maphint"><span>Click the corners of the area</span>{draft.length >= 3 && <button type="button" className="primary small" onClick={finishGarden}>Done</button>}<button type="button" className="ghost small" onClick={() => setDraft(null)}>Cancel</button></div>}
@@ -159,8 +169,7 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
           </form>
           {places && places.length > 1 && <ul className="places">{places.map((p) => <li key={p.label}><button type="button" onClick={() => choose(p)}>{p.label}</button></li>)}</ul>}
           {error && <p className="error">{error}</p>}
-          {!place && !places && <p className="muted">Type your address and we will show your home in 3D, with the sun it gets.</p>}
-          {place && !site && <p className="prompt">Now click your house on the map.</p>}
+          {!site && !places && <p className="prompt">{place ? "We could not find the house at this address. Click it on the map." : "Click your house on the map, or type your address."}</p>}
         </header>
 
         {best && <section>
@@ -182,6 +191,7 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
             <button type="button" className="ghost small" onClick={() => editBuilding(main.id, { flip: !main.flip })}><Turn size={14} />Turn the roof ridge</button>
           </>}
           <p className="small muted">{main.source === "OpenStreetMap" ? "From OpenStreetMap." : main.source === "You" ? "Set by you." : "Our guess from the building shape. Please correct it."}</p>
+          <button type="button" className="ghost small" onClick={() => setSite(() => null)}>This is not my house</button>
         </section>}
 
         {site && <section>
@@ -201,7 +211,7 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
               </li>
             ))}
           </ol>
-          <p className="small muted">Garage or shed? Click it on the map to add it.</p>
+          <p className="small muted">Garage or shed? Click it on the map to add it. Click it again to remove it.</p>
           <label className="check"><input type="checkbox" checked={site.noGarden} onChange={(e) => setSite(() => ({ ...site, noGarden: e.target.checked, surfaces: e.target.checked ? site.surfaces.filter((x) => x.kind !== "ground") : site.surfaces }))} />No panels in my garden</label>
           {!site.noGarden && <button type="button" className="ghost small" onClick={() => setDraft([])}><Pen size={14} />Draw a garden area</button>}
         </section>}

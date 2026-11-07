@@ -15,6 +15,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - `engine/`: dataset, fixed customer-grouped split, predictors, scoring, tests. Scores in `docs/data/findings.md`
 - 3D site step (D33 to D36): address search, click the house, roof slope and ridge, sun per surface from PVGIS, ranked surfaces, "not here", garden drawing, garage by click, panels on the roof, aerial photo in Bavaria. Shown to homeowner and planner
 - App restyled after Steward (D37)
+- Map starts at the browser location. A typed address selects its building by itself. Clicking works without a search. Hover shows what a click picks
 
 ## Not done
 
