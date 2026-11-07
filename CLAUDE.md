@@ -35,6 +35,7 @@ uv run python scripts/evaluate.py
 uv run pytest
 uv run uvicorn main:app --app-dir api --port 8000
 cd web && pnpm dev
+cd backoffice && pnpm dev
 ```
 
 Use `uv run`, never system Python: the Anaconda install has broken numpy and pandas. LightGBM needs `brew install libomp`; sklearn's `HistGradientBoosting*` works without it.

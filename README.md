@@ -24,6 +24,12 @@ uv run uvicorn main:app --app-dir api --port 8000
 cd web && pnpm install && pnpm dev
 ```
 
+The back office runs separately on http://127.0.0.1:5174
+
+```bash
+cd backoffice && pnpm install && pnpm dev
+```
+
 ## Docs
 
 | Doc | Contents |
@@ -38,6 +44,7 @@ cd web && pnpm install && pnpm dev
 | [Evaluation](docs/evaluation.md) | How we prove it decides like an expert |
 | [Sponsor tools](docs/sponsor-tools.md) | Anthropic, Supabase, ElevenLabs, Lovable |
 | [Demo script](docs/demo-script.md) | Five-minute story |
+| [Users](docs/users.md) | Personas, needs, flows, evidence |
 | [Requirements](docs/requirements.md) | Every requirement in the brief, with status |
 | [Roadmap](docs/roadmap.md) | Core scope, then features beyond the brief |
 

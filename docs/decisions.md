@@ -28,3 +28,5 @@
 | D22 | First-proposal coherence is judged by rules, not error alone: designs must be physically consistent and react sensibly to input changes | Proposed | Brief requires a proposal that makes sense as a whole and adapts as an expert would expect |
 | D23 | Site input is general, not roof only: roof, garden, carport or facade, plus usable area. Reonic said we may add such inputs. Non-roof sites are shown as assumptions | Confirmed (user) | Data is almost all rooftop, so these cannot be learned |
 | D24 | Germany is the default and the training base. Other countries are selectable with a clear warning | Confirmed (user) | User: focus on Germany without being limited to it |
+| D25 | Separate app (5173, daily work) and back office (5174, oversight), sharing the engine and API | Proposed by the user; moving compare and results screens awaits go-ahead | Different users and jobs. See `docs/users.md` |
+| D26 | Scope users to the brief's two: planner and homeowner, with its three use cases. Other roles are parked | Confirmed (user) | The judges look at the brief's users |

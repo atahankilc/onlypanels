@@ -34,3 +34,4 @@ dist/
 
 # Vite
 web/dist/
+backoffice/dist/

@@ -3,7 +3,7 @@
 Living document. Update it whenever the phase, blockers or next steps change.
 
 **Last updated:** 2026-11-07, before build start
-**Phase:** First back-office version runs locally: design, compare, results.
+**Phase:** App runs locally (design, compare, results). User and flow analysis is in the back office. Next steps follow from it.
 **Deadline:** Sunday 8 November 2026, 15:00
 
 ## Done
@@ -23,7 +23,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 
 1. Ask Reonic the blocking questions in `docs/open-questions.md` (Q1 to Q4, Q23)
 2. Agree the proposed decisions and split roles
-3. User reviews the UI and says what to change
+3. User reviews the analysis on port 5174 and picks the direction
 4. Improve "no battery" and range quality, using dev scores only
 5. Free-text refinement with Claude, once data sharing (Q2) is answered
 
