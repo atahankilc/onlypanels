@@ -25,6 +25,7 @@ Resolve by moving the answer into `docs/decisions.md` and striking the row here.
 | Q12 | How long does a design take today, and how many offers per planner per week? | Business case needs real numbers. The brief only says "hours" |
 | Q13 | Is there anything else in the export we should know about, such as a data README or more installers? | We received two installers with 1,619 projects |
 | Q14 | What are the folder names? We assume two installers | Sanity check |
+| Q25 | Can you add postcode, roof data, the delivered option, prices and lost offers for these projects? Reonic said roof inputs are fine, but it is unclear whether historic values exist | They would let us learn and measure the main drivers. See `docs/data-needs.md` |
 | Q23 | A Reonic team member said verbally that our output could be a range. Does that replace a single recommendation or sit next to it? How would you judge a range: must the expert value fall inside, and how wide is acceptable? Does it apply to PV, battery, or both? | Sets the output format and the headline metric (D17) |
 
 Resolved: Q24 (hidden test): there is none. See D21.

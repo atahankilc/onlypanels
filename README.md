@@ -39,6 +39,7 @@ cd backoffice && pnpm install && pnpm dev
 | [Open questions](docs/open-questions.md) | For Reonic, organisers and the team |
 | [Challenge brief](docs/brief/challenge.md) | Full extraction of the brief |
 | [Data dictionary](docs/data/dictionary.md) | Every column, units, reconstruction rules |
+| [Data needs](docs/data-needs.md) | Which data would help, per user |
 | [Data findings](docs/data/findings.md) | Traps, limits, baseline, noise floor |
 | [Architecture](docs/architecture.md) | Proposed system |
 | [Evaluation](docs/evaluation.md) | How we prove it decides like an expert |

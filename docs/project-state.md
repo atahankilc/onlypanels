@@ -26,6 +26,10 @@ Living document. Update it whenever the phase, blockers or next steps change.
 3. Add an Anthropic key to `.env` and test the Claude path
 4. Unusual-choice warnings
 
+## Parked
+
+Data needs research is in `docs/data-needs.md`, split by planner and homeowner. Nothing in it is decided. Settle it with the user when working on each view.
+
 ## Proposed timeline
 
 | By | Milestone |
