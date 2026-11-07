@@ -3,6 +3,7 @@ import { Design, Inputs, Overrides, Request, START, Site, designFor, siteInputs 
 import HomeMap from "./HomeMap";
 import { t } from "./i18n";
 import SitePicker from "./SitePicker";
+import { Button, Check, Field, Input, Section, Select, Slider } from "./ui";
 
 type Props = { request: Request | null; add: (r: Request) => void; update: (id: string, p: Partial<Request>) => void };
 
@@ -31,29 +32,29 @@ function RequestForm({ add }: { add: (r: Request) => void }) {
   const fossil = i.heating === "Gas" || i.heating === "Oil";
   return (
     <SitePicker site={site} setSite={setSite} placed={preview?.pv.placed ?? null} note={preview ? <span><b>{preview.pv.modules} panels</b> would suit your home</span>
-      : !site && !manual ? <><span>Click your house on the map, or search for it</span><button type="button" className="ghost" onClick={() => setManual(true)}>Continue without the map</button></> : null}>
+      : !site && !manual ? <><span>Click your house on the map, or search for it</span><Button onClick={() => setManual(true)}>Continue without the map</Button></> : null}>
       {(site || manual) ? <form className="request" onSubmit={submit}>
         <h2>Your energy use</h2>
-        <label className="field"><span>How much electricity do you use in a year? (kWh)</span>
-          <input type="number" min={500} step={100} required value={i.demand_kwh || ""} onChange={(e) => set("demand_kwh", Number(e.target.value))} />
-          <small>You can find this on your electricity bill. A typical family uses around 4,500 kWh.</small></label>
-        <label className="field"><span>How do you heat your home?</span>
-          <select value={i.heating ?? ""} onChange={(e) => set("heating", e.target.value || null)}>
+        <Field label="How much electricity do you use in a year? (kWh)">
+          <Input type="number" min={500} step={100} required value={i.demand_kwh || ""} onChange={(e) => set("demand_kwh", Number(e.target.value))} />
+          <small>You can find this on your electricity bill. A typical family uses around 4,500 kWh.</small></Field>
+        <Field label="How do you heat your home?">
+          <Select value={i.heating ?? ""} onChange={(e) => set("heating", e.target.value || null)}>
             <option value="">Not sure</option><option value="Gas">Gas</option><option value="Oil">Oil</option><option value="Heatpump">Heat pump</option>
-          </select></label>
-        {fossil && <label className="field"><span>How much heat do you use in a year? (kWh, optional)</span>
-          <input type="number" min={0} step={500} value={i.heat_kwh ?? ""} onChange={(e) => set("heat_kwh", e.target.value === "" ? null : Number(e.target.value))} />
-          <small>This helps us check whether a heat pump makes sense.</small></label>}
-        <label className="check"><input type="checkbox" checked={i.ev} onChange={(e) => set("ev", e.target.checked)} />We have, or plan to buy, an electric car</label>
+          </Select></Field>
+        {fossil && <Field label="How much heat do you use in a year? (kWh, optional)">
+          <Input type="number" min={0} step={500} value={i.heat_kwh ?? ""} onChange={(e) => set("heat_kwh", e.target.value === "" ? null : Number(e.target.value))} />
+          <small>This helps us check whether a heat pump makes sense.</small></Field>}
+        <Check checked={i.ev} onChange={(v) => set("ev", v)}>We have, or plan to buy, an electric car</Check>
         {!site && <>
-          <label className="field"><span>Where could the panels go?</span>
-            <select value={i.mount} onChange={(e) => set("mount", e.target.value)}>
+          <Field label="Where could the panels go?">
+            <Select value={i.mount} onChange={(e) => set("mount", e.target.value)}>
               <option value="roof">On the roof</option><option value="ground">In the garden</option><option value="carport">On a carport</option><option value="facade">On the facade</option>
-            </select></label>
-          <label className="field"><span>How much space is there? (m², optional)</span>
-            <input type="number" min={0} step={5} value={i.area_m2 ?? ""} onChange={(e) => set("area_m2", e.target.value === "" ? null : Number(e.target.value))} /></label>
+            </Select></Field>
+          <Field label="How much space is there? (m², optional)">
+            <Input type="number" min={0} step={5} value={i.area_m2 ?? ""} onChange={(e) => set("area_m2", e.target.value === "" ? null : Number(e.target.value))} /></Field>
         </>}
-        <button type="submit" className="primary wide">Send my request</button>
+        <Button type="submit" variant="solid" size="lg" wide>Send my request</Button>
       </form> : null}
     </SitePicker>
   );
@@ -126,49 +127,45 @@ function Offer({ request, update }: { request: Request; update: (id: string, p: 
         <p className="muted">From your installer. Here is what they propose and what it means for you.</p>
       </header>
 
-      <section>
-      <h2>What you get</h2>
+      <Section title="What you get">
       <ul className="plainlist">{included(base).map((x) => <li key={x}>{x}</li>)}</ul>
 
-      </section>
+      </Section>
 
-      <section>
-      <h2>What it means for you</h2>
+      <Section title="What it means for you">
       <dl className="mean">
         <dt>Electricity you make and use yourself</dt><dd>about {base.energy.self_sufficiency_pct}%</dd>
         <dt>Saved on your electricity each year</dt><dd>about €{base.energy.saving_eur}</dd>
       </dl>
 
-      </section>
+      </Section>
 
-      <section>
-      <h2>Is this right for a home like mine?</h2>
+      <Section title="Is this right for a home like mine?">
       <p>{typical(base)}</p>
-      </section>
+      </Section>
 
-      {!none && <section>
-        <h2>Try a change</h2>
+      {!none && <Section title="Try a change">
         <p className="muted">Your installer lets you try these. Nothing changes until you ask.</p>
         <div className="variants">
-          {allowed.battery && <label className="field"><span>Battery</span>
-            <select value={mine.battery_kwh ?? 0} onChange={(e) => setMine({ ...mine, battery_kwh: Number(e.target.value) })}>
+          {allowed.battery && <Field label="Battery">
+            <Select value={mine.battery_kwh ?? 0} onChange={(e) => setMine({ ...mine, battery_kwh: Number(e.target.value) })}>
               <option value={0}>No battery</option>
               {[...new Set([...base.battery.choices, offer.battery_kwh as number])].filter(Boolean).sort((a, b) => a - b).map((c) => <option key={c} value={c}>{c} kWh</option>)}
-            </select></label>}
-          {allowed.panels && <label className="field"><span>Panels: {mine.modules}</span>
-            <input type="range" min={Math.max(6, (offer.modules as number) - 8)} max={max} value={mine.modules ?? 0} onChange={(e) => setMine({ ...mine, modules: Number(e.target.value) })} /></label>}
-          {allowed.wallbox && <label className="check"><input type="checkbox" checked={!!mine.wallbox} onChange={(e) => setMine({ ...mine, wallbox: e.target.checked })} />Wallbox</label>}
-          {allowed.heatpump && !base.heatpump.blocked && <label className="check"><input type="checkbox" checked={!!mine.heatpump} onChange={(e) => setMine({ ...mine, heatpump: e.target.checked })} />Heat pump</label>}
+            </Select></Field>}
+          {allowed.panels && <Field label="Panels" value={mine.modules}>
+            <Slider min={Math.max(6, (offer.modules as number) - 8)} max={max} value={mine.modules ?? 0} onChange={(e) => setMine({ ...mine, modules: Number(e.target.value) })} /></Field>}
+          {allowed.wallbox && <Check checked={!!mine.wallbox} onChange={(v) => setMine({ ...mine, wallbox: v })}>Wallbox</Check>}
+          {allowed.heatpump && !base.heatpump.blocked && <Check checked={!!mine.heatpump} onChange={(v) => setMine({ ...mine, heatpump: v })}>Heat pump</Check>}
         </div>
         {changed && <div className="what">
           <p><b>What this change means:</b> {meaning(base, variant)}</p>
           <div className="actions">
-            <button className="primary" disabled={asked} onClick={() => update(request.id, { status: "change", change: mine })}>{asked ? "Sent to your installer" : "Ask my installer for this"}</button>
-            <button className="ghost" onClick={() => setMine(offer)}>Back to my offer</button>
+            <Button variant="solid" size="lg" disabled={asked} onClick={() => update(request.id, { status: "change", change: mine })}>{asked ? "Sent to your installer" : "Ask my installer for this"}</Button>
+            <Button onClick={() => setMine(offer)}>Back to my offer</Button>
           </div>
         </div>}
-      </section>}
-      <section><p className="small muted">All figures are estimates based on typical homes. The offer does not include prices in this demo.</p></section>
+      </Section>}
+      <Section><p className="small muted">All figures are estimates based on typical homes. The offer does not include prices in this demo.</p></Section>
       </aside>
     </main>
   );

@@ -1,11 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import * as THREE from "three";
 import { Poly, Site, usedSurfaces } from "./api";
 import { P2, P3, centre, inside, normal, toLngLat, toLocal } from "./geometry";
-import { Home as HomeIcon } from "./icons";
+import { Home as HomeIcon, Info, Locate, Minus, Needle, Plus } from "./icons";
 import { mapStyle } from "./mapStyle";
+import { Button, IconButton } from "./ui";
 
 const BLOCKS = "buildings-3d"; // the base map's blocks, used only when zoomed out
 const HOMES = "homes"; // the same buildings, one feature each
@@ -145,6 +146,18 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
   const owned = useRef<string[]>([]);
   const ready = useRef(false);
   const liftPins = useRef(() => {});
+  const needle = useRef<HTMLSpanElement>(null);
+  const me = useRef<maplibregl.Marker | null>(null);
+  const [credits, setCredits] = useState(false);
+  const locateMe = () => navigator.geolocation?.getCurrentPosition((p) => {
+    const m = map.current, at: P2 = [p.coords.longitude, p.coords.latitude];
+    if (!m) return;
+    const dot = document.createElement("div");
+    dot.className = "me";
+    me.current?.remove();
+    me.current = new maplibregl.Marker({ element: dot }).setLngLat(at).addTo(m);
+    m.flyTo({ center: at, zoom: 18, pitch: PITCH, duration: 1400 });
+  }, () => undefined, { enableHighAccuracy: true, timeout: 8000 });
   const refreshEdges = useRef(() => {});
   // The selected building stays the map's own block, recoloured, so its shape cannot change. A measured model replaces
   // every block that stands on its footprint: the map and the land register do not always cut houses the same way.
@@ -213,7 +226,7 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
 
   useEffect(() => {
     const m = new maplibregl.Map({
-      container: box.current as HTMLDivElement, style: mapStyle(true), attributionControl: { compact: true }, center: site?.origin ?? focus ?? [10.4, 51.1],
+      container: box.current as HTMLDivElement, style: mapStyle(true), attributionControl: false, center: site?.origin ?? focus ?? [10.4, 51.1],
       zoom: site || focus ? 18.6 : 5, pitch: site || focus ? PITCH : 0, maxPitch: 60, bearing: -20, clickTolerance: 8, canvasContextAttributes: { antialias: true },
       // By default tiles are cut into smaller ones when zooming in, which cuts every building along a grid.
       zoomLevelsToOverscale: 16,
@@ -223,7 +236,6 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
     m.dragPan.enable({ maxSpeed: 500, deceleration: 4000 });
     m.scrollZoom.enable({ around: "center" });
     if (wide() && !box.current?.closest(".offermap")) m.setPadding({ left: PANEL_W, top: 0, right: 0, bottom: 0 });
-    m.once("idle", () => box.current?.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show"));
     // Lift the rank pins to the roof: a marker has no height of its own.
     const lift = () => {
       const px = (512 * 2 ** m.getZoom()) / (40075016 * Math.cos((m.getCenter().lat * Math.PI) / 180)) * Math.sin((m.getPitch() * Math.PI) / 180);
@@ -231,19 +243,15 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
     };
     liftPins.current = lift;
     m.on("move", lift);
-    if (live.current.locate) {
-      const here = new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, fitBoundsOptions: { maxZoom: 18, pitch: PITCH } as maplibregl.FitBoundsOptions });
-      m.addControl(here, "bottom-right");
-      m.once("load", () => here.trigger());
-    }
-    m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
+    m.on("rotate", () => { if (needle.current) needle.current.style.rotate = `${-m.getBearing()}deg`; });
+    if (live.current.locate) m.once("load", locateMe);
     let renderer: THREE.WebGLRenderer;
     const scene = new THREE.Scene(), camera = new THREE.Camera();
     scene.add(group.current, edges.current);
     m.on("load", () => {
       const paint = (name: "fill-extrusion-color" | "fill-extrusion-opacity") => m.getPaintProperty(BLOCKS, name);
       m.setLayerZoomRange(BLOCKS, 14, HOMES_FROM_ZOOM);
-      m.addSource(HOMES, { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "pid", attribution: "Measured roofs in Bavaria: Bayerische Vermessungsverwaltung" });
+      m.addSource(HOMES, { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "pid" });
       m.addLayer({
         id: HOMES, type: "fill-extrusion", source: HOMES, minzoom: HOMES_FROM_ZOOM,
         paint: {
@@ -272,7 +280,7 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
       m.addSource("draft", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       m.addLayer({ id: "draft-fill", type: "fill", source: "draft", paint: { "fill-color": "#7CF0C6", "fill-opacity": 0.22 } });
       m.addLayer({ id: "draft-line", type: "line", source: "draft", paint: { "line-color": "#7CF0C6", "line-width": 2 } });
-      m.addSource("aerial", { type: "raster", tiles: [AERIAL], tileSize: 512, attribution: "Aerial photo: Bayerische Vermessungsverwaltung, CC BY 4.0" });
+      m.addSource("aerial", { type: "raster", tiles: [AERIAL], tileSize: 512 });
       m.addLayer({ id: "aerial", type: "raster", source: "aerial", layout: { visibility: "none" } }, HOMES);
 
       refreshEdges.current = () => {
@@ -387,7 +395,17 @@ export default function HomeMap({ site, placed, focus, aerial, draft, onBuilding
   return (
     <>
       <div ref={box} className="map3d" role="application" aria-label="3D map of the home" />
-      {site && <button type="button" className="mapbtn home" onClick={() => frame(700)}><HomeIcon />Back to my home</button>}
+      {site && <Button variant="glass" size="lg" className="map-home" onClick={() => frame(700)}><HomeIcon />Back to my home</Button>}
+      <div className="mapctl">
+        {locate !== undefined && <IconButton variant="glass" size="lg" label="Go to my location" onClick={locateMe}><Locate /></IconButton>}
+        <div className="mapstack">
+          <IconButton variant="plain" size="lg" label="Zoom in" onClick={() => map.current?.zoomIn()}><Plus /></IconButton>
+          <IconButton variant="plain" size="lg" label="Zoom out" onClick={() => map.current?.zoomOut()}><Minus /></IconButton>
+          <IconButton variant="plain" size="lg" label="Face north" onClick={() => map.current?.easeTo({ bearing: 0, pitch: PITCH })}><span ref={needle} className="needle"><Needle /></span></IconButton>
+        </div>
+        <IconButton variant="glass" size="lg" label="Map credits" aria-pressed={credits} onClick={() => setCredits(!credits)}><Info /></IconButton>
+      </div>
+      {credits && <p className="credits"><a href="https://maplibre.org" target="_blank" rel="noreferrer">MapLibre</a> · <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> · <a href="https://www.openmaptiles.org" target="_blank" rel="noreferrer">© OpenMapTiles</a> · Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> · Sun: PVGIS · Roofs and aerial photo in Bavaria: Bayerische Vermessungsverwaltung</p>}
     </>
   );
 }

@@ -1,0 +1,59 @@
+/* Control primitives. Every value comes from the tokens in styles.css. */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; border-radius: 999px; font-family: var(--font-ui); font-weight: 500; line-height: 1; white-space: nowrap; text-decoration: none; cursor: pointer; transition: background-color 0.15s, color 0.15s, opacity 0.15s, scale 0.12s var(--ease); }
+.btn svg { flex: none; width: var(--icon); height: var(--icon); }
+.btn-md { --icon: 16px; height: var(--btn-md); padding: 0 14px; font-size: 13px; }
+.btn-lg { --icon: 18px; height: var(--btn-lg); padding: 0 18px; font-size: 14px; }
+.btn-icon { padding: 0; aspect-ratio: 1; }
+.btn-md.btn-icon { width: var(--btn-md); } .btn-lg.btn-icon { width: var(--btn-lg); }
+.btn-wide { width: 100%; }
+.btn-solid { background: var(--hud-solid); color: var(--hud-solid-ink); font-weight: 600; }
+.btn-fill { background: var(--hud-fill); color: var(--hud-ink); }
+.btn-glass { background: var(--hud-glass); border-color: var(--hud-line); color: var(--hud-ink); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); }
+.btn-plain { background: transparent; color: var(--hud-ink); }
+.btn:not(:disabled):active { scale: 0.97; }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn[aria-pressed="true"] { background: var(--hud-solid); color: var(--hud-solid-ink); }
+@media (hover: hover) {
+  .btn-solid:not(:disabled):hover { opacity: 0.88; }
+  .btn-fill:not(:disabled):hover, .btn-plain:not(:disabled):hover { background: var(--hud-fill-2); }
+  .btn-glass:not(:disabled):not([aria-pressed="true"]):hover { background: var(--hud-glass-2); }
+}
+
+.seg { display: inline-flex; gap: 2px; border-radius: 999px; }
+.seg-md { height: var(--btn-md); padding: 3px; } .seg-lg { height: var(--btn-lg); padding: 4px; }
+.seg-fill { background: var(--hud-fill); }
+.seg-glass { border: 1px solid var(--hud-line); background: var(--hud-glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); }
+.seg button { height: 100%; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--hud-ink-2); font: 500 13px var(--font-ui); cursor: pointer; transition: background-color 0.15s, color 0.15s; }
+.seg-lg button { padding: 0 16px; font-size: 14px; }
+.seg button.on { background: var(--hud-solid); color: var(--hud-solid-ink); font-weight: 600; }
+.seg button:disabled { opacity: 0.4; cursor: default; }
+/* Demo tooling, not product UI: it must never read as part of the app. */
+.seg-dev { align-items: center; border: 1px dashed var(--hud-warn); background: var(--hud-land); }
+.seg-dev::before { content: "DEV"; padding: 0 6px 0 10px; font: 600 10.5px var(--font-mono); letter-spacing: 0.1em; color: var(--hud-warn); }
+.seg-dev button { padding: 0 10px; color: var(--hud-warn); font: 500 11px var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; }
+.seg-dev button.on { background: var(--hud-warn); color: var(--hud-land); }
+
+.field { display: block; margin-bottom: 14px; }
+.field-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; font-size: 13px; color: var(--hud-ink-2); }
+.field-label b { font: 500 13px var(--font-mono); color: var(--hud-ink); }
+.field small { display: block; margin-top: 6px; font-size: 12px; color: var(--hud-ink-2); }
+.control { width: 100%; height: var(--btn-md); padding: 0 14px; border: 1px solid transparent; border-radius: 999px; outline-offset: 0; background: var(--hud-fill); color: var(--hud-ink); font: 400 14px var(--font-ui); transition: border-color 0.15s; }
+.control-lg { height: var(--btn-lg); padding: 0 18px; }
+.control:hover:not(:disabled) { border-color: var(--hud-line); }
+.control::placeholder { color: var(--hud-ink-3); }
+.control-select { appearance: none; padding-right: 32px; background: var(--hud-fill) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23A2A6AE' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") right 14px center / 9px no-repeat; }
+.control-select option { background: #1E1F25; }
+.control:disabled { color: var(--hud-ink-3); }
+
+.check { position: relative; display: flex; align-items: center; gap: 10px; min-height: var(--btn-md); cursor: pointer; }
+.check input { position: absolute; inset: 0 auto 0 0; width: 20px; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.check i { display: grid; place-items: center; flex: none; width: 20px; height: 20px; border: 1px solid var(--hud-line-2); border-radius: 6px; background: var(--hud-fill); color: transparent; transition: background-color 0.15s; }
+.check svg { width: 14px; height: 14px; }
+.check input:checked + i { border-color: var(--hud-solid); background: var(--hud-solid); color: var(--hud-solid-ink); }
+.check input:focus-visible + i { outline: 2px solid var(--hud-route); outline-offset: 2px; }
+
+.slider { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 20px; margin: 0; background: none; cursor: pointer; }
+.slider::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--hud-ink) var(--at), var(--hud-fill-2) var(--at)); }
+.slider::-moz-range-track { height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--hud-ink) var(--at), var(--hud-fill-2) var(--at)); }
+.slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8px; border: 0; border-radius: 50%; background: var(--hud-solid); box-shadow: var(--hud-shadow); }
+.slider::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: var(--hud-solid); }

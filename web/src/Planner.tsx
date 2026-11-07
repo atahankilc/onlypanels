@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Allowed, Design, Inputs, Overrides, Refined, Request, START, designFor, refine } from "./api";
 import HomeMap from "./HomeMap";
 import { Back } from "./icons";
+import { Button, Check, Field, Input, Select } from "./ui";
 import { t } from "./i18n";
 
 const num = (v: string) => (v === "" ? null : Number(v));
@@ -32,7 +33,7 @@ function Inbox({ requests, open, add }: { requests: Request[]; open: (id: string
           <h2 className="big">Requests</h2>
           <p className="muted">AI has prepared a draft for each request. Open one to do the engineering.</p>
         </div>
-        <button className="primary" onClick={create}>New request</button>
+        <Button variant="solid" size="lg" onClick={create}>New request</Button>
       </div>
       <table className="inbox">
         <thead><tr><th>Request</th><th>From</th><th>AI draft</th><th>Status</th></tr></thead>
@@ -55,10 +56,6 @@ function Line({ r, open }: { r: Request; open: () => void }) {
       <td><span className={`state ${r.status}`}>{STATUS[r.status]}</span></td>
     </tr>
   );
-}
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return <label className="field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>;
 }
 
 function Workspace({ request, update, back }: { request: Request; update: (id: string, p: Partial<Request>) => void; back: () => void }) {
@@ -86,41 +83,41 @@ function Workspace({ request, update, back }: { request: Request; update: (id: s
   return (
     <main className="split">
       <form onSubmit={(e) => e.preventDefault()}>
-        <button type="button" className="ghost" onClick={back}><Back size={14} />Back to requests</button>
+        <Button onClick={back}><Back />Back to requests</Button>
         <h2>{request.title}</h2>
-        <Field label={t("demand")}><input type="number" min={500} step={100} value={inputs.demand_kwh || ""} onChange={(e) => set("demand_kwh", Number(e.target.value))} /></Field>
+        <Field label={t("demand")}><Input type="number" min={500} step={100} value={inputs.demand_kwh || ""} onChange={(e) => set("demand_kwh", Number(e.target.value))} /></Field>
         <Field label={t("heating")}>
-          <select value={inputs.heating ?? ""} onChange={(e) => set("heating", e.target.value || null)}>
+          <Select value={inputs.heating ?? ""} onChange={(e) => set("heating", e.target.value || null)}>
             <option value="">{t("unknown")}</option>
             {["Gas", "Oil", "OtherNonRenewable", "Heatpump"].map((h) => <option key={h} value={h}>{t(h)}</option>)}
-          </select>
+          </Select>
         </Field>
-        {fossil && <Field label={t("heat")}><input type="number" min={0} step={500} value={inputs.heat_kwh ?? ""} onChange={(e) => set("heat_kwh", num(e.target.value))} /></Field>}
-        <label className="check"><input type="checkbox" checked={inputs.ev} onChange={(e) => set("ev", e.target.checked)} />{t("ev")}</label>
-        {inputs.ev && <Field label={t("evKm")}><input type="number" min={0} step={1000} value={inputs.ev_km} onChange={(e) => set("ev_km", Number(e.target.value))} /></Field>}
+        {fossil && <Field label={t("heat")}><Input type="number" min={0} step={500} value={inputs.heat_kwh ?? ""} onChange={(e) => set("heat_kwh", num(e.target.value))} /></Field>}
+        <Check checked={inputs.ev} onChange={(v) => set("ev", v)}>{t("ev")}</Check>
+        {inputs.ev && <Field label={t("evKm")}><Input type="number" min={0} step={1000} value={inputs.ev_km} onChange={(e) => set("ev_km", Number(e.target.value))} /></Field>}
         {!request.site && <>
         <Field label={t("where")}>
-          <select value={inputs.mount} onChange={(e) => set("mount", e.target.value)}>
+          <Select value={inputs.mount} onChange={(e) => set("mount", e.target.value)}>
             {["roof", "ground", "carport", "facade"].map((m) => <option key={m} value={m}>{t(m)}</option>)}
-          </select>
+          </Select>
         </Field>
-        <Field label={t("area")} hint={t("areaHint")}><input type="number" min={0} step={5} value={inputs.area_m2 ?? ""} onChange={(e) => set("area_m2", num(e.target.value))} /></Field>
+        <Field label={t("area")} hint={t("areaHint")}><Input type="number" min={0} step={5} value={inputs.area_m2 ?? ""} onChange={(e) => set("area_m2", num(e.target.value))} /></Field>
         </>}
         <details>
           <summary>More details</summary>
           <Field label={t("installer")}>
-            <select value={inputs.installer} onChange={(e) => { setOverrides({ ...overrides, battery_kwh: null }); set("installer", e.target.value); }}>
+            <Select value={inputs.installer} onChange={(e) => { setOverrides({ ...overrides, battery_kwh: null }); set("installer", e.target.value); }}>
               <option value="2a8ba8e2">{t("installerA")}</option><option value="23c108b7">{t("installerB")}</option>
-            </select>
+            </Select>
           </Field>
           <Field label={t("country")}>
-            <select value={inputs.country} onChange={(e) => set("country", e.target.value)}>
+            <Select value={inputs.country} onChange={(e) => set("country", e.target.value)}>
               {["Germany", "Austria", "Switzerland", "Netherlands", "Other"].map((c) => <option key={c} value={c}>{t(c)}</option>)}
-            </select>
+            </Select>
           </Field>
-          <Field label={t("price")}><input type="number" min={1} step={0.5} value={inputs.price_ct_kwh} onChange={(e) => set("price_ct_kwh", Number(e.target.value))} /></Field>
-          <label className="check"><input type="checkbox" checked={inputs.has_solar} onChange={(e) => set("has_solar", e.target.checked)} />{t("hasSolar")}</label>
-          <label className="check"><input type="checkbox" checked={inputs.has_storage} onChange={(e) => set("has_storage", e.target.checked)} />{t("hasStorage")}</label>
+          <Field label={t("price")}><Input type="number" min={1} step={0.5} value={inputs.price_ct_kwh} onChange={(e) => set("price_ct_kwh", Number(e.target.value))} /></Field>
+          <Check checked={inputs.has_solar} onChange={(v) => set("has_solar", v)}>{t("hasSolar")}</Check>
+          <Check checked={inputs.has_storage} onChange={(v) => set("has_storage", v)}>{t("hasStorage")}</Check>
         </details>
       </form>
 
@@ -128,7 +125,7 @@ function Workspace({ request, update, back }: { request: Request; update: (id: s
         {request.status === "change" && request.change && (
           <div className="banner">
             <p><b>The homeowner asked for a change:</b> {describe(request.change)}</p>
-            <button className="primary" onClick={() => update(request.id, { overrides: { ...overrides, ...request.change }, status: "draft", change: undefined })}>Apply change</button>
+            <Button variant="solid" size="lg" onClick={() => update(request.id, { overrides: { ...overrides, ...request.change }, status: "draft", change: undefined })}>Apply change</Button>
           </div>
         )}
         <p className="intro">AI prepared this draft before you opened it. Check it, change anything, then send the offer.</p>
@@ -185,8 +182,8 @@ function Ask({ mount, onChange }: { mount: string; onChange: (r: Refined) => voi
     <form className="ask" onSubmit={submit}>
       <label htmlFor="ask">{t("ask")}</label>
       <div>
-        <input id="ask" value={text} placeholder={t("askHint")} onChange={(e) => setText(e.target.value)} />
-        <button type="submit" className="primary" disabled={busy || !text.trim()}>{busy ? t("loading") : t("apply")}</button>
+        <Input big id="ask" value={text} placeholder={t("askHint")} onChange={(e) => setText(e.target.value)} />
+        <Button type="submit" variant="solid" size="lg" disabled={busy || !text.trim()}>{busy ? t("loading") : t("apply")}</Button>
       </div>
       {failed && <p className="error">{t("apiError")}</p>}
       {done && done.understood.length === 0 && <p className="warn-text">{t("notUnderstood")}</p>}
@@ -205,10 +202,10 @@ function Delta({ now, before, unit }: { now: number; before?: number; unit: stri
 
 function Choice({ value, onChange, blocked, label }: { value: boolean | null | undefined; onChange: (v: boolean | null) => void; blocked?: boolean; label: string }) {
   return (
-    <select aria-label={label} disabled={blocked} value={value === null || value === undefined ? "auto" : value ? "yes" : "no"}
+    <Select aria-label={label} disabled={blocked} value={value === null || value === undefined ? "auto" : value ? "yes" : "no"}
       onChange={(e) => onChange(e.target.value === "auto" ? null : e.target.value === "yes")}>
       <option value="auto">{t("auto")}</option><option value="yes">{t("included")}</option><option value="no">{t("none")}</option>
-    </select>
+    </Select>
   );
 }
 
@@ -217,7 +214,7 @@ function Proposal({ d, prev, overrides, setOverrides }: { d: Design; prev: Desig
   const any = Object.values(overrides).some((v) => v !== null && v !== undefined);
   return (
     <>
-      <div className="row"><h2>{t("proposal")}</h2>{any && <button className="ghost" onClick={() => setOverrides({})}>{t("resetAll")}</button>}</div>
+      <div className="row"><h2>{t("proposal")}</h2>{any && <Button onClick={() => setOverrides({})}>{t("resetAll")}</Button>}</div>
       <table>
         <thead><tr><th>{t("component")}</th><th>{t("recommended")}</th><th>{t("similar")}</th><th>{t("control")}</th></tr></thead>
         <tbody>
@@ -225,17 +222,17 @@ function Proposal({ d, prev, overrides, setOverrides }: { d: Design; prev: Desig
             <th scope="row">{t("pv")}</th>
             <td><b>{d.pv.kwp.toFixed(1)} kWp</b> <span className="muted">{d.pv.modules} {t("modules")}</span><Delta now={d.pv.kwp} before={prev?.pv.kwp} unit="kWp" />{d.pv.capped && <span className="tag">{t("capped")}</span>}</td>
             <td>{s.kwp_low}–{s.kwp_high} kWp</td>
-            <td><input aria-label={t("panels")} type="number" min={1} placeholder={t("auto")} value={overrides.modules ?? ""} onChange={(e) => setOverrides({ ...overrides, modules: num(e.target.value) })} /></td>
+            <td><Input aria-label={t("panels")} type="number" min={1} placeholder={t("auto")} value={overrides.modules ?? ""} onChange={(e) => setOverrides({ ...overrides, modules: num(e.target.value) })} /></td>
           </tr>
           <tr>
             <th scope="row">{t("battery")}</th>
             <td><b>{d.battery.kwh ? `${d.battery.kwh} kWh` : t("none")}</b><Delta now={d.battery.kwh} before={prev?.battery.kwh} unit="kWh" />{d.battery.unsure && <span className="tag">Open decision</span>}</td>
             <td>{t("sold", { rate: s.battery_rate })}{s.battery_common.length > 0 && <small>{t("common")}: {s.battery_common.join(", ")} kWh</small>}</td>
             <td>
-              <select aria-label={t("battery")} value={overrides.battery_kwh ?? "auto"} onChange={(e) => setOverrides({ ...overrides, battery_kwh: e.target.value === "auto" ? null : Number(e.target.value) })}>
+              <Select aria-label={t("battery")} value={overrides.battery_kwh ?? "auto"} onChange={(e) => setOverrides({ ...overrides, battery_kwh: e.target.value === "auto" ? null : Number(e.target.value) })}>
                 <option value="auto">{t("auto")}</option><option value="0">{t("none")}</option>
                 {d.battery.choices.map((c) => <option key={c} value={c}>{c} kWh</option>)}
-              </select>
+              </Select>
             </td>
           </tr>
           <tr>
@@ -275,7 +272,7 @@ function Proposal({ d, prev, overrides, setOverrides }: { d: Design; prev: Desig
 function Send({ d, request, update }: { d: Design; request: Request; update: (id: string, p: Partial<Request>) => void }) {
   const [allowed, setAllowed] = useState<Allowed>(request.allowed ?? { battery: true, panels: true, wallbox: false, heatpump: d.heatpump.included });
   const box = (k: keyof Allowed, label: string) => (
-    <label className="check"><input type="checkbox" checked={allowed[k]} onChange={(e) => setAllowed({ ...allowed, [k]: e.target.checked })} />{label}</label>
+    <Check checked={allowed[k]} onChange={(v) => setAllowed({ ...allowed, [k]: v })}>{label}</Check>
   );
   const send = () => update(request.id, {
     status: "sent", allowed,
@@ -286,7 +283,7 @@ function Send({ d, request, update }: { d: Design; request: Request; update: (id
       <h3>Send the offer</h3>
       <p className="muted">The homeowner can only try what you allow. The home's data stays fixed.</p>
       <div className="boxes">{box("battery", "Change the battery")}{box("panels", "Change the panels")}{box("wallbox", "Add or remove the wallbox")}{box("heatpump", "Add or remove the heat pump")}</div>
-      <button className="primary" onClick={send}>{request.status === "sent" ? "Send updated offer" : "Send offer to homeowner"}</button>
+      <Button variant="solid" size="lg" onClick={send}>{request.status === "sent" ? "Send updated offer" : "Send offer to homeowner"}</Button>
       {request.status === "sent" && <span className="got"> Offer sent. Switch to Homeowner to see it.</span>}
     </section>
   );

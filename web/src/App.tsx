@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Request, START } from "./api";
 import Homeowner from "./Homeowner";
-import { Mark, Undo } from "./icons";
+import { Mark } from "./icons";
 import Planner from "./Planner";
+import { Segmented } from "./ui";
 
 const KEY = "energy-desk-v2";
 
@@ -36,14 +37,7 @@ export default function App() {
       <header className={`topbar${open ? " solid" : ""}`}>
         <div className="logo"><Mark /><h1>Energy Design Desk</h1></div>
         <div className="topright">
-          <div className="switch glass" role="group" aria-label="Choose who you are">
-            {(["homeowner", "planner"] as const).map((v) => (
-              <button key={v} className={view === v ? "on" : ""} aria-pressed={view === v} onClick={() => setView(v)}>
-                {v === "homeowner" ? "Homeowner" : "Planner"}
-              </button>
-            ))}
-          </div>
-          <button className="round glass big" aria-label="Reset demo" title="Reset demo" onClick={() => { setSaved({ requests: EXAMPLES, mine: null }); setOpenId(null); }}><Undo size={18} /></button>
+          <Segmented label="Demo only: switch profile" variant="dev" value={view} onChange={setView} options={[{ value: "homeowner", label: "Homeowner" }, { value: "planner", label: "Planner" }]} />
         </div>
       </header>
       {view === "planner"
