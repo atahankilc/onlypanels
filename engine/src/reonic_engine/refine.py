@@ -40,7 +40,7 @@ class Change(BaseModel):
     has_storage: bool | None = None
 
 
-NEGATIVE = r"(istemiyor|istemez|olmasın|olmadan|olmayacak|çıkar|kaldır|without|no |remove|don'?t want|ohne|kein|nicht)"
+NEGATIVE = r"(istemiyor|istemez|olmasın|olmadan|olmayacak|çıkar|kaldır|without|no |remove|don'?t want|do not|does not|doesn'?t|ohne|kein|nicht)"
 HAS = r"(zaten|mevcut|already|existing|bereits|vorhanden)"
 
 

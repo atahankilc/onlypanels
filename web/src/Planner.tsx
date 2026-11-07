@@ -3,6 +3,7 @@ import { View, surfaceKey } from "./api";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
 import { Design, Handoff, Inputs, Overrides, Request, Source, Spot, design, facing, fromHomeowner, loadHome, refine, roofOf, turnTo } from "./plan";
+import { Change, ChangeCard, Trace, touched } from "./Trace";
 import "./planner.css";
 import { Button, Check, Field, Input, Segmented, Select, Slider } from "./ui";
 
@@ -12,19 +13,18 @@ const SOURCE: Record<Source, string> = { customer: "Customer", assumed: "Assumed
 const INSTALLERS: [string, string][] = [["2a8ba8e2", "Installer A"], ["23c108b7", "Installer B"]];
 const HEATS: [string, string][] = [["", "Unknown"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherNonRenewable", "Other fossil"], ["Heatpump", "Heat pump"]];
 const summary = (d: Design) => `${d.pv.kwp.toFixed(1)} kWp · ${d.battery.kwh ? `${d.battery.kwh} kWh` : "no battery"}${d.wallbox.included ? " · wallbox" : ""}${d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}`;
-const WHY: Record<string, (r: Record<string, unknown>) => string> = {
-  pv_demand: (r) => `Sized for ${r.demand} MWh of yearly need. In ${r.n} similar homes, experts mostly chose ${r.low}–${r.high} kWp.`,
-  pv_capped: (r) => `The roof limits this: the model wanted ${r.wanted} kWp, only ${r.modules} modules fit.`,
-  pv_locked: (r) => `You fixed ${r.modules} modules. The rest adapts around that.`,
-  battery_yes: (r) => `${r.kwh} kWh for ${r.kwp} kWp, or ${r.per_kwp} kWh per kWp. ${r.rate}% of similar homes have a battery, most often ${r.common} kWh.`,
-  battery_no: (r) => `No battery proposed. ${r.rate}% of similar homes bought one.`,
-  battery_locked: () => "The battery is your decision here.", battery_existing: () => "The home already has a battery.",
-  wallbox_ev: (r) => `Wallbox added for the car, which adds ${r.added} MWh a year.`,
-  hp_fossil: (r) => `${r.kw} kW for fossil heating with ${r.heat_mwh} MWh of heat. This is a rule resting on few sold examples.`,
-  hp_existing: () => "The home already has a heat pump.", hp_needs_heat: () => "Enter yearly heat to judge a heat pump.",
-  site_sun: (r) => `This roof's measured sun gives about ${r.kwh} kWh per kWp a year, after shade.`,
-  balance: (r) => `Panels make about ${r.production} MWh a year, ${r.ratio} times the need.`,
+const FACT: Record<string, string> = { demand_kwh: "Yearly electricity", price_ct_kwh: "Price", heating: "Heating", heat_kwh: "Yearly heat", ev: "Electric car", ev_km: "Driving", has_solar: "Existing solar", has_storage: "Existing battery", installer: "Catalog" };
+const UNDERSTOOD: Record<string, (u: Record<string, unknown>) => string> = {
+  c_ev_on: () => "electric car", c_ev_off: () => "no electric car", c_ev_km: (u) => `${Number(u.km).toLocaleString("en")} km a year`, c_demand: (u) => `${Number(u.kwh).toLocaleString("en")} kWh a year`,
+  c_mount: (u) => `mount on ${u.mount}`, c_area: (u) => `${u.area} m² usable`, c_max_panels: (u) => `at most ${u.panels} modules fit`, c_has_storage: () => "a battery is already there",
+  c_modules: (u) => `${u.panels} modules`, c_no_battery: () => "no battery", c_battery: (u) => `${u.kwh} kWh battery`, c_hp_on: () => "add a heat pump", c_hp_off: () => "no heat pump", c_wb_on: () => "add a wallbox", c_wb_off: () => "no wallbox",
 };
+const describe = (o: Overrides) => [
+  o.modules !== undefined && (o.modules == null ? "Solar back to the engine" : `Solar fixed at ${o.modules} modules`),
+  o.battery_kwh !== undefined && (o.battery_kwh == null ? "Battery back to the engine" : o.battery_kwh ? `Battery set to ${o.battery_kwh} kWh` : "Battery removed"),
+  o.wallbox !== undefined && (o.wallbox == null ? "Wallbox back to the engine" : o.wallbox ? "Wallbox added" : "Wallbox removed"),
+  o.heatpump !== undefined && (o.heatpump == null ? "Heat pump back to the engine" : o.heatpump ? "Heat pump added" : "Heat pump removed"),
+].filter(Boolean).join(", ");
 const useDesign = (r: Request, roof: Spot[]) => {
   const [out, setOut] = useState<{ d: Design; panels: Record<string, number> } | null>(null);
   useEffect(() => {
@@ -88,11 +88,28 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
   const first = useRef<Design | null>(null);
   if (out && !first.current) first.current = out.d;
   const d = out?.d;
+  // A change remembers the request as it was, so the card can say what moved and undo it.
+  const [change, setChange] = useState<Change | null>(null);
+  const [lit, setLit] = useState<string[]>([]);
+  const pending = useRef<{ label: string; was: Partial<Request> } | null>(null);
+  const prev = useRef<Design | null>(null);
+  useEffect(() => {
+    if (!d) return;
+    const p = pending.current, before = prev.current;
+    if (p && before && d !== before) {
+      setChange({ label: p.label, before, after: d, undo: () => { pending.current = null; update(r.id, p.was); setChange(null); } });
+      setLit(touched(before, d));
+      pending.current = null;
+    }
+    prev.current = d;
+  }, [d]);
+  useEffect(() => { if (!lit.length) return; const t = setTimeout(() => setLit([]), 2600); return () => clearTimeout(t); }, [lit]);
+  const mark = (label: string) => { pending.current = { label, was: { inputs: r.inputs, overrides: r.overrides, sources: r.sources, off: r.off } }; };
   useEffect(() => { if (tab !== "roof") { setView({ layer: "photo", moment: null }); setFace(null); } }, [tab]);
 
-  const setI = (change: Partial<Inputs>, by: Source = "planner") => update(r.id, { inputs: { ...r.inputs, ...change }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(change).map((k) => [k, by])) } });
-  const setO = (change: Overrides) => update(r.id, { overrides: { ...r.overrides, ...change } });
-  const toggle = (key: string) => { if (roof.some((x) => x.key === key)) update(r.id, { off: r.off.includes(key) ? r.off.filter((k) => k !== key) : [...r.off, key] }); };
+  const setI = (change: Partial<Inputs>, by: Source = "planner", label?: string) => { mark(label ?? `${Object.keys(change).map((k) => FACT[k] ?? k).join(", ")} changed`); update(r.id, { inputs: { ...r.inputs, ...change }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(change).map((k) => [k, by])) } }); };
+  const setO = (change: Overrides, label?: string) => { mark(label ?? describe(change)); update(r.id, { overrides: { ...r.overrides, ...change } }); };
+  const toggle = (key: string) => { if (roof.some((x) => x.key === key)) mark(r.off.includes(key) ? "Roof surface added" : "Roof surface taken out"); if (roof.some((x) => x.key === key)) update(r.id, { off: r.off.includes(key) ? r.off.filter((k) => k !== key) : [...r.off, key] }); };
   const walls = r.buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => s.kind === "wall").map((s) => surfaceKey(b, s)));
   const chosen = [...walls, ...roof.filter((x) => !r.off.includes(x.key)).map((x) => x.key)];
   const checks = d ? checkList(r, d) : [];
@@ -115,7 +132,8 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
       <div className="desktabs"><Segmented wide label="Sections" value={tab} onChange={setTab} options={[{ value: "design", label: "Design" }, { value: "roof", label: "Roof" }, { value: "facts", label: "Facts" }, { value: "energy", label: "Energy" }, { value: "checks", label: left ? `Checks ${left}` : "Checks" }]} /></div>
       <div className="deskbody">
         {!d && <p className="muted">The engine is working…</p>}
-        {d && tab === "design" && <DesignTab d={d} first={first.current} r={r} setO={setO} setI={setI} update={update} scores={scores} />}
+        {change && <ChangeCard c={change} close={() => setChange(null)} />}
+        {d && tab === "design" && <DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} />}
         {d && tab === "roof" && <RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} />}
         {tab === "facts" && <Facts r={r} setI={setI} />}
         {d && tab === "energy" && <Energy d={d} inputs={r.inputs} />}
@@ -144,29 +162,26 @@ function checkList(r: Request, d: Design) {
   return list;
 }
 
-function DesignTab({ d, first, r, setO, setI, update, scores }: { d: Design; first: Design | null; r: Request; setO: (c: Overrides) => void; setI: (c: Partial<Inputs>) => void; update: (id: string, p: Partial<Request>) => void; scores: Scores | null }) {
+function DesignTab({ d, first, r, setO, apply, lit, scores }: { d: Design; first: Design | null; r: Request; setO: (c: Overrides) => void; apply: (label: string, x: { inputs: Partial<Inputs>; overrides: Overrides }) => void; lit: string[]; scores: Scores | null }) {
   const [text, setText] = useState(""), [said, setSaid] = useState("");
   const o = r.overrides, kwp = d.pv.kwp, s = d.similar;
   const three = (v: boolean | null | undefined) => (v == null ? "auto" : v ? "yes" : "no");
   const from3 = (v: string) => (v === "auto" ? null : v === "yes");
-  const flags: string[] = [];
-  if (kwp > s.kwp_high) flags.push(`${kwp.toFixed(1)} kWp is above what experts chose in most similar homes (${s.kwp_low}–${s.kwp_high} kWp).`);
-  if (kwp < s.kwp_low) flags.push(`${kwp.toFixed(1)} kWp is below what experts chose in most similar homes (${s.kwp_low}–${s.kwp_high} kWp).`);
-  if (!d.battery.kwh && s.battery_rate >= 80 && !r.inputs.has_storage) flags.push(`No battery, but ${s.battery_rate}% of similar homes have one.`);
-  if (d.battery.kwh / Math.max(kwp, 1) > 2) flags.push(`${d.battery.kwh} kWh is more than 2 kWh per kWp. Check it is not oversized.`);
   const ask = () => refine(text).then((x) => {
-    update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...o, ...x.overrides } });
-    setSaid(x.understood.length ? "Applied. The numbers above are the engine's new answer." : "Not understood. Try the car, battery, heat pump or panel count."); setText("");
+    if (!x.understood.length) { setSaid("Not understood. Try the car, battery, heat pump, wallbox or a module count."); return; }
+    const heard = x.understood.map((u) => UNDERSTOOD[u.code]?.(u) ?? u.code).join(", ");
+    apply(`“${text.trim()}”`, x);
+    setSaid(`Understood: ${heard}${x.source === "claude" ? " (read by AI)" : ""}. The numbers come from the engine.`); setText("");
   }).catch(() => setSaid("The change could not be applied."));
   const engine = scores?.scores[`engine ${r.inputs.installer}`];
   const changed = first && summary(first) !== summary(d);
   return <>
     {changed && <p className="delta"><span>AI draft</span> {summary(first)}<br /><span>Now</span> {summary(d)}</p>}
-    {flags.map((f) => <p key={f} className="flag">{f}</p>)}
+    {d.review.filter((n) => n.level === "warn").map((n) => <p key={n.code} className="flag">{n.text}</p>)}
     <table className="grid"><thead><tr><th /><th>Proposal</th><th>Similar homes</th><th>Your decision</th></tr></thead><tbody>
       <tr><th scope="row">Solar</th><td>{d.pv.modules} modules<small>{kwp.toFixed(1)} kWp{d.pv.capped ? " · roof limit" : ""}</small></td><td>{s.kwp_low}–{s.kwp_high} kWp<small>{s.n} homes</small></td>
         <td><div className="lock"><Slider min={4} max={Math.max(d.pv.max_modules ?? 40, 4)} value={o.modules ?? d.pv.modules} onChange={(e) => setO({ modules: Number(e.target.value) })} /><Button disabled={o.modules == null} onClick={() => setO({ modules: null })}>Auto</Button></div></td></tr>
-      <tr><th scope="row">Battery</th><td>{r.inputs.has_storage ? "Already there" : d.battery.kwh ? `${d.battery.kwh} kWh` : "None"}{!r.inputs.has_storage && <small>{d.battery.probability}% likely</small>}</td><td>{s.battery_rate}% have one<small>often {s.battery_common.join(", ")} kWh</small></td>
+      <tr><th scope="row">Battery</th><td>{r.inputs.has_storage ? "Already there" : d.battery.kwh ? `${d.battery.kwh} kWh` : "None"}{!r.inputs.has_storage && <small>{d.battery.locked ? `your choice · engine ${d.battery.probability}% for one` : `${d.battery.probability}% likely`}</small>}</td><td>{s.battery_rate}% have one<small>often {s.battery_common.join(", ")} kWh</small></td>
         <td><Select aria-label="Battery" value={o.battery_kwh == null ? "auto" : String(o.battery_kwh)} onChange={(e) => setO({ battery_kwh: e.target.value === "auto" ? null : Number(e.target.value) })}><option value="auto">Auto</option><option value="0">None</option>{d.battery.choices.map((c) => <option key={c} value={c}>{c} kWh</option>)}</Select></td></tr>
       <tr><th scope="row">Wallbox</th><td>{d.wallbox.included ? "Included" : "None"}</td><td>{s.wallbox_rate}% have one</td>
         <td><Segmented wide label="Wallbox" value={three(o.wallbox)} onChange={(v) => setO({ wallbox: from3(v) })} options={[{ value: "auto", label: "Auto" }, { value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></td></tr>
@@ -177,8 +192,9 @@ function DesignTab({ d, first, r, setO, setI, update, scores }: { d: Design; fir
       <Input aria-label="What changed?" placeholder="What changed? e.g. they are buying an electric car" value={text} onChange={(e) => setText(e.target.value)} /><Button type="submit">Apply</Button>
     </form>
     {said && <p className="small muted">{said}</p>}
-    <h3>Why</h3>
-    <ul className="why">{d.reasons.map((x, i) => <li key={i}>{WHY[x.code]?.(x) ?? x.code}</li>)}</ul>
+    <h3>How the engine decided</h3>
+    <Trace steps={d.trace} sources={r.sources} lit={lit} />
+    {d.review.filter((n) => n.level === "note").map((n) => <p key={n.code} className="small muted">{n.text}</p>)}
     {engine && <p className="small muted trust">How far to trust a first draft: on {Math.round(engine.n)} past projects at this installer, it landed within 20% of the expert's size {Math.round(engine.kwp_within20 * 100)}% of the time. That is why you decide.</p>}
   </>;
 }

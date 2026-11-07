@@ -5,12 +5,16 @@ import { fit } from "./panels";
 
 export type Inputs = { installer: string; demand_kwh: number | null; price_ct_kwh: number; heating: string | null; heat_kwh: number | null; has_solar: boolean; has_storage: boolean; ev: boolean; ev_km: number };
 export type Overrides = { modules?: number | null; battery_kwh?: number | null; wallbox?: boolean | null; heatpump?: boolean | null };
+/** One step of the engine's own decision, in order. Input keys match the request's facts, so their source can be shown. */
+export type TraceStep = { id: string; title: string; kind: "measured" | "learned" | "rule" | "physics" | "input"; by?: "engine" | "planner"; inputs: { key: string | null; label: string; value: string }[]; how: string; result: string; context?: string };
+export type Note = { code: string; level: "warn" | "note"; on: string; text: string };
 export type Design = {
-  pv: { modules: number; kwp: number; max_modules: number | null; placed: number[] | null; capped: boolean };
-  battery: { kwh: number; probability: number; choices: number[]; unsure: boolean };
-  wallbox: { included: boolean }; heatpump: { included: boolean; kw: number; blocked: boolean };
+  pv: { modules: number; kwp: number; max_modules: number | null; placed: number[] | null; capped: boolean; locked: boolean };
+  battery: { kwh: number; probability: number; choices: number[]; unsure: boolean; locked: boolean };
+  wallbox: { included: boolean; locked: boolean }; heatpump: { included: boolean; kw: number; blocked: boolean; locked: boolean };
+  trace: TraceStep[]; review: Note[];
   energy: { base_mwh: number; ev_mwh: number; hp_mwh: number; total_mwh: number; production_mwh: number; self_sufficiency_pct: number; self_use_pct: number; saving_eur: number };
-  similar: { n: number; kwp_low: number; kwp_high: number; battery_rate: number; battery_common: number[]; wallbox_rate: number };
+  similar: { n: number; kwp_low: number; kwp_high: number; battery_rate: number; battery_common: number[]; wallbox_rate: number; battery_low: number | null; battery_high: number | null; learned_from: number };
   reasons: ({ code: string } & Record<string, unknown>)[]; warnings: ({ code: string } & Record<string, unknown>)[]; assumed: string[];
 };
 export type Source = "customer" | "assumed" | "planner";
@@ -52,7 +56,7 @@ export const design = (i: Inputs, o: Overrides, roof: Spot[], off: string[]) => 
   return post<Design>("/api/design", { inputs: { ...i, surfaces: use.map((r) => ({ max_modules: r.fits, kwh_per_kwp: r.yield_ })) }, overrides: o })
     .then((d) => ({ d, panels: Object.fromEntries(use.map((r, k) => [r.key, Math.min(r.fits, d.pv.placed?.[k] ?? 0)])) as Record<string, number> }));
 };
-export const refine = (text: string) => post<{ inputs: Partial<Inputs>; overrides: Overrides; understood: unknown[] }>("/api/refine", { text, mount: "roof" });
+export const refine = (text: string) => post<{ inputs: Partial<Inputs>; overrides: Overrides; understood: ({ code: string } & Record<string, unknown>)[]; source: string }>("/api/refine", { text, mount: "roof" });
 
 const short = (label: string) => label.split(", ").slice(0, 2).join(", ");
 const here = (r: P3[], origin: P2) => r.map((p) => [...toLocal(origin, [p[0], p[1]]), p[2]] as P3);

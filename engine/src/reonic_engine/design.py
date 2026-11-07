@@ -8,7 +8,7 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 
 from .data import ASSUMED_KWP_PER_MODULE, battery_catalog
-from .energy import simulate
+from .energy import BATTERY_USABLE, FEED_IN_CT_KWH, simulate
 from .models import HP_KWH_PER_KW, HP_SIZES, TREE, _frame, snap
 
 EV_KWH_PER_KM = 0.18
@@ -25,6 +25,7 @@ FOSSIL = ["Gas", "Oil", "OtherNonRenewable"]
 COLS = ["demand_mwh", "price_ct_kwh", "existing_hp", "fossil_heat", "has_solar", "has_storage", "installer_b"]
 MIN_SIMILAR = 30
 UNSURE_BATTERY = 0.8  # below this, tell the planner the battery decision is open
+GUIDE_KWH_PER_UNIT = 1.5  # HTW Berlin 2022: usable kWh per kWp and per MWh of use, at most
 
 
 def place(modules, surfaces):
@@ -75,13 +76,19 @@ class Engine:
         battery = snap(self.battery.predict(xb), d.installer.values, self.catalog)
         return kwp, battery, self.has_battery.predict_proba(xb)[:, 1]
 
-    def similar(self, installer, demand_mwh):
+    def near(self, installer, demand_mwh):
+        """Past expert designs at this installer for homes with about this yearly need."""
         t = self.train[self.train.installer == installer]
         gap = (t.demand_mwh - demand_mwh).abs()
         near = t[gap <= 0.25 * demand_mwh]
         if len(near) < MIN_SIMILAR:
             near = t.loc[gap.nsmallest(MIN_SIMILAR).index]
+        return near
+
+    def similar(self, installer, demand_mwh):
+        near = self.near(installer, demand_mwh)
         sold = near[near.has_battery].battery_kwh.round(1)
+        with_battery = near[near.has_battery].battery_kwh
         return {
             "n": len(near),
             "kwp_low": round(float(near.kwp.quantile(0.1)), 1),
@@ -89,6 +96,9 @@ class Engine:
             "battery_rate": round(float(near.has_battery.mean()) * 100),
             "battery_common": [float(v) for v in sold.value_counts().head(3).index],
             "wallbox_rate": round(float(near.has_wallbox.mean()) * 100),
+            "battery_low": round(float(with_battery.quantile(0.1)), 1) if len(with_battery) else None,
+            "battery_high": round(float(with_battery.quantile(0.9)), 1) if len(with_battery) else None,
+            "learned_from": int((self.train.installer == installer).sum()),
         }
 
     def design(self, i, overrides=None):
@@ -99,16 +109,16 @@ class Engine:
         heat_mwh = i.get("heat_kwh") and i["heat_kwh"] / 1000
 
         # Heat pump: rule, too few sold systems to learn from.
-        hp_kw, hp_wanted = 0.0, heat_type in FOSSIL and bool(heat_mwh)
+        # Heat pump: a rule, too few sold systems to learn from. It enters only when the customer or planner asks (D69).
+        hp_kw, hp_wanted = 0.0, False
+        if o.get("heatpump") is not None and heat_type != "Heatpump":
+            hp_wanted = bool(o["heatpump"])
         if heat_type == "Heatpump":
             reasons.append({"code": "hp_existing"})
         elif hp_wanted:
-            reasons.append({"code": "hp_fossil", "heat_mwh": round(heat_mwh, 1),
-                            "kw": float(HP_SIZES[np.abs(heat_mwh * 1000 / HP_KWH_PER_KW - HP_SIZES).argmin()])})
+            reasons.append({"code": "hp_asked", "heat_mwh": round(heat_mwh or 15.0, 1)})
         elif heat_type in FOSSIL:
-            reasons.append({"code": "hp_needs_heat"})
-        if o.get("heatpump") is not None and heat_type != "Heatpump":
-            hp_wanted = o["heatpump"]
+            reasons.append({"code": "hp_offer"})
         if hp_wanted:
             need = (heat_mwh or 15.0) * 1000 / HP_KWH_PER_KW
             hp_kw = float(HP_SIZES[np.abs(need - HP_SIZES).argmin()])
@@ -195,6 +205,15 @@ class Engine:
         estimate = simulate(base * 1000, ev_mwh * 1000, hp_mwh * 1000, production * 1000, battery_kwh,
                             i.get("price_ct_kwh", 32.0))
         reasons.append({"code": "balance", "production": round(production, 1), "ratio": round(production / total, 1)})
+
+        near = self.near(i["installer"], total)
+        review = _review(near, similar, kwp_final, battery_kwh, total, has_storage, unsure, p_battery[0])
+        trace = _trace(
+            i=i, o=o, base=base, ev_mwh=ev_mwh, hp_mwh=hp_mwh, total=total, heat_type=heat_type, heat_mwh=heat_mwh,
+            hp_kw=hp_kw, hp_wanted=hp_wanted, surfaces=surfaces, max_modules=max_modules, free_kwp=free_kwp,
+            modules=modules, kwp_final=kwp_final, capped=capped, similar=similar, catalog=catalog,
+            battery_kwh=battery_kwh, p_battery=float(p_battery[0]), has_storage=has_storage, wallbox=wallbox,
+            production=production, estimate=estimate, review=review, typical=typical)
         return {
             "pv": {"modules": modules, "kwp": round(kwp_final, 2), "max_modules": max_modules, "placed": placed,
                    "locked": lock is not None, "capped": bool(capped)},
@@ -206,8 +225,141 @@ class Engine:
                          "blocked": heat_type == "Heatpump"},
             "energy": {"base_mwh": round(base, 2), "ev_mwh": round(ev_mwh, 2), "hp_mwh": round(hp_mwh, 2),
                        "total_mwh": round(total, 2), "production_mwh": round(production, 1), **estimate},
-            "similar": similar, "reasons": reasons, "warnings": warnings,
+            "similar": similar, "reasons": reasons, "warnings": warnings, "trace": trace, "review": review,
         }
+
+
+def _num(v, digits=1):
+    v = v + 1e-9 if v >= 0 else v - 1e-9  # round halves up, as the screen does: 11.25 shows as 11.3 in both
+    return f"{v:,.{digits}f}".rstrip("0").rstrip(".") if digits else f"{v:,.0f}"
+
+
+def _review(near, similar, kwp, battery_kwh, total_mwh, has_storage, unsure, p_battery):
+    """The reviewer: rules and similar homes, never a language model. It notes, it does not forbid."""
+    notes = []
+    n = len(near)
+    share_below = round(float((near.kwp < kwp - 1e-6).mean()) * 100)
+    if kwp > similar["kwp_high"]:
+        notes.append({"code": "pv_high", "level": "warn", "on": "pv",
+                      "text": f"{_num(kwp)} kWp is larger than {share_below}% of {n} similar homes at this installer "
+                              f"(most chose {_num(similar['kwp_low'])}–{_num(similar['kwp_high'])} kWp)."})
+    elif kwp < similar["kwp_low"]:
+        notes.append({"code": "pv_low", "level": "warn", "on": "pv",
+                      "text": f"{_num(kwp)} kWp is smaller than {100 - share_below}% of {n} similar homes at this installer "
+                              f"(most chose {_num(similar['kwp_low'])}–{_num(similar['kwp_high'])} kWp)."})
+    sold = near[near.has_battery].battery_kwh
+    if battery_kwh and len(sold):
+        if similar["battery_high"] is not None and battery_kwh > similar["battery_high"]:
+            notes.append({"code": "battery_high", "level": "warn", "on": "battery",
+                          "text": f"{_num(battery_kwh)} kWh is larger than {round(float((sold < battery_kwh).mean()) * 100)}% "
+                                  f"of batteries sold in similar homes (most {_num(similar['battery_low'])}–{_num(similar['battery_high'])} kWh)."})
+        elif similar["battery_low"] is not None and battery_kwh < similar["battery_low"]:
+            notes.append({"code": "battery_low", "level": "warn", "on": "battery",
+                          "text": f"{_num(battery_kwh)} kWh is smaller than most batteries sold in similar homes "
+                                  f"({_num(similar['battery_low'])}–{_num(similar['battery_high'])} kWh)."})
+        limit = GUIDE_KWH_PER_UNIT * min(kwp, total_mwh)
+        if battery_kwh * BATTERY_USABLE > limit + 1e-6:
+            notes.append({"code": "battery_guide", "level": "note", "on": "battery",
+                          "text": f"Above the independent guideline (HTW Berlin): at most 1.5 kWh usable per kWp and per MWh of use, "
+                                  f"here {_num(limit)} kWh. Experts at both installers usually sell about 1 kWh per kWp."})
+    if not battery_kwh and not has_storage and similar["battery_rate"] >= 80:
+        notes.append({"code": "battery_none", "level": "warn", "on": "battery",
+                      "text": f"No battery, but {similar['battery_rate']}% of similar homes bought one."})
+    if unsure:
+        notes.append({"code": "battery_open", "level": "warn", "on": "battery",
+                      "text": f"The battery decision is open: the engine is {round(p_battery * 100)}% sure. Discuss it with the customer."})
+    return notes
+
+
+def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_wanted, surfaces, max_modules, free_kwp,
+           modules, kwp_final, capped, similar, catalog, battery_kwh, p_battery, has_storage, wallbox, production,
+           estimate, review, typical):
+    """The engine's own steps, in order, each with what went in, how it was decided and what came out.
+    Every number here is the engine's. Input keys match the request's facts, so the screen can show their source."""
+    def fact(key, label, value):
+        return {"key": key, "label": label, "value": value}
+
+    steps = []
+    need_in = [fact("demand_kwh", "House", f"{_num(base * 1000, 0)} kWh")]
+    how = ["The house's yearly use"]
+    if ev_mwh:
+        need_in.append(fact("ev_km", "Car", f"{_num(i.get('ev_km', 0), 0)} km"))
+        how.append(f"car at {EV_KWH_PER_KM} kWh per km")
+    if hp_mwh:
+        need_in.append(fact("heat_kwh", "Heat", f"{_num((heat_mwh or 15.0) * 1000, 0)} kWh"))
+        how.append(f"heat pump: heat ÷ {HEAT_PUMP_COP}")
+    parts = [f"{_num(base)} house"] + ([f"{_num(ev_mwh)} car"] if ev_mwh else []) + ([f"{_num(hp_mwh)} heat pump"] if hp_mwh else [])
+    steps.append({"id": "need", "title": "Yearly need", "kind": "rule", "inputs": need_in, "how": ", ".join(how) + ".",
+                  "result": f"{_num(total)} MWh a year" + (f" ({' + '.join(parts)})" if len(parts) > 1 else "")})
+
+    if surfaces:
+        best = max((s.get("kwh_per_kwp") or 0) for s in surfaces)
+        steps.append({"id": "roof", "title": "Roof", "kind": "measured",
+                      "inputs": [fact("surfaces", "Surfaces", f"{len(surfaces)} measured")],
+                      "how": "Modules of 1.13 × 1.76 m fitted to each measured surface, 40 cm from the edges. Yield from PVGIS sun and measured shade.",
+                      "result": f"{max_modules} modules fit ({_num(max_modules * ASSUMED_KWP_PER_MODULE)} kWp). Best surface {_num(best, 0)} kWh per kWp."})
+    else:
+        steps.append({"id": "roof", "title": "Roof", "kind": "input", "inputs": [],
+                      "how": "No measured roof.", "result": "No area limit. Check the roof before quoting."})
+
+    pv_in = [fact(None, "Need", f"{_num(total)} MWh"), fact("installer", "Installer", "catalog and style")]
+    if o.get("modules") is not None:
+        pv_res = f"You fixed {modules} modules ({_num(kwp_final)} kWp). The model alone would choose {_num(free_kwp)} kWp."
+        by = "planner"
+    elif capped:
+        pv_res = f"The model wants {_num(free_kwp)} kWp, the roof allows {max_modules} modules: {_num(kwp_final)} kWp."
+        by = "engine"
+    else:
+        pv_res = f"{modules} modules, {_num(kwp_final)} kWp."
+        by = "engine"
+    steps.append({"id": "pv", "title": "Solar size", "kind": "learned", "by": by, "inputs": pv_in,
+                  "how": f"Learned from {similar['learned_from']} past expert designs at this installer. More need never gives a smaller system.",
+                  "result": pv_res,
+                  "context": f"In {similar['n']} similar homes, 8 in 10 experts chose {_num(similar['kwp_low'])}–{_num(similar['kwp_high'])} kWp."})
+
+    sizes = ", ".join(_num(c) for c in catalog)
+    if o.get("battery_kwh") is not None:
+        b_res, by = (f"You chose {_num(battery_kwh)} kWh." if battery_kwh else "You chose no battery."), "planner"
+    elif has_storage:
+        b_res, by = "The home already has a battery, so none is added.", "engine"
+    elif battery_kwh:
+        b_res, by = f"{_num(battery_kwh)} kWh ({_num(battery_kwh / kwp_final)} kWh per kWp). The engine is {round(p_battery * 100)}% sure a battery belongs here.", "engine"
+    else:
+        b_res, by = f"No battery. The engine is {round((1 - p_battery) * 100)}% sure it does not belong here.", "engine"
+    steps.append({"id": "battery", "title": "Battery", "kind": "learned", "by": by,
+                  "inputs": [fact(None, "Solar", f"{_num(kwp_final)} kWp"), fact("has_storage", "Existing battery", "yes" if has_storage else "no")],
+                  "how": f"Learned from past designs: whether to add one, and how large, rounded to sizes this installer sells ({sizes} kWh). More solar never gives a smaller battery.",
+                  "result": b_res,
+                  "context": f"{similar['battery_rate']}% of similar homes bought one" +
+                             (f", most {_num(similar['battery_low'])}–{_num(similar['battery_high'])} kWh." if similar["battery_low"] is not None else ".")})
+
+    if heat_type == "Heatpump":
+        hp_res = "The home already has one."
+    elif hp_wanted:
+        hp_res = f"{_num(hp_kw)} kW, from {_num((heat_mwh or 15.0) * 1000, 0)} kWh of heat at {HP_KWH_PER_KW:,} full-load hours." + ("" if heat_mwh else " Heat use is a stand-in.")
+    elif heat_type in FOSSIL:
+        hp_res = "Not in the design: nobody asked for one. Offered as an alternative."
+    else:
+        hp_res = "Not in the design."
+    steps.append({"id": "heatpump", "title": "Heat pump", "kind": "rule", "by": "planner" if o.get("heatpump") is not None else "engine",
+                  "inputs": [fact("heating", "Heating", heat_type or "unknown"), fact("heat_kwh", "Heat", f"{_num(heat_mwh * 1000, 0)} kWh" if heat_mwh else "unknown")],
+                  "how": "A rule, not learned: only 17 past projects sold one. Added only when the customer or you ask. A room-by-room heat load is needed before ordering.",
+                  "result": hp_res})
+
+    steps.append({"id": "wallbox", "title": "Wallbox", "kind": "rule", "by": "planner" if o.get("wallbox") is not None else "engine",
+                  "inputs": [fact("ev", "Electric car", "yes" if i.get("ev") else "no")],
+                  "how": "Added when there is an electric car.", "result": "Included." if wallbox else "Not included."})
+
+    steps.append({"id": "energy", "title": "Energy check", "kind": "physics",
+                  "inputs": [fact(None, "Production", f"{_num(production)} MWh"), fact("price_ct_kwh", "Price", f"{_num(i.get('price_ct_kwh', 32.0))} ct")],
+                  "how": f"One year hour by hour, with assumed household, car and heat profiles and {FEED_IN_CT_KWH} ct feed-in. An estimate, not a measurement.",
+                  "result": f"Makes {_num(production)} MWh, {_num(production / total)} times the need. About {estimate['self_sufficiency_pct']}% of the need from own power, about €{estimate['saving_eur']:,} saved a year."})
+
+    warn = [r for r in review if r["level"] == "warn"]
+    steps.append({"id": "review", "title": "Review", "kind": "rule", "inputs": [],
+                  "how": "Each size compared with what experts chose in similar homes, and with independent guidelines.",
+                  "result": f"{len(warn)} {'point' if len(warn) == 1 else 'points'} to look at." if warn else "Nothing unusual against similar homes."})
+    return steps
 
 
 def engine_predictor(train, test, catalog):

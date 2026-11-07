@@ -57,9 +57,24 @@ def test_no_new_heat_pump_where_one_exists(engine):
     assert not d["heatpump"]["included"] and d["heatpump"]["blocked"]
 
 
-def test_fossil_heating_gets_a_sized_heat_pump_that_raises_demand(engine):
-    d = engine.design({**HOME, "heating": "Gas", "heat_kwh": 20000})
+def test_heat_pump_only_when_asked_then_sized_and_raises_demand(engine):
+    home = {**HOME, "heating": "Gas", "heat_kwh": 20000}
+    assert not engine.design(home)["heatpump"]["included"]
+    d = engine.design(home, {"heatpump": True})
     assert d["heatpump"]["kw"] == 7 and d["energy"]["total_mwh"] > 6
+
+
+def test_trace_follows_the_steps_and_quotes_the_design(engine):
+    d = engine.design({**HOME, "ev": True, "ev_km": 10000, "surfaces": [{"kind": "roof", "max_modules": 30, "kwh_per_kwp": 1000}]})
+    assert [s["id"] for s in d["trace"]] == ["need", "roof", "pv", "battery", "heatpump", "wallbox", "energy", "review"]
+    assert f"{d['pv']['modules']} modules" in d["trace"][2]["result"]
+    assert {"demand_kwh", "ev_km"} <= {f["key"] for f in d["trace"][0]["inputs"]}
+
+
+def test_reviewer_notes_an_oversized_battery_without_changing_it(engine):
+    d = engine.design(HOME, {"modules": 10, "battery_kwh": 30})
+    assert d["battery"]["kwh"] == 30
+    assert {"battery_high", "battery_guide"} <= {r["code"] for r in d["review"]}
 
 
 def test_other_country_and_non_roof_warn(engine):

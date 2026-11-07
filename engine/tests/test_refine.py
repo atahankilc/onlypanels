@@ -74,3 +74,7 @@ def test_claude_failure_falls_back_to_rules(monkeypatch):
     monkeypatch.setattr("reonic_engine.refine.claude", lambda text: 1 / 0)
     r = refine("Araba alıyorlar")
     assert r["source"] == "rules" and r["inputs"]["ev"] is True
+
+
+def test_do_not_want_a_battery_removes_it():
+    assert refine("they do not want a battery")["overrides"] == {"battery_kwh": 0}

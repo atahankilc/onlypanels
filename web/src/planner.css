@@ -43,3 +43,29 @@
 .tasks b { display: block; font-weight: 600; } .tasks small { display: block; color: var(--hud-ink-2); font-size: 12.5px; }
 .stage.plan .pin { display: none; }
 .facts .span { grid-column: 1 / -1; margin: 0; }
+
+/* Decision trace: one row per engine step, opened for what went in and how. */
+.trace { list-style: none; margin: 0; padding: 0; counter-reset: none; }
+.trace > li { max-width: none; margin: 0; border-bottom: 1px solid var(--hud-line); transition: background 0.4s; }
+.trace > li.lit { background: color-mix(in srgb, var(--hud-route) 12%, transparent); }
+.trace-head { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 24px 132px 1fr; gap: 10px; align-items: baseline; padding: 10px 4px; cursor: pointer; font-size: 13.5px; }
+.trace-head:focus-visible { outline: 2px solid var(--hud-route); outline-offset: -2px; border-radius: 8px; }
+.trace-head > i { font: 500 11px var(--font-mono); font-style: normal; color: var(--hud-ink-3); }
+.trace-title { display: flex; flex-direction: column; gap: 3px; } .trace-title b { font-weight: 600; }
+.trace-result { color: var(--hud-ink); }
+.kind { align-self: flex-start; font: 500 9.5px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; font-style: normal; color: var(--hud-ink-3); }
+.kind.learned { color: var(--hud-route); } .kind.measured { color: var(--hud-live); } .kind.physics { color: var(--hud-warn); } .kind.you { color: var(--hud-route); }
+.trace-body { padding: 0 4px 12px 34px; font-size: 13px; color: var(--hud-ink-2); display: flex; flex-direction: column; gap: 6px; }
+.trace-body p { margin: 0; max-width: none; } .trace-context { color: var(--hud-ink); }
+.trace-in { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.trace-in li { margin: 0; display: flex; gap: 6px; align-items: baseline; padding: 4px 9px; border-radius: 999px; background: var(--hud-fill); }
+.trace-in b { font-weight: 600; color: var(--hud-ink); }
+.trace-in em { font: 500 9.5px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; font-style: normal; color: var(--hud-ink-3); }
+.trace-in em.assumed { color: var(--hud-warn); } .trace-in em.planner { color: var(--hud-route); } .trace-in em.measured { color: var(--hud-live); }
+
+/* What a change did. */
+.change { padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--hud-route) 10%, var(--hud-fill)); font-size: 13px; }
+.change header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; } .change header b { flex: 1; font-weight: 600; }
+.change table { width: 100%; border-collapse: collapse; } .change th, .change td { padding: 3px 8px 3px 0; text-align: left; font-weight: 400; }
+.change th { color: var(--hud-ink-2); width: 76px; } .change td:nth-child(3) { color: var(--hud-ink-3); width: 14px; } .change td:last-child { color: var(--hud-ink-2); }
+.change p { margin: 0; color: var(--hud-ink-2); }
