@@ -65,6 +65,4 @@ Hourly simulation for one reference year using public inputs: a standard load pr
 | `api/` | FastAPI service |
 | `web/` | Frontend |
 | `scripts/` | Repeatable data and training commands |
-| `notebooks/` | Exploration only, cleared of outputs before commit |
-| `pitch/` | Deck, demo recording notes |
 | `data/`, `models/` | Local only, gitignored |

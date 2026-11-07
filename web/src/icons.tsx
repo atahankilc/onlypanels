@@ -9,10 +9,7 @@ export const Minus = path("M5 12h14");
 export const Locate = path("M20 4L4 11l7 2 2 7z");
 export const Info = path("M12 11v6M12 7.5v.01M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z");
 export const Needle = path("M12 3l4 9h-8zM8 12l4 9 4-9");
-export const Up = path("M12 19V5M6 11l6-6 6 6");
-export const Down = path("M12 5v14M6 13l6 6 6-6");
 export const Back = path("M15 6l-6 6 6 6");
-export const Home = path("M4 11l8-7 8 7M6 10v9h12v-9");
 export const Photo = path("M4 6h16v12H4zM4 15l5-4 4 3 3-2 4 3");
 export const Mark = ({ size = 28 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

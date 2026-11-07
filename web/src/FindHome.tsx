@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, allRoofs, sunOf } from "./api";
+import { Answers, NO_ANSWERS, Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, allRoofs, sunOf } from "./api";
 import { P2, P3, toLocal } from "./geometry";
 import HomeMap, { Face, Picked, Step, letter } from "./HomeMap";
 import { Close, Photo, Search } from "./icons";
-import Review from "./Review";
+import Review, { Stage } from "./Review";
 import { Button, IconButton } from "./ui";
 
 const short = (label: string) => label.split(", ").slice(0, 2).join(", ");
@@ -30,6 +30,8 @@ export default function FindHome({ dark }: { dark: boolean }) {
   const [face, setFace] = useState<Face | null>(null); // the roof surface under the pointer, on the map or in the list
   const [look, setLook] = useState<{ id: string } | null>(null);
   const [view, setView] = useState<View>({ layer: "photo", moment: null });
+  const [stage, setStage] = useState<Stage>("roof");
+  const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
   const [picks, setPicks] = useState<string[] | null>(null); // null: every roof, until the user changes something
   const typed = useRef("");
   const asked = useRef("");
@@ -90,7 +92,7 @@ export default function FindHome({ dark }: { dark: boolean }) {
   return (
     <main className={`stage ${step}`}>
       <HomeMap dark={dark} buildings={buildings} step={step} focus={focus} aerial={aerial} onPick={step === "pick" ? toggle : undefined}
-        open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={view} chosen={step === "review" ? chosen : []} onToggle={toggleSurface} />
+        open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={view} chosen={step === "review" ? chosen : []} onToggle={toggleSurface} editing={stage === "roof"} />
       {step === "pick" && <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</Button>}
       {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
@@ -120,7 +122,7 @@ export default function FindHome({ dark }: { dark: boolean }) {
         <div className="panelfoot"><Button variant="solid" size="lg" wide disabled={waiting} onClick={() => setWaiting(true)}>{waiting ? "Getting your roofs ready…" : "Continue"}</Button></div>
       </aside>}
 
-      {step === "review" && <Review buildings={buildings} goTo={goTo} face={face} setFace={setFace} view={view} setView={setView} chosen={chosen} toggle={toggleSurface} reset={() => setPicks(null)} back={() => { setFace(null); setStep("pick"); }} />}
+      {step === "review" && <Review stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} goTo={goTo} face={face} setFace={setFace} view={view} setView={setView} chosen={chosen} toggle={toggleSurface} reset={() => setPicks(null)} back={() => { setFace(null); setStep("pick"); }} />}
     </main>
   );
 }

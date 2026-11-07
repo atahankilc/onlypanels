@@ -40,7 +40,7 @@ type Props = {
   buildings: Selected[]; step: Step; focus: P2 | null; aerial: boolean; onPick?: (b: Picked) => void;
   open: string | null; near: string | null; face: Face | null; look: { id: string } | null;
   onFace: (f: Face | null) => void; onOpen: (id: string) => void;
-  view: View; chosen: string[]; onToggle: (key: string) => void; dark: boolean;
+  view: View; chosen: string[]; onToggle: (key: string) => void; dark: boolean; editing: boolean;
 };
 
 // What changes with the theme on the map itself. Everything else comes from the base style.
@@ -227,7 +227,7 @@ const edgeFade = (zoom: number) => {
 type OnMap = { scene: THREE.Scene; at: P2; done: boolean };
 type Spot = { id: string; square: string };
 
-export default function HomeMap({ buildings, step, focus, aerial, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, dark }: Props) {
+export default function HomeMap({ buildings, step, focus, aerial, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, dark, editing }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const models = useRef<{ scene: THREE.Scene; at: P2; id: string; polys: Poly[]; surfaces: { s: SunSurface; poly: number }[]; skins: ReturnType<typeof skinOf>[]; ghosts: THREE.Mesh }[]>([]); // one per building, each around its own origin
@@ -246,8 +246,8 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   const [bearing, setBearing] = useState(0);
   const spot = useRef<maplibregl.Marker | null>(null);
   const pins = useRef<maplibregl.Marker[]>([]);
-  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, dark });
-  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, dark };
+  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, dark, editing });
+  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, dark, editing };
 
   const locateMe = () => navigator.geolocation?.getCurrentPosition((p) => {
     const m = map.current, at: P2 = [p.coords.longitude, p.coords.latitude];
@@ -591,6 +591,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     };
     m.on("click", (e) => {
       if (live.current.step === "review") {
+        if (!live.current.editing) return; // surfaces are changed on the roof step only
         const found = faceAt(e.point), b = live.current.buildings.find((x) => x.id === found?.building);
         const surface = b?.sun?.surfaces.find((x) => polyOf(b, x) === found?.poly);
         if (b && surface) live.current.onToggle(surfaceKey(b, surface));
@@ -615,7 +616,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       frame = requestAnimationFrame(() => {
         frame = 0;
         if (live.current.step === "review") {
-          const found = faceAt(e.point);
+          const found = live.current.editing ? faceAt(e.point) : null;
           m.getCanvas().style.cursor = found ? "pointer" : "";
           live.current.onFace(found);
           return;

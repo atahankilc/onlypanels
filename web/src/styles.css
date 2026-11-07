@@ -48,8 +48,7 @@ ul, ol { margin: 0; padding-left: 18px; } li { margin-bottom: 5px; max-width: 70
 h2, h3 { margin: 0 0 10px; font: 500 10.5px/1.4 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--hud-ink-2); }
 h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015em; color: var(--hud-ink); text-transform: none; }
 .muted { color: var(--hud-ink-2); } .small { font-size: 12.5px; line-height: 1.45; }
-.warn, .warn-text { color: var(--hud-warn); } .error { color: var(--hud-bad); }
-.intro { color: var(--hud-ink-2); margin: 0 0 14px; }
+.error { color: var(--hud-bad); }
 
 /* ---------- top line ---------- */
 .topbar { position: fixed; z-index: 5; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 16px 0 24px; pointer-events: none; }
@@ -108,6 +107,14 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .sunrow { display: flex; gap: 16px; animation: rise 0.3s var(--ease); }
 .sunrow .field { flex: 1; min-width: 0; margin: 0; }
 .source { margin: 0; padding: 12px 18px 16px; }
+.ask { padding: 16px 18px; }
+.ask > p { margin: 0 0 14px; }
+.ask h3 { margin: 16px 0 8px; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.review { display: grid; grid-template-columns: auto 1fr auto; gap: 10px 12px; align-items: center; margin: 0 0 14px; }
+.review dt { color: var(--hud-ink-2); }
+.review dd { margin: 0; }
+.stepnav { position: sticky; bottom: 0; display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--hud-line); background: var(--hud-base); }
 .panel h3 { margin-bottom: 8px; font: 600 14px var(--font-ui); letter-spacing: 0; text-transform: none; color: var(--hud-ink); }
 .picked { list-style: none; margin: 0; padding: 0 10px 0 18px; max-height: 50dvh; overflow-y: auto; }
 .picked li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; margin: 0; max-width: none; border-top: 1px solid var(--hud-line); }

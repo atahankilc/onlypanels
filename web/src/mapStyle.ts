@@ -5,7 +5,7 @@
 // as footprints that rise into 3D blocks (OSM `render_height`). Farmland stays ground colour, so the countryside
 // reads calm instead of patchy. Labels use the tile server's Noto glyphs.
 
-import type { ExpressionSpecification, FillExtrusionLayerSpecification, FilterSpecification, GeoJSONSourceSpecification, LayerSpecification, StyleSpecification } from 'maplibre-gl'
+import type { ExpressionSpecification, FillExtrusionLayerSpecification, FilterSpecification, LayerSpecification, StyleSpecification } from 'maplibre-gl'
 
 export const BUILDINGS_FROM_ZOOM = 14 // OpenMapTiles carries buildings from z14
 export const BUILDINGS_3D_FILTER: FilterSpecification = ['!=', ['get', 'hide_3d'], true] // outlines split into parts draw as their parts
@@ -35,9 +35,6 @@ type Palette = {
   footprintLine: string
   wall: string
   roof: string
-  /** blocks of the buildings that have a model in the app (drawn by MapLanding from their kit footprints) */
-  ours: string
-  oursRoof: string
   label: string
   labelMuted: string
   labelWater: string
@@ -70,8 +67,6 @@ const PALETTE: Record<'light' | 'dark', Palette> = {
     footprintLine: '#1E2026',
     wall: '#15161B',
     roof: '#262830',
-    ours: '#1F3A5C',
-    oursRoof: '#3A6FA8',
     label: '#A2A6AE',
     labelMuted: '#6E727A',
     labelWater: '#4F7894',
@@ -104,8 +99,6 @@ const PALETTE: Record<'light' | 'dark', Palette> = {
     footprintLine: '#D6D4CE',
     wall: '#D9D7D1',
     roof: '#FBFBF9',
-    ours: '#9FC2EC',
-    oursRoof: '#D6E6F8',
     label: '#2E3136',
     labelMuted: '#73777F',
     labelWater: '#3F709A',
@@ -245,122 +238,11 @@ function layers(p: Palette, dark: boolean): LayerSpecification[] {
   ]
 }
 
-/** the accent the buildings with a model are drawn in: walls at the ground, lighter towards the roof. Kit buildings
- * often touch (a campus is one block of wings), so each takes one of MODEL_TONES shades (`tone`, chosen by
- * `modelTones` so touching ones differ); the one under the pointer lights up (`hover`), and `edge` traces every
- * footprint. */
-export const MODEL_TONES = [0, 0.22, -0.2] // + towards white, − towards black
-export const modelColours = (dark: boolean, tone = 0) => {
-  const p = PALETTE[dark ? 'dark' : 'light']
-  const shift = MODEL_TONES[tone] ?? 0
-  return {
-    wall: mix(p.ours, shift),
-    roof: mix(p.oursRoof, shift),
-    hover: mix(p.oursRoof, dark ? 0.45 : 0.35),
-    edge: dark ? mix(p.oursRoof, 0.55) : mix(p.ours, -0.55),
-  }
-}
-
-/** a #RRGGBB colour moved `by` (−1..1) towards black or white */
-export const mix = (colour: string, by: number) => {
-  const target = by >= 0 ? 1 : 0
-  const out = rgb(colour).map((c) => Math.round((c + (target - c) * Math.abs(by)) * 255))
-  return '#' + out.map((c) => c.toString(16).padStart(2, '0')).join('')
-}
-
-/** A tone per building (indices into MODEL_TONES) so that buildings whose outlines touch or nearly touch (within
- * about 4 m) differ: greedy colouring, most-connected first. */
-export function modelTones(outlines: [number, number][][][]): number[] {
-  const NEAR = 0.00004 // degrees: about 4 m north–south, 3 m east–west at Munich's latitude
-  const boxes = outlines.map((rings) => {
-    const points = rings.flat()
-    const xs = points.map((p) => p[0])
-    const ys = points.map((p) => p[1])
-    return points.length ? [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] : null
-  })
-  const touches = (a: number, b: number) => {
-    const [p, q] = [boxes[a], boxes[b]]
-    if (!p || !q) return false
-    if (p[0] > q[2] + NEAR || q[0] > p[2] + NEAR || p[1] > q[3] + NEAR || q[1] > p[3] + NEAR) return false
-    // boxes overlap: touching if some corner of one lies within NEAR of some corner or edge of the other
-    const near = (from: [number, number][][], to: [number, number][][]) =>
-      from.flat().some(([x, y]) =>
-        to.some((ring) => ring.some(([ax, ay], i) => {
-          const [bx, by] = ring[(i + 1) % ring.length]
-          const [dx, dy] = [bx - ax, by - ay]
-          const t = dx || dy ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy))) : 0
-          return Math.hypot(x - (ax + t * dx), y - (ay + t * dy)) <= NEAR
-        })),
-      )
-    return near(outlines[a], outlines[b]) || near(outlines[b], outlines[a])
-  }
-  const links = outlines.map((_, a) => outlines.map((_, b) => b).filter((b) => b !== a && touches(a, b)))
-  const tones: number[] = outlines.map(() => -1)
-  for (const a of outlines.map((_, i) => i).sort((x, y) => links[y].length - links[x].length)) {
-    const taken = new Set(links[a].map((b) => tones[b]))
-    const free = MODEL_TONES.findIndex((_, tone) => !taken.has(tone))
-    tones[a] = free < 0 ? a % MODEL_TONES.length : free
-  }
-  return tones
-}
-
 const BLOCK_OPACITY = 0.95
 const LIGHT_POSITION: [number, number, number] = [1.2, 210, 40]
 const lightIntensity = (dark: boolean) => (dark ? 0.45 : 0.42)
-/** a #RRGGBB colour as sRGB 0..1 */
-export const rgb = (colour: string): [number, number, number] => {
-  const n = parseInt(colour.slice(1), 16)
-  return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]
-}
-
-/** How the map draws its blocks, for the ones drawn around an open building (src/map/neighbours.ts): the same
- * colours, light and opacity, so the two cannot be told apart. */
-export const blockLook = (dark: boolean) => {
-  const p = PALETTE[dark ? 'dark' : 'light']
-  return { wall: p.wall, roof: p.roof, ours: p.ours, oursRoof: p.oursRoof, position: LIGHT_POSITION, intensity: lightIntensity(dark), opacity: BLOCK_OPACITY, ground: rgb(p.land) }
-}
-
-/** the map's ground colour (the model tints what lies under the ground with it) */
-export const groundColour = (dark: boolean) => PALETTE[dark ? 'dark' : 'light'].land
 
 const ATTRIBUTION = '<a href="https://openfreemap.org">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-
-// an organisation's island board (./board.ts): the islands lie on a table a shade off the ground, so where the world
-// was cut away reads as "not on this map", not as empty land
-const TABLE = { dark: '#09090B', light: '#DCDBD5' }
-
-/** The style of an island board: the same layers on the board's own tiles (./boardTiles.ts), the islands' ground
- * on the table, each named island's name over its top left corner, a seam between neighbouring islands and, past its
- * end, how far apart they really are. */
-export function boardStyle(dark: boolean, tiles: string, shapes: GeoJSONSourceSpecification['data']): StyleSpecification {
-  const p = PALETTE[dark ? 'dark' : 'light']
-  const table = TABLE[dark ? 'dark' : 'light']
-  const style = mapStyle(dark)
-  const kind = (name: string): FilterSpecification => ['==', ['get', 'kind'], name]
-  const [land, ...rest] = style.layers
-  return {
-    ...style,
-    sources: { ...style.sources, openmaptiles: { type: 'vector', tiles: [tiles], maxzoom: 14, attribution: ATTRIBUTION }, board: { type: 'geojson', data: shapes } },
-    sky: { ...style.sky, 'sky-color': table, 'horizon-color': table, 'fog-color': table },
-    layers: [
-      { ...land, paint: { 'background-color': table } } as LayerSpecification,
-      { id: 'island', type: 'fill', source: 'board', filter: kind('island'), paint: { 'fill-color': p.land } },
-      ...rest,
-      { id: 'island-edge', type: 'line', source: 'board', filter: kind('island'), paint: { 'line-color': p.footprintLine, 'line-width': 1 } },
-      {
-        id: 'island-name', type: 'symbol', source: 'board', filter: kind('island-name'),
-        layout: { 'text-field': ['get', 'label'], 'text-font': FONT.bold, 'text-size': 14, 'text-anchor': 'bottom-left', 'text-offset': [0, -0.5], 'text-allow-overlap': true },
-        paint: { 'text-color': p.label, 'text-halo-color': table, 'text-halo-width': 2 },
-      },
-      { id: 'seam', type: 'line', source: 'board', filter: kind('seam'), paint: { 'line-color': p.labelMuted, 'line-width': 1.5, 'line-dasharray': [3, 3] } },
-      {
-        id: 'seam-label', type: 'symbol', source: 'board', filter: kind('seam-label'),
-        layout: { 'text-field': ['get', 'label'], 'text-font': FONT.bold, 'text-size': 12, 'text-anchor': ['get', 'anchor'] as never, 'text-offset': ['match', ['get', 'anchor'], 'top', ['literal', [0, 0.6]], ['literal', [-0.6, 0]]] as never, 'text-allow-overlap': true },
-        paint: { 'text-color': p.label, 'text-halo-color': p.halo, 'text-halo-width': 2 },
-      },
-    ],
-  }
-}
 
 export function mapStyle(dark: boolean): StyleSpecification {
   const p = PALETTE[dark ? 'dark' : 'light']

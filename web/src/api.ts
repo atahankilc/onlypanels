@@ -17,6 +17,9 @@ export const surfaceName = (s: SunSurface) => (s.kind === "roof" ? (s.tilt < 8 ?
 /** The solid each surface belongs to: roofs first, then walls. */
 export const polyOf = (b: Selected, s: SunSurface) => (s.kind === "roof" ? s.index : (b.real?.roofs.length ?? 0) + s.index);
 
+/** What the design engine needs from the household, named as it names them. Null is not answered yet. */
+export type Answers = { demand_kwh: number | null; price_ct_kwh: number; has_solar: boolean; has_storage: boolean; heating: string | null; heat_kwh: number | null; ev: boolean | null; ev_km: number };
+export const NO_ANSWERS: Answers = { demand_kwh: null, price_ct_kwh: 32, has_solar: false, has_storage: false, heating: null, heat_kwh: null, ev: null, ev_km: 15000 };
 export type View = { layer: "photo" | "sun"; moment: { month: number; hour: number } | null };
 /** Every roof starts chosen: we have no measure of what a surface yields once obstacles are known, so nothing is ruled out for the user. */
 export const allRoofs = (buildings: Selected[]) => buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => s.kind === "roof").map((s) => surfaceKey(b, s)));

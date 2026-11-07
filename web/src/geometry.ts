@@ -18,22 +18,6 @@ export function normal(r: P3[]): P3 {
   return [(n[0] / l) * s, (n[1] / l) * s, (n[2] / l) * s];
 }
 
-const COMPASS = ["North", "North-east", "East", "South-east", "South", "South-west", "West", "North-west"];
-/** What a roof polygon measures: real area on the slope, its slope and the way it faces. */
-export function faceFacts({ ring, holes }: { ring: P3[]; holes: P3[][] }) {
-  const n = normal(ring), tilt = Math.round((Math.acos(n[2]) * 180) / Math.PI);
-  const m2 = (Math.hypot(...newell(ring)) - holes.reduce((s, h) => s + Math.hypot(...newell(h)), 0)) / 2;
-  const facing = (Math.atan2(n[0], n[1]) * 180 / Math.PI + 360) % 360;
-  return { m2, tilt, side: tilt < 8 ? "Flat" : COMPASS[Math.round(facing / 45) % 8] };
-}
-
-const MIN_FACE_M2 = 6; // smaller pieces are drawn, not listed
-
-/** Roof surfaces worth naming, largest first. Their place in this list is their number on the map. */
-export const listedFaces = (roofs: { ring: P3[]; holes: P3[][] }[]) => roofs
-  .map((p, poly) => ({ poly, ...faceFacts(p), at: p.ring.reduce<P3>((s, q) => [s[0] + q[0] / p.ring.length, s[1] + q[1] / p.ring.length, s[2] + q[2] / p.ring.length], [0, 0, 0]) }))
-  .filter((f) => f.m2 >= MIN_FACE_M2).sort((a, b) => b.m2 - a.m2);
-
 export function inside(p: P2, r: P2[]) {
   let hit = false;
   for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
