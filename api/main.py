@@ -39,6 +39,8 @@ class Surface(BaseModel):
     kind: str = "roof"
     max_modules: int  # from the layout fitted to the measured surface
     kwh_per_kwp: float | None = None
+    tilt: float | None = None  # degrees, for the hourly sun
+    azimuth: float | None = None  # compass degrees, 180 is south
 
 
 class Inputs(BaseModel):

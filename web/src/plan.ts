@@ -58,7 +58,7 @@ export const roofOf = (buildings: Selected[], installed: string[]): Spot[] => bu
 
 export const design = (i: Inputs, o: Overrides, roof: Spot[], off: string[]) => {
   const use = roof.filter((r) => r.fits > 0 && !off.includes(r.key));
-  return post<Design>("/api/design", { inputs: { ...i, surfaces: use.map((r) => ({ max_modules: r.fits, kwh_per_kwp: r.yield_ })) }, overrides: o })
+  return post<Design>("/api/design", { inputs: { ...i, surfaces: use.map((r) => ({ max_modules: r.fits, kwh_per_kwp: r.yield_, tilt: r.s.tilt, azimuth: r.s.azimuth })) }, overrides: o })
     .then((d) => ({ d, panels: Object.fromEntries(use.map((r, k) => [r.key, Math.min(r.fits, d.pv.placed?.[k] ?? 0)])) as Record<string, number> }));
 };
 export const refine = (text: string) => post<{ inputs: Partial<Inputs>; overrides: Overrides; understood: ({ code: string } & Record<string, unknown>)[]; source: string }>("/api/refine", { text, mount: "roof" });

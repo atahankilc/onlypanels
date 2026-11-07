@@ -8,7 +8,7 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 
 from .data import ASSUMED_KWP_PER_MODULE, battery_catalog
-from .energy import BATTERY_USABLE, FEED_IN_CT_KWH, simulate
+from .energy import BATTERY_USABLE, FEED_IN_CT_KWH, simulate, sun_shape
 from .models import HP_KWH_PER_KW, HP_SIZES, TREE, _frame, snap
 
 EV_KWH_PER_KM = 0.18
@@ -253,7 +253,7 @@ class Engine:
                 for n, s in zip(placed, surfaces)) / 1000
             reasons.append({"code": "site_sun", "kwh": round(production * 1000 / kwp_final)})
         estimate = simulate(base * 1000, ev_mwh * 1000, hp_mwh * 1000, production * 1000, battery_kwh,
-                            i.get("price_ct_kwh", 32.0))
+                            i.get("price_ct_kwh", 32.0), sun=sun_shape(surfaces, placed))  # real weather years, this roof's directions
         reasons.append({"code": "balance", "production": round(production, 1), "ratio": round(production / total, 1)})
 
         near = self.near(i["installer"], total)
