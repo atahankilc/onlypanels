@@ -105,7 +105,7 @@ What this shows:
 - **"No battery" is rarely found:** recall is 5% to 10%.
 - **Heat pump rule:** finds 7 of 8 dev projects, but only 37% of its recommendations match a sold heat pump.
 
-Sensible reaction checks on 192 unseen homes: adding a car never shrinks PV (100%) and grows it in 96.9%; never shrinks the battery (99.5%); a heat pump never shrinks PV (100%); more PV never shrinks the battery (100%); area limits hold (100%).
+Sensible reaction checks on 192 unseen homes: adding a car never shrinks PV (100%) and grows it in 97.4%; never shrinks the battery (98.4%); a heat pump never shrinks PV (100%); more PV never shrinks the battery (100%); area limits hold (100%).
 
 ## "No battery" decisions
 
