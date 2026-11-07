@@ -28,6 +28,12 @@
 .seg button.on { background: var(--hud-solid); color: var(--hud-solid-ink); font-weight: 600; }
 .seg button:disabled { opacity: 0.4; cursor: default; }
 
+/* Demo tooling, not product UI: it must never read as part of the app. */
+.seg-dev { align-items: center; border: 1px dashed var(--hud-warn); background: var(--hud-land); }
+.seg-dev::before { content: "DEV"; padding: 0 6px 0 10px; font: 600 10.5px var(--font-mono); letter-spacing: 0.1em; color: var(--hud-warn); }
+.seg-dev button { padding: 0 10px; color: var(--hud-warn); font: 500 11px var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; }
+.seg-dev button.on { background: var(--hud-warn); color: var(--hud-land); }
+
 .field { display: block; margin-bottom: 14px; }
 .field-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; font-size: 13px; color: var(--hud-ink-2); }
 .field-label b { font: 500 13px var(--font-mono); color: var(--hud-ink); }

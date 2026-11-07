@@ -40,6 +40,8 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 /* ---------- top line ---------- */
 .topbar { position: fixed; z-index: 5; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 16px 0 24px; pointer-events: none; }
 .topbar > * { pointer-events: auto; }
+.blank { display: grid; place-items: center; min-height: 100dvh; }
+.blank p { margin: 0; }
 .logo { display: flex; align-items: center; gap: 12px; text-shadow: 0 1px 12px var(--hud-land); }
 .logo h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
 
