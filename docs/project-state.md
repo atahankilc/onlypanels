@@ -3,7 +3,7 @@
 Living document. Update it whenever the phase, blockers or next steps change.
 
 **Last updated:** 2026-11-07, evening
-**Phase:** Homeowner starts from a 3D view of the home. App (5173) holds the homeowner and planner flow. Back office (5174) holds analysis, expert comparison and results.
+**Phase:** Homeowner starts from a 3D view of the home. App (5173) holds the homeowner and planner flow. The back office was removed (D38), so expert comparison and results have no screen now.
 **Deadline:** Sunday 8 November 2026, 15:00
 
 ## Done
@@ -14,7 +14,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - Proposed architecture, evaluation plan, tool plan, demo script
 - `engine/`: dataset, fixed customer-grouped split, predictors, scoring, tests. Scores in `docs/data/findings.md`
 - 3D site step (D33 to D36): address search, click the house, roof slope and ridge, sun per surface from PVGIS, ranked surfaces, "not here", garden drawing, garage by click, panels on the roof, aerial photo in Bavaria. Shown to homeowner and planner
-- App and back office restyled after Steward (D37)
+- App restyled after Steward (D37)
 
 ## Not done
 
@@ -48,7 +48,7 @@ Data needs research is in `docs/data-needs.md`, split by planner and homeowner. 
 
 ## Focus
 
-Core first (D18): accurate decisions on unseen projects, shown in a plain back-office UI. Everything else waits in `docs/roadmap.md`.
+Core first (D18): accurate decisions on unseen projects, shown in the app. Everything else waits in `docs/roadmap.md`.
 
 ## Risks
 

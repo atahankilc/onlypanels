@@ -9,7 +9,7 @@ Order confirmed by the user (D18). Do not start a later phase until the one befo
 - Engine: complete coupled design with a recommended value and range
 - Refinement: change an input or component and get an updated design
 - Short explanation of why
-- Plain back-office UI: enter a home, see the design, refine it, compare with the expert, see overall scores
+- Plain UI: enter a home, see the design, refine it, compare with the expert, see overall scores
 
 ## Phase 2: stretch goals in the brief
 

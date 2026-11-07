@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { Request, START } from "./api";
 import Homeowner from "./Homeowner";
-import { Mark, Out, Undo } from "./icons";
+import { Mark, Undo } from "./icons";
 import Planner from "./Planner";
 
 const KEY = "energy-desk-v1";
-const BACK_OFFICE = "http://127.0.0.1:5174";
 
 // Made-up example requests, so the planner's inbox is not empty.
 const EXAMPLES: Request[] = [
@@ -54,7 +53,6 @@ export default function App() {
               </button>
             ))}
           </div>
-          <a className="pill glass" href={BACK_OFFICE}>Back office<Out size={14} /></a>
           <button className="round glass big" aria-label="Reset demo" title="Reset demo" onClick={() => { setSaved({ requests: EXAMPLES, mine: null }); setOpenId(null); }}><Undo size={18} /></button>
         </div>
       </header>

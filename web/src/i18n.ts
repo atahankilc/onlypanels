@@ -1,7 +1,7 @@
 type Params = Record<string, unknown>;
 
 const en = {
-  title: "Energy Design Desk", backOffice: "Back office",
+  title: "Energy Design Desk",
   design: "Design", compare: "Compare with expert", results: "Overall results",
   home: "Home facts", installer: "Installer catalog", installerA: "Installer A", installerB: "Installer B",
   country: "Country", Germany: "Germany", Austria: "Austria", Switzerland: "Switzerland", Netherlands: "Netherlands", Other: "Other",

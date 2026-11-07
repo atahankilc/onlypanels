@@ -1,6 +1,6 @@
 # Users and flows
 
-Scope is the two users in the brief (page 4) and its three use cases (page 5). The back office on port 5174 shows the same content.
+Scope is the two users in the brief (page 4) and its three use cases (page 5).
 
 ## Users
 

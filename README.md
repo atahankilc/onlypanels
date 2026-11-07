@@ -2,7 +2,7 @@
 
 thinc! München 2026 hackathon. An AI system that learns from real installer decisions and proposes the right mix of PV, battery and heat pump for a home, which planners can refine.
 
-**Status:** First back-office version runs locally. See `docs/project-state.md`.
+**Status:** The app runs locally. See `docs/project-state.md`.
 
 ## Setup
 
@@ -22,12 +22,6 @@ Two terminals, then open http://127.0.0.1:5173
 ```bash
 uv run uvicorn main:app --app-dir api --port 8000
 cd web && pnpm install && pnpm dev
-```
-
-The back office runs separately on http://127.0.0.1:5174
-
-```bash
-cd backoffice && pnpm install && pnpm dev
 ```
 
 ## Docs
