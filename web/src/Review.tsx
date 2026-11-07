@@ -39,12 +39,8 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
   const flow = flowFor(a), here = Math.max(0, flow.indexOf(stage));
   const next = () => go(flow[here + 1]);
   const previous = () => (here ? go(flow[here - 1]) : back());
-  /** An answer with nothing more to ask moves on; one that needs more opens it below. The next page follows the answer as it now stands. */
-  const answer = (change: Partial<Answers>, done = true) => {
-    const after = { ...a, ...change }, list = flowFor(after);
-    setAnswers(after);
-    if (done) go(list[list.indexOf(stage) + 1]);
-  };
+  /** An answer only records itself, and opens below what it needs. Every page moves on with its own Next, never by itself. */
+  const answer = (change: Partial<Answers>, _done = true) => setAnswers({ ...a, ...change });
 
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -64,8 +60,7 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
     {line && <p className="muted">{line}</p>}
     {body}
     {more && <div className="more">{more}</div>}
-    {more ? <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={next}>Next</Button></div>
-      : <div className="quizfoot"><button type="button" className="textlink" onClick={previous}>Back</button></div>}
+    <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={next}>Next</Button></div>
   </>;
   /** A field that helps but can be left empty: it says so in its label. */
   const optional = (label: string) => <>{label}<span className="opt">Optional</span></>;
