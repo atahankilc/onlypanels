@@ -129,7 +129,7 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
           <button type="button" className="row" onClick={() => goTo(b.home)}><span className="tag">{letter(i)}</span><span className="name">{b.label}</span></button>
           <IconButton label={`Remove ${b.label}`} onClick={() => remove(b.home)}><Close /></IconButton>
         </li>)}</ul>
-        <div className="panelfoot"><Button variant="solid" size="lg" wide disabled={waiting} onClick={() => setWaiting(true)}>{waiting ? "Getting your roofs ready…" : "Continue"}</Button></div>
+        <div className="panelfoot"><Button variant="solid" size="lg" wide disabled={waiting} onClick={() => setWaiting(true)}>{waiting ? "Preparing your building…" : "Continue"}</Button></div>
       </aside>}
       </Curtain>}
 

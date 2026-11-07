@@ -204,7 +204,7 @@ function photoOf(b: Selected) {
   const merc = (p: P2): P2 => [(p[0] * 20037508.34) / 180, Math.log(Math.tan(((90 + p[1]) * Math.PI) / 360)) * 6378137];
   const [a, c] = [merc(toLngLat(b.origin, [x0, y0])), merc(toLngLat(b.origin, [x1, y1]))];
   const px = (m: number) => Math.min(4096, Math.max(256, Math.round(m / 0.1))); // the photo is 20 cm: twice that, so resampling does not soften it
-  return { x0, x1, y0, y1, url: `https://geoservices.bayern.de/od/wms/dop/v1/dop20?service=WMS&version=1.3.0&request=GetMap&layers=by_dop20c&styles=&crs=EPSG:3857&bbox=${a[0]},${a[1]},${c[0]},${c[1]}&width=${px(x1 - x0)}&height=${px(y1 - y0)}&format=image/jpeg` };
+  return { x0, x1, y0, y1, url: `https://geoservices.bayern.de/od/wms/dop/v1/dop20?service=WMS&version=1.3.0&request=GetMap&layers=by_dop20c&styles=&crs=EPSG:3857&bbox=${a[0]},${a[1]},${c[0]},${c[1]}&width=${px(x1 - x0)}&height=${px(y1 - y0)}&format=image/png` };
 }
 
 /** The aerial photo of the ground under a building, as a texture lying on its roofs. */
@@ -472,7 +472,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   useEffect(() => {
     const m = new maplibregl.Map({
       container: box.current as HTMLDivElement, style: mapStyle(dark), attributionControl: false, center: MUNICH, zoom: 11, pitch: 30, maxPitch: MAX_PITCH, bearing: 0,
-      maxBounds: VIEW_LIMIT, clickTolerance: 8, canvasContextAttributes: { antialias: true }, reduceMotion: false, boxZoom: false,
+      maxBounds: VIEW_LIMIT, clickTolerance: 8, canvasContextAttributes: { antialias: true }, reduceMotion: false, boxZoom: false, doubleClickZoom: false,
       rotateSpeed: TURN_PER_PX, pitchSpeed: -TILT_PER_PX,
       // By default tiles are cut into smaller ones when zooming in, which cuts every building along a grid.
       zoomLevelsToOverscale: 16,
