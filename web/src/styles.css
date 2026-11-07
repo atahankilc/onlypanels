@@ -10,7 +10,7 @@
   --hud-route: #4B85FF; --hud-live: #7CF0C6; --hud-warn: #FFB547; --hud-sun: #FF9F0A; --hud-bad: #FF8A7A;
   --hud-land: #0F1013;
   --hud-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
-  --btn-sm: 32px; --btn-md: 36px; --btn-lg: 44px;
+  --btn-md: 36px; --btn-lg: 44px;
   --font-ui: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -35,26 +35,25 @@ h2, h3 { margin: 0 0 10px; font: 500 10.5px/1.4 var(--font-mono); letter-spacing
 h1, .big { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015em; color: var(--hud-ink); text-transform: none; }
 .muted { color: var(--hud-ink-2); } .small { font-size: 12.5px; line-height: 1.45; }
 .warn, .warn-text { color: var(--hud-warn); } .error { color: var(--hud-bad); }
-.lead { font-size: 15px; color: var(--hud-ink-2); margin-bottom: 18px; } .intro { color: var(--hud-ink-2); margin: 0 0 14px; }
+.intro { color: var(--hud-ink-2); margin: 0 0 14px; }
 
-/* ---------- buttons: round, three heights ---------- */
+/* ---------- buttons: two heights. 44 floats on the map or is the main action, 36 sits in a panel ---------- */
 .primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--btn-lg); padding: 0 22px; border: 0; border-radius: 999px; background: var(--hud-solid); color: var(--hud-solid-ink); font-weight: 600; font-size: 15px; }
-.primary.small { height: var(--btn-sm); padding: 0 14px; font-size: 13px; }
+.primary.small { height: var(--btn-md); padding: 0 16px; font-size: 13px; }
 .primary.wide { width: 100%; }
-.ghost { display: inline-flex; align-items: center; gap: 6px; height: var(--btn-md); padding: 0 14px; border: 0; border-radius: 999px; background: var(--hud-fill); color: var(--hud-ink); font-weight: 500; font-size: 13px; }
-.ghost.small { height: var(--btn-sm); padding: 0 12px; font-size: 12.5px; white-space: nowrap; }
-.round { display: grid; place-items: center; flex: none; width: var(--btn-sm); height: var(--btn-sm); padding: 0; border: 0; border-radius: 50%; background: var(--hud-fill); color: var(--hud-ink-2); }
+.ghost { display: inline-flex; align-items: center; gap: 6px; height: var(--btn-md); padding: 0 14px; white-space: nowrap; border: 0; border-radius: 999px; background: var(--hud-fill); color: var(--hud-ink); font-weight: 500; font-size: 13px; }
+.round { display: grid; place-items: center; flex: none; width: var(--btn-md); height: var(--btn-md); padding: 0; border: 0; border-radius: 50%; background: var(--hud-fill); color: var(--hud-ink-2); }
 .round.big { width: var(--btn-lg); height: var(--btn-lg); color: var(--hud-ink); }
-.link { border: 0; background: none; color: var(--hud-ink); cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--hud-line-2); }
 @media (hover: hover) {
   .primary:not(:disabled):hover { opacity: 0.88; }
   .ghost:not(:disabled):hover, .round:not(:disabled):hover { background: var(--hud-fill-2); color: var(--hud-ink); }
 }
 .glass { border: 1px solid var(--hud-line); background: var(--hud-glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); }
-.pill { display: inline-flex; align-items: center; gap: 6px; height: var(--btn-lg); padding: 0 16px; border-radius: 999px; font-weight: 500; text-decoration: none; }
 .switch { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--hud-fill); }
 .switch.glass { height: var(--btn-lg); padding: 4px; background: var(--hud-glass); }
-.switch button { border: 0; background: none; padding: 0 16px; min-height: 30px; border-radius: 999px; color: var(--hud-ink-2); font-weight: 500; }
+.switch { height: var(--btn-md); } .switch button { border: 0; background: none; padding: 0 16px; height: 100%; font-size: 13px; border-radius: 999px; color: var(--hud-ink-2); font-weight: 500; }
+.panel section > .ghost + .ghost, .panel .surfaces + .ghost { margin-top: 8px; }
+.panel section > .ghost { margin-right: 6px; margin-top: 8px; }
 .switch button.on { background: var(--hud-solid); color: var(--hud-solid-ink); font-weight: 600; }
 
 /* ---------- top line ---------- */
@@ -68,21 +67,25 @@ h1, .big { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: 
 /* ---------- stage: the map fills the screen, the panel floats on it ---------- */
 .stage { position: fixed; inset: 0; overflow: hidden; }
 .map3d { position: absolute; inset: 0; background: var(--hud-land); }
-.panel { position: absolute; z-index: 2; top: 76px; left: 12px; bottom: 12px; width: 400px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--hud-line); border-radius: 24px; background: rgba(18, 19, 23, 0.93); box-shadow: var(--hud-shadow); } /* no blur: repainting one this large on every map frame makes dragging lag */
+.panel { position: absolute; z-index: 2; top: 132px; left: 12px; width: 400px; max-height: calc(100dvh - 144px); overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--hud-line); border-radius: 24px; background: rgba(18, 19, 23, 0.93); box-shadow: var(--hud-shadow); } /* no blur: repainting one this large on every map frame makes dragging lag */
+.panel.tall { top: 76px; max-height: calc(100dvh - 88px); }
 .panelhead { padding: 18px 18px 14px; }
-.panel > section, .panel > form { padding: 16px 18px; border-top: 1px solid var(--hud-line); }
-.panel > section > :last-child, .panel > form > :last-child { margin-bottom: 0; }
-.finder { display: flex; align-items: center; gap: 10px; height: var(--btn-lg); margin: 12px 0 10px; padding: 0 6px 0 14px; border: 1px solid transparent; border-radius: 999px; background: var(--hud-fill); color: var(--hud-ink-2); transition: border-color 0.2s; }
-.finder:focus-within { border-color: var(--hud-line-2); }
-.finder svg { flex: none; }
-.finder input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--hud-ink); font-weight: 500; font-size: 15px; }
-.finder input::placeholder { color: var(--hud-ink-3); font-weight: 400; }
-.places { list-style: none; padding: 0; margin: 0 0 8px; }
-.places li { margin: 0; max-width: none; }
-.places button { width: 100%; padding: 8px 12px; border: 0; border-radius: 14px; background: none; text-align: left; font-size: 13px; color: var(--hud-ink); }
-.places button:hover { background: var(--hud-fill); }
-.prompt { margin: 0; color: var(--hud-live); font-weight: 500; }
 .panelhead p:last-child { margin-bottom: 0; }
+.panel > section, .panel > form { padding: 16px 18px; border-top: 1px solid var(--hud-line); }
+.panel > section:first-child, .panel > form:first-child { border-top: 0; }
+.panel > section > :last-child, .panel > form > :last-child { margin-bottom: 0; }
+.finder { position: absolute; z-index: 3; top: 76px; left: 12px; width: 400px; }
+.field-pill { display: flex; align-items: center; gap: 10px; height: var(--btn-lg); padding: 0 4px 0 16px; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); color: var(--hud-ink-2); transition: border-color 0.2s; }
+.field-pill:focus-within { border-color: var(--hud-line-2); }
+.field-pill svg { flex: none; }
+.field-pill input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--hud-ink); font-weight: 500; font-size: 15px; text-overflow: ellipsis; }
+.field-pill input::placeholder { color: var(--hud-ink-2); font-weight: 400; }
+.suggest { margin-top: 8px; max-height: min(60dvh, 420px); overflow-y: auto; padding: 6px; border: 1px solid var(--hud-line); border-radius: 22px; background: rgba(24, 25, 30, 0.96); box-shadow: var(--hud-shadow); animation: rise 0.2s var(--ease); }
+.suggest p { margin: 0; padding: 8px 12px; }
+.suggest button { display: block; width: 100%; padding: 8px 12px; border: 0; border-radius: 16px; background: none; text-align: left; }
+.suggest button.on { background: var(--hud-fill); }
+.suggest b { display: block; font-weight: 500; font-size: 14px; }
+.suggest small { display: block; font-size: 12.5px; color: var(--hud-ink-2); }
 
 .bignum { display: flex; align-items: baseline; gap: 8px; margin: 0; font: 600 30px/1.1 var(--font-mono); letter-spacing: -0.02em; }
 .bignum small { font: 400 13px var(--font-ui); letter-spacing: 0; color: var(--hud-ink-2); }
@@ -106,9 +109,10 @@ h1, .big { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: 
 /* on the map */
 .mapbtn.home { right: auto; left: 424px; }
 .mapbtn { position: absolute; z-index: 1; right: 76px; bottom: 16px; display: inline-flex; align-items: center; gap: 8px; height: var(--btn-lg); padding: 0 16px; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); font-weight: 500; }
-.maphint, .mapnote { position: absolute; z-index: 1; left: calc(50% + 206px); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; min-height: var(--btn-lg); padding: 6px 8px 6px 18px; white-space: nowrap; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass-2); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); animation: rise 0.35s var(--ease); }
+.maphint, .mapnote { position: absolute; z-index: 1; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; min-height: var(--btn-lg); padding: 6px 8px 6px 18px; white-space: nowrap; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass-2); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); animation: rise 0.35s var(--ease); }
 .maphint { top: 76px; }
-.mapnote { bottom: 16px; padding: 6px 18px; left: calc(50% + 100px); gap: 5px; }
+.mapnote { bottom: 16px; padding: 4px 4px 4px 18px; }
+.mapnote:not(:has(button)) { padding-right: 18px; }
 .mapnote b { font-weight: 600; }
 @keyframes rise { from { opacity: 0; translate: 0 8px; } }
 .dialog { position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(400px, calc(100vw - 32px)); padding: 26px 24px 20px; text-align: center; border: 1px solid var(--hud-line); border-radius: 24px; background: var(--hud-glass-2); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); }
@@ -164,7 +168,6 @@ tbody th { font-weight: 500; }
 td b { font: 600 14px var(--font-mono); }
 td small { display: block; color: var(--hud-ink-2); font-size: 12px; }
 td input, td select { max-width: 140px; }
-.n { text-align: right; }
 tr.pick { cursor: pointer; }
 tr.pick:hover > * { background: var(--hud-fill); }
 .inbox { margin-top: 16px; }
@@ -209,10 +212,13 @@ summary { cursor: pointer; color: var(--hud-ink-2); margin-bottom: 10px; }
   .stage { position: relative; inset: auto; overflow: visible; }
   .map3d { position: sticky; top: 0; height: 52dvh; }
   .offermap .map3d, .plannermap .map3d { position: absolute; height: 100%; }
-  .panel { position: relative; top: auto; left: auto; bottom: auto; width: 100%; margin-top: -24px; border-width: 1px 0 0; border-radius: 24px 24px 0 0; overflow: visible; }
+  .panel, .panel.tall { position: relative; top: auto; left: auto; bottom: auto; width: 100%; margin-top: -24px; border-width: 1px 0 0; border-radius: 24px 24px 0 0; overflow: visible; }
   .mapbtn { top: calc(52dvh - 84px); bottom: auto; right: auto; left: 12px; }
-  .mapbtn.home { left: 12px; top: 64px; }
-  .maphint { left: 50%; top: 64px; }
+  .mapbtn.home { left: 12px; top: calc(52dvh - 84px); }
+  .mapbtn:not(.home) { left: auto; right: 72px; }
+  .maphint { left: 50%; top: 116px; }
+  .finder { top: 60px; left: 10px; right: 10px; width: auto; z-index: 3; }
+  .panel, .panel.tall { max-height: none; }
   .mapnote { display: none; }
   .map3d .maplibregl-ctrl-bottom-right { padding-bottom: 36px; }
   .map3d .maplibregl-ctrl-compass { display: none; }

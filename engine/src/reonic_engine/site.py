@@ -11,6 +11,8 @@ from functools import lru_cache
 AGENT = "energy-design-desk-demo"
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 REVERSE = "https://nominatim.openstreetmap.org/reverse"
+PHOTON = "https://photon.komoot.io/api/"  # made for search-as-you-type; Nominatim's rules forbid that
+CENTRE_OF_GERMANY = {"lat": 51.1, "lon": 10.4, "zoom": 6}  # ranks German results first without excluding others
 PVGIS = "https://re.jrc.ec.europa.eu/api/v5_3/PVcalc"
 OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
 SYSTEM_LOSS_PCT = 14  # PVGIS default
@@ -41,6 +43,32 @@ def read_place(row):
 
 def geocode(query):
     return [read_place(row) for row in map(json.loads, _search(query.strip()))]
+
+
+def read_photon(feature):
+    p = feature["properties"]
+    street = " ".join(x for x in (p.get("street"), p.get("housenumber")) if x)
+    town = " ".join(x for x in (p.get("postcode"), p.get("city") or p.get("county")) if x)
+    parts = [p.get("name"), street if street != p.get("name") else None, town]
+    lon, lat = feature["geometry"]["coordinates"]
+    return {"label": ", ".join(x for x in parts if x), "lat": lat, "lon": lon,
+            "country": COUNTRIES.get((p.get("countrycode") or "").lower(), "Other"),
+            "bavaria": p.get("state") in ("Bayern", "Bavaria")}
+
+
+@lru_cache(maxsize=512)
+def _suggest(query):
+    params = urllib.parse.urlencode({"q": query, "limit": 6, **CENTRE_OF_GERMANY})
+    return json.dumps(_get(f"{PHOTON}?{params}", 6)["features"])
+
+
+def suggest(query):
+    """Places for a partly typed address. Falls back to Nominatim if Photon is down."""
+    try:
+        places = [read_photon(f) for f in json.loads(_suggest(query.strip()))]
+    except (OSError, KeyError, ValueError):
+        return geocode(query)
+    return list({p["label"]: p for p in places}.values())
 
 
 @lru_cache(maxsize=256)

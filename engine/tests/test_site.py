@@ -1,4 +1,4 @@
-from reonic_engine.site import pvgis_aspect, read_overpass, read_place, read_pvgis
+from reonic_engine.site import pvgis_aspect, read_overpass, read_photon, read_place, read_pvgis
 
 
 def test_compass_bearing_becomes_pvgis_aspect():
@@ -8,6 +8,14 @@ def test_compass_bearing_becomes_pvgis_aspect():
 def test_read_place():
     row = {"display_name": "A street", "lat": "48.1", "lon": "11.6", "address": {"country_code": "de", "state": "Bayern"}}
     assert read_place(row) == {"label": "A street", "lat": 48.1, "lon": 11.6, "country": "Germany", "bavaria": True}
+
+
+def test_read_photon():
+    feature = {"geometry": {"coordinates": [11.6, 48.1]},
+               "properties": {"street": "Hauptstr.", "housenumber": "8", "postcode": "85748", "city": "Garching",
+                              "countrycode": "DE", "state": "Bayern"}}
+    assert read_photon(feature) == {"label": "Hauptstr. 8, 85748 Garching", "lat": 48.1, "lon": 11.6,
+                                    "country": "Germany", "bavaria": True}
 
 
 def test_read_pvgis():

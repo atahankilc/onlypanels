@@ -10,12 +10,21 @@ const INSET = 0.4; // keep clear of roof edges
 const FLAT_TILT = 15, GROUND_TILT = 25;
 const FLAT_ROW_GAP = 1.0, GROUND_ROW_GAP = 1.9; // against rows shading each other
 const MAX_PANELS = 200; // per surface: far above any home system
+const MAX_GABLE_WIDTH_M = 15, MIN_RECT_FILL = 0.85;
+const MIN_SLOPE_DEG = 8; // below this a measured roof counts as flat
 
 export const toLocal = (o: P2, p: P2): P2 => [(p[0] - o[0]) * M_PER_DEG * Math.cos(o[1] * RAD), (p[1] - o[1]) * M_PER_DEG];
 export const toLngLat = (o: P2, p: P2): P2 => [o[0] + p[0] / (M_PER_DEG * Math.cos(o[1] * RAD)), o[1] + p[1] / M_PER_DEG];
 
 export const area = (r: P2[]) => Math.abs(r.reduce((s, p, i) => { const q = r[(i + 1) % r.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2;
 export const centre = (r: P2[]): P2 => [r.reduce((s, p) => s + p[0], 0) / r.length, r.reduce((s, p) => s + p[1], 0) / r.length];
+
+const newell = (r: P3[]): P3 => r.reduce<P3>((n, p, i) => { const q = r[(i + 1) % r.length]; return [n[0] + (p[1] - q[1]) * (p[2] + q[2]), n[1] + (p[2] - q[2]) * (p[0] + q[0]), n[2] + (p[0] - q[0]) * (p[1] + q[1])]; }, [0, 0, 0]);
+/** The plane's normal, pointing up. */
+export function normal(r: P3[]): P3 {
+  const n = newell(r), l = Math.hypot(...n) || 1, s = n[2] < 0 ? -1 : 1;
+  return [(n[0] / l) * s, (n[1] / l) * s, (n[2] / l) * s];
+}
 
 export function inside(p: P2, r: P2[]) {
   let hit = false;
@@ -53,15 +62,15 @@ function clip(r: P2[], o: P2, n: P2) {
   return out;
 }
 
-export type Face = { ring: P3[]; base: number; tilt: number; azimuth: number; side: string; m2: number; panels: P3[][] };
+export type Face = { ring: P3[]; holes?: P3[][]; base: number; tilt: number; azimuth: number; side: string; m2: number; panels: P3[][] };
 const bearing = (n: P2) => (Math.atan2(n[0], n[1]) / RAD + 360) % 360;
 export const compass = (a: number) => ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"][Math.round(a / 45) % 8];
 
 /** Rows of panels inside the ring. u runs along a row, n points down the slope. */
-function grid(ring: P2[], u: P2, n: P2, depth: number, pitch: number, height: (p: P2) => number) {
+function grid(ring: P2[], u: P2, n: P2, depth: number, pitch: number, height: (p: P2) => number, holes: P2[][] = []) {
   const us = ring.map((p) => p[0] * u[0] + p[1] * u[1]), ns = ring.map((p) => p[0] * n[0] + p[1] * n[1]);
   const at = (a: number, b: number): P2 => [a * u[0] + b * n[0], a * u[1] + b * n[1]];
-  const fits = (a: number, b: number) => [[-INSET, -INSET], [PANEL_W + INSET, -INSET], [PANEL_W + INSET, depth + INSET], [-INSET, depth + INSET]].every(([x, y]) => inside(at(a + x, b + y), ring));
+  const fits = (a: number, b: number) => [[-INSET, -INSET], [PANEL_W + INSET, -INSET], [PANEL_W + INSET, depth + INSET], [-INSET, depth + INSET]].every(([x, y]) => { const p = at(a + x, b + y); return inside(p, ring) && !holes.some((h) => inside(p, h)); });
   const u0 = Math.min(...us), u1 = Math.max(...us), mid = (u0 + u1) / 2;
   const rows: P3[][][] = [];
   for (let b = Math.max(...ns) - depth - INSET; b >= Math.min(...ns); b -= pitch) {
@@ -90,16 +99,35 @@ export function pitchedFaces(ring: P2[], eave: number, tilt: number, flip: boole
   });
 }
 
-function southRows(ring: P2[], base: number, tilt: number, gap: number): Face {
+function southRows(ring: P2[], base: number, tilt: number, gap: number, holes: P2[][] = []): Face {
   const depth = PANEL_L * Math.cos(tilt * RAD), rise = Math.tan(tilt * RAD);
- 
-  const n: P2 = [0, -1];
-  const rows = grid(ring, [1, 0], n, depth, depth + gap, () => 0).map((c) => {
+  const rows = grid(ring, [1, 0], [0, -1], depth, depth + gap, () => 0, holes).map((c) => {
     const low = Math.min(...c.map((p) => p[1]));
     return c.map((p) => [p[0], p[1], base + 0.3 + (p[1] - low) * rise] as P3);
   });
-  return { ring: ring.map((p) => [p[0], p[1], base] as P3), base, tilt, azimuth: 180, side: "south", m2: area(ring), panels: rows };
+  const flat = (r: P2[]) => r.map((p) => [p[0], p[1], base] as P3);
+  return { ring: flat(ring), holes: holes.map(flat), base, tilt, azimuth: 180, side: "south", m2: area(ring) - holes.reduce((s, h) => s + area(h), 0), panels: rows };
 }
 
-export const flatFace = (ring: P2[], eave: number) => southRows(ring, eave + 0.05, FLAT_TILT, FLAT_ROW_GAP);
+export const flatFace = (ring: P2[], top: number, holes: P2[][] = []) => southRows(ring, top + 0.15, FLAT_TILT, FLAT_ROW_GAP, holes);
 export const groundFace = (ring: P2[]) => southRows(ring, 0.05, GROUND_TILT, GROUND_ROW_GAP);
+
+/** A gable only makes sense on a plain, narrow footprint. Anything else keeps the map's shape. */
+export function plainShape(ring: P2[]) {
+  const a = longAxis(ring);
+  return a.width <= MAX_GABLE_WIDTH_M && area(ring) / (a.length * a.width) >= MIN_RECT_FILL;
+}
+
+/** A measured roof polygon as a surface panels can go on. */
+export function measuredFace(ring: P3[], holes: P3[][] = []): Face {
+  const n = normal(ring), tilt = Math.acos(n[2]) / RAD;
+  const flat2 = (r: P3[]) => r.map((p) => [p[0], p[1]] as P2);
+  const top = ring.reduce((s, p) => s + p[2], 0) / ring.length;
+  if (tilt < MIN_SLOPE_DEG) return { ...southRows(flat2(ring), top + 0.1, FLAT_TILT, FLAT_ROW_GAP, holes.map(flat2)), ring, holes, side: "flat" };
+  const l = Math.hypot(n[0], n[1]), down: P2 = [n[0] / l, n[1] / l], along: P2 = [-down[1], down[0]];
+  const slope = Math.tan(tilt * RAD), o = ring[0];
+  const z = (p: P2) => o[2] - ((p[0] - o[0]) * down[0] + (p[1] - o[1]) * down[1]) * slope;
+  const depth = PANEL_L * Math.cos(tilt * RAD), azimuth = bearing(down), r2 = flat2(ring), h2 = holes.map(flat2);
+  return { ring, holes, base: Math.min(...ring.map((p) => p[2])), tilt: Math.round(tilt), azimuth, side: compass(azimuth),
+    m2: (area(r2) - h2.reduce((s, h) => s + area(h), 0)) / Math.cos(tilt * RAD), panels: grid(r2, along, down, depth, depth + GAP, (p) => z(p) + 0.12, h2) };
+}

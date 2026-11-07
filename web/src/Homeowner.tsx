@@ -30,9 +30,9 @@ function RequestForm({ add }: { add: (r: Request) => void }) {
   };
   const fossil = i.heating === "Gas" || i.heating === "Oil";
   return (
-    <SitePicker site={site} setSite={setSite} placed={preview?.pv.placed ?? null} note={preview && <><b>{preview.pv.modules} panels</b> would suit your home</>}>
-      {!site && !manual && <section><button type="button" className="ghost small" onClick={() => setManual(true)}>Can't find your home? Continue without the map</button></section>}
-      {(site || manual) && <form className="request" onSubmit={submit}>
+    <SitePicker site={site} setSite={setSite} placed={preview?.pv.placed ?? null} note={preview ? <span><b>{preview.pv.modules} panels</b> would suit your home</span>
+      : !site && !manual ? <><span>Click your house on the map, or search for it</span><button type="button" className="ghost" onClick={() => setManual(true)}>Continue without the map</button></> : null}>
+      {(site || manual) ? <form className="request" onSubmit={submit}>
         <h2>Your energy use</h2>
         <label className="field"><span>How much electricity do you use in a year? (kWh)</span>
           <input type="number" min={500} step={100} required value={i.demand_kwh || ""} onChange={(e) => set("demand_kwh", Number(e.target.value))} />
@@ -54,7 +54,7 @@ function RequestForm({ add }: { add: (r: Request) => void }) {
             <input type="number" min={0} step={5} value={i.area_m2 ?? ""} onChange={(e) => set("area_m2", e.target.value === "" ? null : Number(e.target.value))} /></label>
         </>}
         <button type="submit" className="primary wide">Send my request</button>
-      </form>}
+      </form> : null}
     </SitePicker>
   );
 }
@@ -120,7 +120,7 @@ function Offer({ request, update }: { request: Request; update: (id: string, p: 
   return (
     <main className="stage">
       <HomeMap site={request.site ?? null} placed={(changed ? variant : base).pv.placed} />
-      <aside className="panel">
+      <aside className="panel tall">
       <header className="panelhead">
         <h1>Your home energy offer</h1>
         <p className="muted">From your installer. Here is what they propose and what it means for you.</p>
@@ -164,7 +164,7 @@ function Offer({ request, update }: { request: Request; update: (id: string, p: 
           <p><b>What this change means:</b> {meaning(base, variant)}</p>
           <div className="actions">
             <button className="primary" disabled={asked} onClick={() => update(request.id, { status: "change", change: mine })}>{asked ? "Sent to your installer" : "Ask my installer for this"}</button>
-            <button className="ghost small" onClick={() => setMine(offer)}>Back to my offer</button>
+            <button className="ghost" onClick={() => setMine(offer)}>Back to my offer</button>
           </div>
         </div>}
       </section>}

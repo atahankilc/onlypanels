@@ -4,7 +4,7 @@ import Homeowner from "./Homeowner";
 import { Mark, Undo } from "./icons";
 import Planner from "./Planner";
 
-const KEY = "energy-desk-v1";
+const KEY = "energy-desk-v2";
 
 // Made-up example requests, so the planner's inbox is not empty.
 const EXAMPLES: Request[] = [
@@ -26,16 +26,6 @@ export default function App() {
   const { requests, mine } = saved;
 
   useEffect(() => localStorage.setItem(KEY, JSON.stringify(saved)), [saved]);
-  useEffect(() => {
-    const id = new URLSearchParams(location.search).get("project");
-    if (!id) return;
-    fetch(`/api/projects/${id}`).then((r) => r.json()).then((d) => {
-      const request: Request = { id, title: "Held-out project", from: "planner", status: "draft", inputs: d.inputs, overrides: {} };
-      setSaved((s) => ({ ...s, requests: [request, ...s.requests.filter((r) => r.id !== id)] }));
-      setOpenId(id); setView("planner");
-    }).catch(() => undefined);
-  }, []);
-
   const add = (r: Request, isMine: boolean) => setSaved((s) => ({ requests: [r, ...s.requests], mine: isMine ? r.id : s.mine }));
   const update = (id: string, patch: Partial<Request>) =>
     setSaved((s) => ({ ...s, requests: s.requests.map((r) => (r.id === id ? { ...r, ...patch } : r)) }));

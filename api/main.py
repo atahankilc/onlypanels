@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from reonic_engine.data import load_dataset
 from reonic_engine.design import Engine
 from reonic_engine.refine import refine
-from reonic_engine import site
+from reonic_engine import lod2, site
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 SCORES = Path(__file__).resolve().parents[1] / "data" / "processed" / "scores.json"
@@ -102,7 +102,7 @@ class SunRequest(BaseModel):
 @app.get("/api/site/search")
 def site_search(q: str):
     try:
-        return site.geocode(q)
+        return site.suggest(q)
     except OSError:
         raise HTTPException(502, "Address search is not reachable")
 
@@ -121,6 +121,11 @@ def site_sun(req: SunRequest):
         return site.sun(req.lat, req.lon, [s.model_dump() for s in req.surfaces])
     except (OSError, KeyError, ValueError):
         raise HTTPException(502, "Sun data is not reachable")
+
+
+@app.get("/api/site/real")
+def site_real(lat: float, lon: float, reach: float = 0):
+    return lod2.building_at(lat, lon, reach)
 
 
 @app.get("/api/site/building")

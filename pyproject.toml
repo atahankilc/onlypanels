@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.162.1",
     "numpy",
     "pandas",
+    "pyproj>=3.8.0",
     "python-dotenv>=1.2.4",
     "scikit-learn",
     "uvicorn>=0.54.0",

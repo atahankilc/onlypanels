@@ -1,25 +1,42 @@
-import { ReactNode, useState } from "react";
-import { Building, Place, Site, SiteSurface, Sun, buildingFacts, placeAt, searchPlace, sunFor } from "./api";
+import { ReactNode, useEffect, useRef, useState } from "react";
+import { Building, Place, Poly, Real, RealAnswer, Site, SiteSurface, Sun, buildingFacts, placeAt, realBuilding, searchPlace, sunFor, usedSurfaces } from "./api";
 import HomeMap, { Picked } from "./HomeMap";
 import { Close, Down, Pen, Photo, Search, Turn, Up } from "./icons";
-import { Face, P2, area, centre, flatFace, groundFace, inside, pitchedFaces, toLocal } from "./geometry";
+import { Face, P2, P3, area, centre, flatFace, groundFace, inside, measuredFace, pitchedFaces, plainShape, toLocal } from "./geometry";
 
-const LARGE_M2 = 400; // assume a flat roof above this footprint until told otherwise
+const MIN_ROOF_FACE_M2 = 6, MAX_ROOF_FACES = 6, MAX_ROOF_TILT = 70; // dormers and fragments are drawn, not offered
 const DEFAULT_TILT = 35; // common German pitched roof; an assumption
 const SHADE_DEG = 15, SHADE_REACH_M = 60;
 const MONTHS = "JFMAMJJASOND".split("");
 const key = (s: { tilt: number; azimuth: number }) => `${Math.round(s.tilt)}|${Math.round(s.azimuth)}`;
 
 function surfacesOf(b: Building, old: SiteSurface[]): SiteSurface[] {
-  const faces: Face[] = b.roof === "flat" ? [flatFace(b.ring, b.eave)] : pitchedFaces(b.ring, b.eave, b.tilt, b.flip);
+  const faces: Face[] = b.real ? b.real.faces : b.roof === "flat" ? [flatFace(b.ring, b.eave, b.holes)] : pitchedFaces(b.ring, b.eave, b.tilt, b.flip);
   const label = b.main ? "Roof" : "Other building";
+  const sides = new Map<string, number>();
   return faces.map((f, i) => {
     const id = `${b.id}-${i}`;
     const before = old.find((s) => s.id === id);
     const same = before && key(before) === key(f);
+    const n = (sides.get(f.side) ?? 0) + 1;
+    sides.set(f.side, n);
+    const flat = f.side === "flat" || (!b.real && b.roof === "flat");
     return { ...f, id, owner: b.id, kind: b.main ? "roof" : "carport", wanted: before?.wanted ?? true, sun: same ? before.sun : null,
-      name: b.roof === "flat" ? `${label}, flat` : `${label}, ${f.side} side` };
+      name: `${label}, ${flat ? "flat" : `${f.side} side`}${n > 1 ? ` ${n}` : ""}` };
   });
+}
+
+/** Bavaria's measured building in the site's metres. Big roof polygons become surfaces, the rest is only drawn. */
+function toReal(answer: NonNullable<RealAnswer>, origin: P2, footprint: P2[]): Real {
+  const here = (r: P3[]) => r.map((p) => [...toLocal(origin, [p[0], p[1]]), p[2]] as P3);
+  const polys = (list: { ring: P3[]; holes: P3[][] }[]): Poly[] => list.map((p) => ({ ring: here(p.ring), holes: p.holes.map(here) }));
+  const roofs = polys(answer.main.roofs).map((p) => ({ p, f: measuredFace(p.ring, p.holes) }));
+  const good = roofs.filter((r) => r.f.m2 >= MIN_ROOF_FACE_M2 && r.f.tilt <= MAX_ROOF_TILT && r.f.panels.length > 0).sort((a, b) => b.f.m2 - a.f.m2).slice(0, MAX_ROOF_FACES);
+  // Houses the map drew as one block with this one: they keep their place, as measured.
+  const inBlock = answer.near.filter((b) => { const c = here(b.ground[0].ring).map((p) => [p[0], p[1]] as P2); return inside(centre(c), footprint) || c.filter((p) => inside(p, footprint)).length * 2 >= c.length; });
+  const flat = (b: NonNullable<RealAnswer>["main"]) => b.ground.map((g) => here(g.ring).map((p) => [p[0], p[1]] as P2));
+  return { ground: [...flat(answer.main), ...inBlock.flatMap(flat)], faces: good.map((r) => r.f), rest: roofs.filter((r) => !good.includes(r)).map((r) => r.p), walls: polys(answer.main.walls),
+    others: inBlock.flatMap((b) => [...polys(b.roofs), ...polys(b.walls)]) };
 }
 
 function shadeNote(b: Building, origin: P2, near: Picked["neighbours"]) {
@@ -54,23 +71,38 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
   const [place, setPlace] = useState<Place | null>(site?.place ?? null);
   const [target, setTarget] = useState<P2 | null>(null);
   const [busy, setBusy] = useState(false);
+  const [active, setActive] = useState(0);
+  const picked = useRef("");
   const [error, setError] = useState("");
   const [aerial, setAerial] = useState(false);
   const [draft, setDraft] = useState<P2[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [measuring, setMeasuring] = useState(false);
 
-  const find = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!q.trim()) return;
-    setBusy(true); setError("");
-    try {
-      const found = await searchPlace(q);
-      setPlaces(found);
-      if (found.length === 1) choose(found[0]);
-      if (!found.length) setError("Nothing found. Try street, house number and town.");
-    } catch { setError("Address search is not reachable right now."); }
-    setBusy(false);
+  // Suggestions as you type. A slow answer to an older text never replaces a newer one.
+  const asked = useRef("");
+  useEffect(() => {
+    const text = q.trim();
+    asked.current = text;
+    if (text.length < 3 || text === picked.current) { setPlaces(null); return; }
+    const timer = setTimeout(() => {
+      setBusy(true);
+      searchPlace(text)
+        .then((found) => { if (asked.current === text) { setPlaces(found); setActive(0); setError(""); } })
+        .catch(() => { if (asked.current === text) setError("Address search is not reachable right now."); })
+        .finally(() => setBusy(false));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [q]);
+
+  const keys = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") setPlaces(null);
+    if (!places?.length) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive((active + 1) % places.length); }
+    if (e.key === "ArrowUp") { e.preventDefault(); setActive((active - 1 + places.length) % places.length); }
+    if (e.key === "Enter") { e.preventDefault(); choose(places[active]); }
   };
-  const choose = (p: Place) => { setPlace(p); setTarget([p.lon, p.lat]); setPlaces(null); setAerial(false); setSite(() => null); };
+  const choose = (p: Place) => { picked.current = p.label; setQ(p.label); setPlace(p); setTarget([p.lon, p.lat]); setPlaces(null); setAerial(false); setSite(() => null); };
 
   /** Adds sun figures to surfaces that lack them, then ranks by sun until the homeowner reorders. */
   const loadSun = (s: Site) => {
@@ -96,29 +128,37 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
     const here = place ?? { label: "Your home", lat: hit.at[1], lon: hit.at[0], country: "Germany", bavaria: false };
     if (!place) {
       setPlace(here);
-      placeAt(here.lat, here.lon).then((p) => { setPlace(p); setSite((now) => now && { ...now, place: p }); setQ(p.label.split(", ").slice(0, 3).join(", ")); }).catch(() => undefined);
+      placeAt(here.lat, here.lon).then((p) => { setPlace(p); setSite((now) => now && { ...now, place: p }); const short = p.label.split(", ").slice(0, 3).join(", "); picked.current = short; setQ(short); }).catch(() => undefined);
     }
     const origin = site?.origin ?? centre(hit.ring);
     const ring = hit.ring.map((p) => toLocal(origin, p));
-    const clicked = site?.buildings.find((b) => inside(toLocal(origin, hit.at), b.ring));
-    if (clicked) {
-      // A second click takes an added building away again.
-      if (!clicked.main && site) setSite(() => ({ ...site, buildings: site.buildings.filter((b) => b !== clicked), surfaces: site.surfaces.filter((x) => x.owner !== clicked.id) }));
-      return;
-    }
+    if (site?.buildings.some((b) => b.homeIds.some((id) => hit.ids.includes(id)))) { setAdding(false); return; }
     const main = !site?.buildings.length;
-    const b: Building = { id: crypto.randomUUID(), ring, eave: hit.height, roof: area(ring) > LARGE_M2 ? "flat" : "pitched", tilt: DEFAULT_TILT, flip: false, source: "Assumed", main };
+    const b: Building = { id: crypto.randomUUID(), ring, holes: hit.holes.map((h) => h.map((p) => toLocal(origin, p))), eave: hit.height, roof: plainShape(ring) ? "pitched" : "flat", tilt: DEFAULT_TILT, flip: false, source: "Assumed", main, homeIds: hit.ids };
     const base: Site = site ?? { place: here, origin, buildings: [], surfaces: [], noGarden: false, shade: null, trees: null, sorted: false };
+    setAdding(false);
     change({ ...base, buildings: [...base.buildings, b], surfaces: [...base.surfaces, ...surfacesOf(b, [])], shade: main ? shadeNote(b, origin, hit.neighbours) : base.shade });
-    if (main) buildingFacts(hit.at[1], hit.at[0]).then((f) => {
-      setSite((now) => {
-        if (!now) return now;
-        const known = f.roof ? now.buildings.map((x) => (x.id === b.id && x.source === "Assumed" ? { ...x, roof: f.roof as Building["roof"], tilt: f.tilt ?? x.tilt, source: "OpenStreetMap" } : x)) : now.buildings;
-        const next = { ...now, trees: f.trees, buildings: known, surfaces: f.roof ? rebuilt(now, known) : now.surfaces };
+    // Bavaria publishes every building measured, roof included. Elsewhere the guess above stands.
+    const mid = centre(hit.ring), reach = Math.max(...ring.map((p) => Math.hypot(p[0] - centre(ring)[0], p[1] - centre(ring)[1])));
+    setMeasuring(true);
+    realBuilding(mid[1], mid[0], reach).then((answer) => {
+      if (answer) setSite((now) => {
+        if (!now?.buildings.some((x) => x.id === b.id)) return now;
+        const buildings = now.buildings.map((x) => (x.id === b.id ? { ...x, real: toReal(answer, now.origin, ring), source: "Measured" } : x));
+        const next = { ...now, buildings, surfaces: rebuilt({ ...now, surfaces: now.surfaces.filter((x) => x.owner !== b.id) }, buildings) };
         loadSun(next);
         return next;
       });
-    }).catch(() => undefined);
+      else if (main) buildingFacts(mid[1], mid[0]).then((f) => {
+        setSite((now) => {
+          if (!now) return now;
+          const known = f.roof ? now.buildings.map((x) => (x.id === b.id && x.source === "Assumed" && (f.roof === "flat" || plainShape(x.ring)) ? { ...x, roof: f.roof as Building["roof"], tilt: f.tilt ?? x.tilt, source: "OpenStreetMap" } : x)) : now.buildings;
+          const next = { ...now, trees: f.trees, buildings: known, surfaces: f.roof ? rebuilt(now, known) : now.surfaces };
+          loadSun(next);
+          return next;
+        });
+      }).catch(() => undefined);
+    }).catch(() => undefined).finally(() => setMeasuring(false));
   };
 
   const rebuilt = (s: Site, buildings: Building[]) => {
@@ -146,7 +186,7 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
     setSite(() => ({ ...site, surfaces: list, sorted: true }));
   };
   const patch = (id: string, p: Partial<SiteSurface>) => site && setSite(() => ({ ...site, surfaces: site.surfaces.map((x) => (x.id === id ? { ...x, ...p } : x)) }));
-  const remove = (s: SiteSurface) => site && setSite(() => ({ ...site, surfaces: site.surfaces.filter((x) => x.id !== s.id) }));
+  const remove = (s: SiteSurface) => site && setSite(() => ({ ...site, surfaces: site.surfaces.filter((x) => x.owner === "garden" ? x.id !== s.id : x.owner !== s.owner), buildings: site.buildings.filter((b) => b.id !== s.owner) }));
 
   const best = site?.surfaces.reduce<Sun | null>((a, x) => (x.sun && (!a || x.sun.kwh_per_kwp > a.kwh_per_kwp) ? x.sun : a), null) ?? null;
   const main = site?.buildings.find((b) => b.main);
@@ -154,24 +194,30 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
   return (
     <main className="stage">
       <HomeMap locate={!site} site={site} placed={placed} focus={target} aerial={aerial} draft={draft ?? []} drawing={draft !== null}
-        onBuilding={addBuilding} onPoint={(p) => setDraft((d) => [...(d ?? []), p])} />
+        onBuilding={!site || adding ? addBuilding : undefined} onPoint={(p) => setDraft((d) => [...(d ?? []), p])} />
       {place?.bavaria && <button type="button" className="mapbtn" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</button>}
-      {draft !== null && <div className="maphint"><span>Click the corners of the area</span>{draft.length >= 3 && <button type="button" className="primary small" onClick={finishGarden}>Done</button>}<button type="button" className="ghost small" onClick={() => setDraft(null)}>Cancel</button></div>}
-      {note && draft === null && <div className="mapnote">{note}</div>}
+      {adding && <div className="maphint"><span>Click the garage or shed</span><button type="button" className="ghost" onClick={() => setAdding(false)}>Cancel</button></div>}
+      {draft !== null && <div className="maphint"><span>Click the corners of the area</span>{draft.length >= 3 && <button type="button" className="primary small" onClick={finishGarden}>Done</button>}<button type="button" className="ghost" onClick={() => setDraft(null)}>Cancel</button></div>}
+      {note && draft === null && !adding && <div className="mapnote">{note}</div>}
 
-      <aside className="panel">
-        <header className="panelhead">
-          <h1>Your home</h1>
-          <form className="finder" onSubmit={find}>
-            <Search size={18} />
-            <input id="where" aria-label="Where is your home?" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Street, house number, town" />
-            <button className="primary small" disabled={busy}>{busy ? "Searching" : "Find"}</button>
-          </form>
-          {places && places.length > 1 && <ul className="places">{places.map((p) => <li key={p.label}><button type="button" onClick={() => choose(p)}>{p.label}</button></li>)}</ul>}
+      <div className="finder">
+        <div className="field-pill">
+          <Search size={18} />
+          <input id="where" role="combobox" aria-expanded={!!places?.length} aria-controls="places" aria-label="Where is your home?" autoComplete="off"
+            value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={keys} placeholder="Find your home" />
+          {q && <button type="button" className="round" aria-label="Clear" onClick={() => { setQ(""); setPlaces(null); }}><Close size={14} /></button>}
+        </div>
+        {(places || error) && <div className="suggest" id="places" role="listbox">
           {error && <p className="error">{error}</p>}
-          {!site && !places && <p className="prompt">{place ? "We could not find the house at this address. Click it on the map." : "Click your house on the map, or type your address."}</p>}
-        </header>
+          {places?.length === 0 && !busy && <p className="muted">Nothing found. Try street, house number and town.</p>}
+          {places?.map((p, i) => {
+            const [name, ...rest] = p.label.split(", ");
+            return <button type="button" key={p.label} role="option" aria-selected={i === active} className={i === active ? "on" : ""} onMouseEnter={() => setActive(i)} onClick={() => choose(p)}><b>{name}</b><small>{rest.slice(0, 3).join(", ")}</small></button>;
+          })}
+        </div>}
+      </div>
 
+      {(site || children) && <aside className="panel">
         {best && <section>
           <h2>Sun at your home</h2>
           <p className="bignum">{best.sun_kwh_m2.toLocaleString("en")}<small>kWh of sunlight per m² a year</small></p>
@@ -183,15 +229,18 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
 
         {main && site && <section>
           <h2>Your roof</h2>
-          <div className="switch" role="group" aria-label="Roof type">
-            {(["pitched", "flat"] as const).map((r) => <button key={r} type="button" className={main.roof === r ? "on" : ""} aria-pressed={main.roof === r} onClick={() => editBuilding(main.id, { roof: r })}>{r === "flat" ? "Flat" : "Sloped"}</button>)}
-          </div>
-          {main.roof === "pitched" && <>
-            <label className="field range"><span>Slope <b>{main.tilt}°</b></span><input type="range" min={15} max={55} step={5} value={main.tilt} onChange={(e) => editBuilding(main.id, { tilt: Number(e.target.value) })} /></label>
-            <button type="button" className="ghost small" onClick={() => editBuilding(main.id, { flip: !main.flip })}><Turn size={14} />Turn the roof ridge</button>
+          {main.real ? <p>Measured roof, from Bavaria's 3D building data.</p> : <>
+            {measuring && <p className="small muted">Looking for the measured roof…</p>}
+            <div className="switch" role="group" aria-label="Roof type">
+              {(["pitched", "flat"] as const).map((r) => <button key={r} type="button" disabled={r === "pitched" && !plainShape(main.ring)} className={main.roof === r ? "on" : ""} aria-pressed={main.roof === r} onClick={() => editBuilding(main.id, { roof: r })}>{r === "flat" ? "Flat" : "Sloped"}</button>)}
+            </div>
+            {main.roof === "pitched" && <>
+              <label className="field range"><span>Slope <b>{main.tilt}°</b></span><input type="range" min={15} max={55} step={5} value={main.tilt} onChange={(e) => editBuilding(main.id, { tilt: Number(e.target.value) })} /></label>
+              <button type="button" className="ghost" onClick={() => editBuilding(main.id, { flip: !main.flip })}><Turn size={14} />Turn the roof ridge</button>
+            </>}
+            <p className="small muted">{main.source === "OpenStreetMap" ? "From OpenStreetMap." : main.source === "You" ? "Set by you." : "Our guess from the building shape. Please correct it."}</p>
           </>}
-          <p className="small muted">{main.source === "OpenStreetMap" ? "From OpenStreetMap." : main.source === "You" ? "Set by you." : "Our guess from the building shape. Please correct it."}</p>
-          <button type="button" className="ghost small" onClick={() => setSite(() => null)}>This is not my house</button>
+          <button type="button" className="ghost" onClick={() => setSite(() => null)}>This is not my house</button>
         </section>}
 
         {site && <section>
@@ -200,24 +249,24 @@ export default function SitePicker({ site, setSite, placed, note, children }: Pr
           <ol className="surfaces">
             {site.surfaces.map((s, i) => (
               <li key={s.id} className={s.wanted ? "" : "off"}>
-                <span className="rank">{s.wanted ? site.surfaces.filter((x) => x.wanted).indexOf(s) + 1 : "–"}</span>
-                <div><b>{s.name}</b><small>{s.panels.length} panels fit{s.sun ? ` · ${s.sun.kwh_per_kwp.toLocaleString("en")} kWh per kW` : ""}</small></div>
+                <span className="rank">{usedSurfaces(site).indexOf(s) + 1 || "–"}</span>
+                <div><b>{s.name}</b><small>{s.panels.length} panels{s.sun ? ` · ${s.sun.kwh_per_kwp.toLocaleString("en")} kWh/kW` : ""}</small></div>
                 <span className="tools">
                   <button type="button" className="round" aria-label={`Move ${s.name} up`} disabled={i === 0} onClick={() => move(i, -1)}><Up size={14} /></button>
                   <button type="button" className="round" aria-label={`Move ${s.name} down`} disabled={i === site.surfaces.length - 1} onClick={() => move(i, 1)}><Down size={14} /></button>
-                  <button type="button" className="ghost small" onClick={() => patch(s.id, { wanted: !s.wanted })}>{s.wanted ? "Not here" : "Allow"}</button>
-                  {s.kind === "ground" && <button type="button" className="round" aria-label="Delete garden area" onClick={() => remove(s)}><Close size={14} /></button>}
+                  <button type="button" className="ghost" onClick={() => patch(s.id, { wanted: !s.wanted })}>{s.wanted ? "Not here" : "Allow"}</button>
+                  {(s.kind === "ground" || s.kind === "carport") && <button type="button" className="round" aria-label={`Remove ${s.name}`} onClick={() => remove(s)}><Close size={14} /></button>}
                 </span>
               </li>
             ))}
           </ol>
-          <p className="small muted">Garage or shed? Click it on the map to add it. Click it again to remove it.</p>
+          <button type="button" className="ghost" onClick={() => setAdding(true)}>Add a garage or shed</button>
           <label className="check"><input type="checkbox" checked={site.noGarden} onChange={(e) => setSite(() => ({ ...site, noGarden: e.target.checked, surfaces: e.target.checked ? site.surfaces.filter((x) => x.kind !== "ground") : site.surfaces }))} />No panels in my garden</label>
-          {!site.noGarden && <button type="button" className="ghost small" onClick={() => setDraft([])}><Pen size={14} />Draw a garden area</button>}
+          {!site.noGarden && <button type="button" className="ghost" onClick={() => setDraft([])}><Pen size={14} />Draw a garden area</button>}
         </section>}
 
         {children}
-      </aside>
+      </aside>}
     </main>
   );
 }

@@ -1,4 +1,4 @@
-import { Face, P2 } from "./geometry";
+import { Face, P2, P3 } from "./geometry";
 
 export type Inputs = {
   installer: string; country: string; demand_kwh: number; price_ct_kwh: number; heating: string | null;
@@ -32,7 +32,12 @@ export type Request = {
 export type Place = { label: string; lat: number; lon: number; country: string; bavaria: boolean };
 export type Sun = { kwh_per_kwp: number; sun_kwh_m2: number; monthly: number[] };
 export type BuildingFacts = { roof: "flat" | "pitched" | null; shape: string | null; tilt: number | null; trees: number | null };
-export type Building = { id: string; ring: P2[]; eave: number; roof: "flat" | "pitched"; tilt: number; flip: boolean; source: string; main: boolean };
+export type Poly = { ring: P3[]; holes: P3[][] };
+/** Bavaria's measured model of a building, in the site's local metres. */
+export type Real = { ground: P2[][]; faces: Face[]; rest: Poly[]; walls: Poly[]; others: Poly[] };
+export type Building = { id: string; ring: P2[]; holes: P2[][]; eave: number; roof: "flat" | "pitched"; tilt: number; flip: boolean; source: string; main: boolean; homeIds: string[]; real?: Real };
+type RealPolys = { ground: { ring: P3[]; holes: P3[][] }[]; roofs: { ring: P3[]; holes: P3[][] }[]; walls: { ring: P3[]; holes: P3[][] }[] };
+export type RealAnswer = { main: RealPolys; near: RealPolys[] } | null;
 export type SiteSurface = Face & { id: string; owner: string; kind: "roof" | "carport" | "ground"; name: string; wanted: boolean; sun: Sun | null };
 export type Site = {
   place: Place; origin: P2; buildings: Building[]; surfaces: SiteSurface[]; noGarden: boolean;
@@ -54,6 +59,7 @@ export const refine = (text: string, mount: string) => post<Refined>("/api/refin
 export const searchPlace = (q: string) => fetch(`/api/site/search?q=${encodeURIComponent(q)}`).then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<Place[]>; });
 export const placeAt = (lat: number, lon: number) => fetch(`/api/site/reverse?lat=${lat}&lon=${lon}`).then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<Place>; });
 export const sunFor = (lat: number, lon: number, surfaces: { tilt: number; azimuth: number }[]) => post<Sun[]>("/api/site/sun", { lat, lon, surfaces });
+export const realBuilding = (lat: number, lon: number, reach: number) => fetch(`/api/site/real?lat=${lat}&lon=${lon}&reach=${reach}`).then((r) => r.json() as Promise<RealAnswer>);
 export const buildingFacts = (lat: number, lon: number) => fetch(`/api/site/building?lat=${lat}&lon=${lon}`).then((r) => r.json() as Promise<BuildingFacts>);
 
 export const usedSurfaces = (site: Site) => site.surfaces.filter((s) => s.wanted && s.panels.length > 0);

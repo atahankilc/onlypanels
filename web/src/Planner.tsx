@@ -86,7 +86,7 @@ function Workspace({ request, update, back }: { request: Request; update: (id: s
   return (
     <main className="split">
       <form onSubmit={(e) => e.preventDefault()}>
-        <button type="button" className="ghost small" onClick={back}><Back size={14} />Back to requests</button>
+        <button type="button" className="ghost" onClick={back}><Back size={14} />Back to requests</button>
         <h2>{request.title}</h2>
         <Field label={t("demand")}><input type="number" min={500} step={100} value={inputs.demand_kwh || ""} onChange={(e) => set("demand_kwh", Number(e.target.value))} /></Field>
         <Field label={t("heating")}>
@@ -154,7 +154,7 @@ function SiteView({ request, placed }: { request: Request; placed: number[] | nu
         <ol className="plainlist">{site.surfaces.filter((s) => s.wanted).map((s) => <li key={s.id}>{s.name}: {s.panels.length} panels fit, {s.tilt}°{s.sun ? `, ${s.sun.kwh_per_kwp} kWh per kWp` : ""}</li>)}</ol>
         {site.surfaces.some((s) => !s.wanted) && <p>Not here: {site.surfaces.filter((s) => !s.wanted).map((s) => s.name).join(", ")}</p>}
         {site.noGarden && <p>No panels in the garden.</p>}
-        <p className="small warn-text">Roof shape and fit are estimates from the map. Check on site.</p>
+        <p className="small warn-text">{site.buildings.some((b) => b.real) ? "Roof from measured state data. Panel fit is an estimate. Check on site." : "Roof shape and fit are estimates from the map. Check on site."}</p>
       </div>
     </div>
   );
@@ -217,7 +217,7 @@ function Proposal({ d, prev, overrides, setOverrides }: { d: Design; prev: Desig
   const any = Object.values(overrides).some((v) => v !== null && v !== undefined);
   return (
     <>
-      <div className="row"><h2>{t("proposal")}</h2>{any && <button className="link" onClick={() => setOverrides({})}>{t("resetAll")}</button>}</div>
+      <div className="row"><h2>{t("proposal")}</h2>{any && <button className="ghost" onClick={() => setOverrides({})}>{t("resetAll")}</button>}</div>
       <table>
         <thead><tr><th>{t("component")}</th><th>{t("recommended")}</th><th>{t("similar")}</th><th>{t("control")}</th></tr></thead>
         <tbody>

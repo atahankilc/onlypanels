@@ -2,6 +2,7 @@
 # Never commit raw data, derived per-project data, or anything trained on it.
 data/raw/
 data/processed/
+data/cache/
 models/
 *.csv
 *.parquet

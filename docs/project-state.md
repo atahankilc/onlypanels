@@ -15,6 +15,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - `engine/`: dataset, fixed customer-grouped split, predictors, scoring, tests. Scores in `docs/data/findings.md`
 - 3D site step (D33 to D36): address search, click the house, roof slope and ridge, sun per surface from PVGIS, ranked surfaces, "not here", garden drawing, garage by click, panels on the roof, aerial photo in Bavaria. Shown to homeowner and planner
 - App restyled after Steward (D37)
+- Single buildings on the map, measured Bavarian roofs, address suggestions while typing (D39 to D41)
 - Map starts at the browser location. A typed address selects its building by itself. Clicking works without a search. Hover shows what a click picks
 
 ## Not done
@@ -25,7 +26,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 ## Next steps
 
 1. Check the high own-electricity share in the energy estimate (assumed sun curve), then fix offer screen wording, add reasons and an accept button
-2. Option B: Bavarian LoD2 real roofs for the demo area
+2. Decide where expert comparison and results go (back office removed)
 3. Ask Reonic the blocking questions in `docs/open-questions.md` (Q1 to Q4, Q23)
 4. Agree the proposed decisions and split roles
 5. Add an Anthropic key to `.env` and test the Claude path
