@@ -32,8 +32,8 @@ export const FLOWS: { name: string; who: string; need: string; goal: string; ste
     name: "Faster offers", who: "Planner", need: "Minimum",
     goal: "Enters the basics of a new project and receives a complete design as the starting point for the offer.",
     steps: [
-      { who: "Planner", does: "Enters a few basic facts about the home", status: "var" },
-      { who: "System", does: "Proposes PV, battery and heat pump as appropriate", status: "kismen" },
+      { who: "Homeowner", does: "Sends an installation request, or the planner enters the basics after a call", status: "var" },
+      { who: "System", does: "Prepares a draft before the planner opens it: PV, battery and heat pump as appropriate", status: "kismen" },
       { who: "System", does: "Shows a short explanation of why", status: "var" },
       { who: "Planner", does: "Changes an input or component, for example \"the family is buying an electric car next year\"", status: "var" },
       { who: "System", does: "Adapts the rest of the design as an expert would expect, and explains why", status: "var" },
@@ -53,9 +53,9 @@ export const FLOWS: { name: string; who: string; need: string; goal: string; ste
     name: "Exploring the offer", who: "Homeowner", need: "Stretch",
     goal: "Tries variants within the options the installer allows, and understands each change before signing.",
     steps: [
-      { who: "Homeowner", does: "Sees the offer in plain language", status: "yok" },
-      { who: "Homeowner", does: "Tries the options the installer allows", status: "yok" },
-      { who: "System", does: "Explains what each change means", status: "yok" },
+      { who: "Homeowner", does: "Sees the offer in plain language", status: "var" },
+      { who: "Homeowner", does: "Tries the options the installer allows", status: "var" },
+      { who: "System", does: "Explains what each change means, as an estimate", status: "var" },
     ],
   },
 ];
@@ -106,7 +106,7 @@ export const VALUE = [
   { today: "\"Why this size?\" is hard to answer", ours: "A short reason and similar homes with every proposal", who: "Planner", gain: "A defensible offer", state: "Working" },
   { today: "Knowledge lives in experienced heads", ours: "Learns from past expert decisions", who: "Installer", gain: "New staff design consistently", state: "Limited, accuracy is low" },
   { today: "Mistakes surface after the offer goes out", ours: "Unusual choices are flagged first", who: "Installer", gain: "Fewer wrong offers", state: "Not built" },
-  { today: "The homeowner waits on every question", ours: "Tries the allowed variants themselves", who: "Both", gain: "Fewer questions, safer decisions", state: "Not built" },
+  { today: "The homeowner waits on every question", ours: "Tries the allowed variants themselves", who: "Both", gain: "Fewer questions, safer decisions", state: "Working, without prices" },
 ];
 
 export const CANNOT = [

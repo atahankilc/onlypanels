@@ -32,4 +32,7 @@
 | D26 | Scope users to the brief's two: planner and homeowner, with its three use cases. Other roles are parked | Confirmed (user) | The judges look at the brief's users |
 | D27 | Free-text changes: Claude when a key is set, simple rules otherwise and on failure. Only the sentence is sent, never project data | Proposed | The demo must not depend on the network. Keeps Q2 from blocking this feature |
 | D28 | Do not force more "no battery" answers. Default to a battery, respect an existing one, flag open decisions below 80% | Proposed | Forced answers are wrong about three times in four |
-| D29 | UI language is English. The app keeps an optional Turkish toggle; the back office is English only | Confirmed (user) | Judges and Reonic read English. Resolves Q22 |
+| D29 | UI language is English. Both the app and the back office are English only | Confirmed (user) | Judges and Reonic read English. Resolves Q22 |
+| D30 | Flow: homeowner sends a request, AI drafts before the planner opens it, planner does the engineering and sends the offer, homeowner explores and can ask for a change. Planners can also create a request themselves | Confirmed (user) | Fits a faster first offer. Manual entry keeps the brief's demo step |
+| D31 | No auth for now: one app with a Planner and Homeowner switch. State lives in the browser | Confirmed (user) | Demo scope |
+| D32 | Hourly energy estimate (independence, yearly saving) from simple assumed profiles, shown as an estimate. No system cost or payback: the data has no prices | Proposed | Homeowners need to know what a change means |

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { makeT } from "../../web/src/i18n";
+import { t } from "../../web/src/i18n";
 
-const t = makeT("en");
 const APP = "http://127.0.0.1:5173";
 const API_ERROR = t("apiError");
 const fmt = (v: number, unit: string) => (v ? `${v} ${unit}` : t("none"));

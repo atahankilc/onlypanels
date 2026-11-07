@@ -1,59 +1,6 @@
-export type Lang = "tr" | "en";
 type Params = Record<string, unknown>;
 
-const tr = {
-  title: "Enerji Tasarım Masası", backOffice: "Back office",
-  design: "Tasarım", compare: "Uzmanla karşılaştır", results: "Genel sonuçlar",
-  home: "Ev bilgileri", installer: "Kurulumcu kataloğu", installerA: "Kurulumcu A", installerB: "Kurulumcu B",
-  country: "Ülke", Germany: "Almanya", Austria: "Avusturya", Switzerland: "İsviçre", Netherlands: "Hollanda", Other: "Diğer",
-  demand: "Yıllık elektrik tüketimi (kWh)", price: "Elektrik fiyatı (ct/kWh)",
-  heating: "Mevcut ısıtma", unknown: "Bilinmiyor", Gas: "Doğalgaz", Oil: "Fuel oil", Heatpump: "Isı pompası", OtherNonRenewable: "Diğer fosil",
-  heat: "Yıllık ısı ihtiyacı (kWh)", hasSolar: "Evde zaten güneş paneli var", hasStorage: "Evde zaten batarya var",
-  ev: "Elektrikli araç var veya alınacak", evKm: "Yıllık sürüş (km)",
-  place: "Kurulum yeri", where: "Paneller nereye?", roof: "Çatı", ground: "Bahçe (zemin üstü)", carport: "Carport", facade: "Cephe",
-  area: "Kullanılabilir alan (m²)", areaHint: "Boş bırakılırsa alan sınırı uygulanmaz",
-  proposal: "Önerilen sistem", component: "Bileşen", recommended: "Öneri", similar: "Benzer evlerde", control: "Planlayıcı kararı",
-  pv: "Güneş paneli", battery: "Batarya", wallbox: "Wallbox", heatpump: "Isı pompası",
-  modules: "panel", none: "Yok", included: "Var", auto: "Otomatik", locked: "Sabitlendi", reset: "Sıfırla", resetAll: "Tüm kararları sıfırla",
-  panels: "Panel sayısı", why: "Neden bu sistem?", energy: "Enerji dengesi", base: "Ev tüketimi", evLoad: "Elektrikli araç", hpLoad: "Isı pompası",
-  total: "Toplam ihtiyaç", production: "Tahmini üretim", assumption: "Üretim varsayımdır, geçmiş veriden öğrenilmedi.",
-  sold: "%{rate} oranında vardı", common: "En sık", loading: "Hesaplanıyor…", apiError: "API'ye ulaşılamadı. `uv run uvicorn main:app --app-dir api` çalışıyor mu?",
-  lower: "azaldı", higher: "arttı", notes: "Dikkat", capped: "Alan sınırına takıldı",
-  unseenTitle: "Sistemin hiç görmediği projeler", pick: "Bir proje seç", ours: "Bizim önerimiz", expert: "Uzman", option: "Seçenek",
-  openInDesign: "Tasarımda aç", diff: "Fark", heatShort: "Isıtma", optionsShort: "seçenek", installerShort: "Kurulumcu", demandShort: "Tüketim",
-  resultsIntro: "Sonuçlar görülmemiş projelerde ölçüldü: {n} proje, 5 parçalı çapraz doğrulama. Kilitli test seti henüz kullanılmadı.",
-  method: "Yöntem", pvError: "Panel hatası (kWp)", batError: "Batarya hatası (kWh)", tier: "Bataryayı tam tutturma",
-  m_median: "Herkese ortalamayı öner", m_rule: "Tüketimle orantılı kural", m_engine: "Motorumuz", m_mode: "Kurulumcunun en sık bataryası",
-  checks: "Mantıklı tepki kontrolleri", checksIntro: "{n} görülmemiş evde kaç kez doğru tepki verdi.",
-  ev_never_shrinks_pv: "Araç eklenince panel küçülmüyor", ev_grows_pv: "Araç eklenince panel büyüyor", ev_never_shrinks_battery: "Araç eklenince batarya küçülmüyor",
-  heat_pump_never_shrinks_pv: "Isı pompası eklenince panel küçülmüyor", more_pv_never_shrinks_battery: "Daha çok panelde batarya küçülmüyor", area_limit_respected: "Alan sınırı aşılmıyor",
-  r_pv_demand: "{demand} MWh yıllık ihtiyaç için. {n} benzer evde uzmanlar çoğunlukla {low}–{high} kWp seçmiş.",
-  r_pv_capped: "Modele göre {wanted} kWp uygun olurdu, ama {area} m² alana en fazla {modules} panel sığıyor.",
-  r_pv_locked: "Planlayıcı {modules} panele sabitledi. Geri kalan buna göre ayarlandı.",
-  r_battery_yes: "{kwp} kWp panele {kwh} kWh, yani kWp başına {per_kwp} kWh. Benzer evlerde %{rate} oranında batarya var, en sık {common} kWh.",
-  r_battery_existing: "Evde zaten batarya var, yenisi önerilmiyor.",
-  r_balance: "Panel yılda yaklaşık {production} MWh üretir, bu ihtiyacın {ratio} katı.",
-  r_battery_no: "Bu ev için batarya önerilmiyor. Benzer evlerde batarya oranı %{rate}.",
-  r_battery_locked: "Batarya kararı planlayıcıya ait.",
-  r_wallbox_ev: "Araç için wallbox eklendi. Araç yılda {added} MWh ek tüketim getiriyor.",
-  r_hp_fossil: "Fosil ısıtma ve {heat_mwh} MWh ısı ihtiyacı için {kw} kW. Bu kural az örneğe dayanıyor, geçmişte benzer evlerin yaklaşık yarısı ısı pompası aldı.",
-  r_hp_existing: "Evde zaten ısı pompası var, yenisi önerilmiyor.",
-  r_hp_needs_heat: "Isı pompası kararı için yıllık ısı ihtiyacı girilmeli.",
-  w_not_germany: "Model Alman projelerinden öğrendi. Bu ülke için boyutlar yol gösterici, ürün ve teşvik kuralları farklı olabilir.",
-  w_non_roof: "Geçmiş veride neredeyse yalnızca çatı kurulumları var. Bu kurulum yeri için alan ve verim varsayımdır. Almanya'da bahçe kurulumunda izin ve şebeke ödemesi ayrıca kontrol edilmeli.",
-  w_no_area: "Alan girilmedi. Sistem kurulum yerine sığmayabilir.",
-  w_hp_assumed_heat: "Isı ihtiyacı girilmedi. Isı pompası 15 MWh varsayımıyla boyutlandırıldı.",
-  w_battery_unsure: "Batarya kararı net değil. Bu tip evlerin yaklaşık %{share}'ü bataryasız seçilmiş olabilir, müşteriyle konuşun.",
-  ask: "Ne değişti?", askHint: "Örnek: Aile gelecek yıl elektrikli araba alıyor, çatıya 16 panel sığıyor", apply: "Uygula",
-  understood: "Anlaşılan", notUnderstood: "Bunu anlayamadım. Araba, batarya, ısı pompası, panel sayısı veya alan gibi bir değişiklik yazın.",
-  byClaude: "Claude ile", byRules: "Kurallarla",
-  c_ev_on: "Elektrikli araç eklendi", c_ev_off: "Elektrikli araç çıkarıldı", c_ev_km: "Yıllık sürüş {km} km", c_demand: "Tüketim {kwh} kWh",
-  c_mount: "Kurulum yeri değişti", c_area: "Alan {area} m²", c_max_panels: "En fazla {panels} panel", c_has_storage: "Evde batarya var",
-  c_modules: "{panels} panele sabitlendi", c_no_battery: "Batarya çıkarıldı", c_battery: "Batarya {kwh} kWh", c_hp_on: "Isı pompası eklendi", c_hp_off: "Isı pompası çıkarıldı",
-  c_wb_on: "Wallbox eklendi", c_wb_off: "Wallbox çıkarıldı",
-};
-
-const en: typeof tr = {
+const en = {
   title: "Energy Design Desk", backOffice: "Back office",
   design: "Design", compare: "Compare with expert", results: "Overall results",
   home: "Home facts", installer: "Installer catalog", installerA: "Installer A", installerB: "Installer B",
@@ -105,9 +52,5 @@ const en: typeof tr = {
   c_wb_on: "Wallbox added", c_wb_off: "Wallbox removed",
 };
 
-export type Key = keyof typeof tr;
-export function makeT(lang: Lang) {
-  const dict = lang === "tr" ? tr : en;
-  return (key: string, params: Params = {}) =>
-    ((dict as Record<string, string>)[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ""));
-}
+export const t = (key: string, params: Params = {}) =>
+  ((en as Record<string, string>)[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ""));

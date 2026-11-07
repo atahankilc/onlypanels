@@ -8,6 +8,7 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 
 from .data import ASSUMED_KWP_PER_MODULE, battery_catalog
+from .energy import simulate
 from .models import HP_KWH_PER_KW, HP_SIZES, TREE, _frame, snap
 
 EV_KWH_PER_KM = 0.18
@@ -169,6 +170,8 @@ class Engine:
 
         country = i.get("country", "Germany")
         production = kwp_final * KWH_PER_KWP.get(country, KWH_PER_KWP["Other"]) * mount["yield"] / 1000
+        estimate = simulate(base * 1000, ev_mwh * 1000, hp_mwh * 1000, production * 1000, battery_kwh,
+                            i.get("price_ct_kwh", 32.0))
         reasons.append({"code": "balance", "production": round(production, 1), "ratio": round(production / total, 1)})
         return {
             "pv": {"modules": modules, "kwp": round(kwp_final, 2), "max_modules": max_modules,
@@ -180,7 +183,7 @@ class Engine:
             "heatpump": {"included": hp_kw > 0, "kw": hp_kw, "locked": o.get("heatpump") is not None,
                          "blocked": heat_type == "Heatpump"},
             "energy": {"base_mwh": round(base, 2), "ev_mwh": round(ev_mwh, 2), "hp_mwh": round(hp_mwh, 2),
-                       "total_mwh": round(total, 2), "production_mwh": round(production, 1)},
+                       "total_mwh": round(total, 2), "production_mwh": round(production, 1), **estimate},
             "similar": similar, "reasons": reasons, "warnings": warnings,
         }
 
