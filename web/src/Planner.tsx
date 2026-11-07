@@ -8,6 +8,7 @@ import "./planner.css";
 import ProofPage from "./Proof";
 import Offer from "./Offer";
 import { Options } from "./Options";
+import { BatteryCurve } from "./BatteryCurve";
 import { Button, Check, Field, Input, Segmented, Select, Slider } from "./ui";
 
 const LEFT = 620;
@@ -224,6 +225,7 @@ function DesignTab({ d, first, r, setO, apply, lit, scores }: { d: Design; first
     {changed && <p className="delta"><span>AI draft</span> {summary(first)}<br /><span>Now</span> {summary(d)}</p>}
     {d.review.filter((n) => n.level === "warn").map((n) => <p key={n.code} className="flag">{n.text}</p>)}
     <Options d={d} pick={(a) => setO(a.overrides, `Option: ${a.title.toLowerCase()}`)} />
+    {!r.inputs.has_storage && <BatteryCurve d={d} pick={(kwh) => setO({ battery_kwh: kwh })} />}
     <table className="grid"><thead><tr><th /><th>Proposal</th><th>Similar homes</th><th>Your decision</th></tr></thead><tbody>
       <tr><th scope="row">Solar</th><td>{d.pv.modules} modules<small>{kwp.toFixed(1)} kWp{d.pv.capped ? " · roof limit" : ""}</small></td><td>{s.kwp_low}–{s.kwp_high} kWp<small>{s.n} homes</small></td>
         <td><div className="lock"><Slider min={4} max={Math.max(d.pv.max_modules ?? 40, 4)} value={o.modules ?? d.pv.modules} onChange={(e) => setO({ modules: Number(e.target.value) })} /><Button disabled={o.modules == null} onClick={() => setO({ modules: null })}>Auto</Button></div></td></tr>

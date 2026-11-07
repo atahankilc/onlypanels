@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Path
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from reonic_engine import lod2, site, sun
+from reonic_engine import battery as batteries, lod2, site, sun
 from reonic_engine.data import load_dataset
 from reonic_engine.design import Engine
 from reonic_engine.refine import refine
@@ -82,7 +82,7 @@ def design(req: DesignRequest):
     i["demand_kwh"] = i["demand_kwh"] or TYPICAL_USE_KWH
     o = req.overrides.model_dump()
     d = engine().design(i, o)
-    return {**d, "alternatives": engine().alternatives(i, o, d), "assumed": assumed}
+    return {**d, "alternatives": engine().alternatives(i, o, d), "battery_curve": batteries.curve(i, d), "assumed": assumed}
 
 
 @app.get("/api/scores")
