@@ -8,8 +8,10 @@ export type Square = { name: string; ring: P2[] };
 export type Real = { roofs: Poly[]; walls: Poly[] };
 /** One surface of a building, sampled. `at` is lon, lat, height per sample; `seen` says which sun positions reach each one. */
 export type SunSurface = { kind: "roof" | "wall"; index: number; m2: number; tilt: number; azimuth: number; kwh_m2: number | null; kwh_per_kwp: number | null; year: number[]; at: number[]; seen: string; cells: number[]; outline: P2[]; holes: P2[][]; n: P3 };
-/** `solid` comes with a neighbour that shares a wall: its measured surfaces, lon, lat and height above its own floor. */
-export type SunData = { around: { id: string; h: number; ring: P3[]; solid?: { roofs: Poly[]; walls: Poly[] } | null }[]; step: number; suns: { month: number; hour: number; az: number; el: number; vector: P3 }[]; surfaces: SunSurface[]; sunny: boolean };
+/** A building nearby. `ring` is its outline as lon, lat and metres to this building; `touch` says it shares a wall. `solid` comes with
+ *  the close ones: its measured surfaces, lon, lat and height above its own floor. */
+export type Near = { id: string; h: number; touch: boolean; ring: P3[]; solid?: { roofs: Poly[]; walls: Poly[] } | null };
+export type SunData = { around: Near[]; step: number; suns: { month: number; hour: number; az: number; el: number; vector: P3 }[]; surfaces: SunSurface[]; sunny: boolean };
 export type Selected = { id: string; home: string; square: string; label: string; origin: P2; real: Real | null; measuring: boolean; sun?: SunData | null };
 const COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
 export const surfaceKey = (b: { id: string }, s: SunSurface) => `${b.id}|${s.kind}${s.index}`;

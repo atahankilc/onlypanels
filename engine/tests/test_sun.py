@@ -29,14 +29,14 @@ def test_a_wall_touching_a_neighbour_is_found_only_where_the_neighbour_stands():
     assert h.against(wall, [1, 0, 0]).tolist() == [True, False]
 
 
-def test_context_keeps_close_buildings_and_fades_them_with_distance():
+def test_context_keeps_close_buildings_with_their_distance():
     own = _dense([(0, 0), (10, 0), (10, 10), (0, 10)])
     near = [(10, 0), (60, 0), (60, 10), (10, 10)]
-    far = [(200, 0), (210, 0), (210, 10)]
+    far = [(300, 0), (310, 0), (310, 10)]
     found = context([("near", 8, near), ("far", 8, far)], own)
     assert [f[0] for f in found] == ["near"]
-    pts, fade = found[0][2], found[0][3]
-    assert fade[0] == 1 and fade[np.argmax(pts[:, 0])] == 0 and CONTEXT_M < 50
+    pts, gap = found[0][2], found[0][3]
+    assert gap[0] == 0 and gap[np.argmax(pts[:, 0])] == 50 and CONTEXT_M < 300
 
 
 def test_samples_fill_a_surface_and_face_outward():

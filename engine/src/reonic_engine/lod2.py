@@ -197,3 +197,14 @@ def building(name, building_id):
             if line.startswith(start):
                 return json.loads(line[len(start):])
     return None
+
+
+def buildings(name, ids):
+    """Several buildings of a built square, by id, in one read of its file."""
+    want, found = {f"{i}\t".encode() for i in ids}, {}
+    with path(name, "solids").open("rb") as lines:
+        for line in lines:
+            key = line[:line.find(b"\t") + 1]
+            if key in want:
+                found[key[:-1].decode()] = json.loads(line[len(key):])
+    return found

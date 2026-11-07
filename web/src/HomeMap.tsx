@@ -179,13 +179,67 @@ function skinOf(s: SunSurface, poly: Poly, step: number) {
   return { s, skin, cover, plate, pixels, source, texture, holes, mask, fitted, fit, centres, plane: [P0, P1, P2] as P3[] };
 }
 
-/** The buildings next to one, as plain blocks fading out with distance, so it stands in its street and not alone. */
-function ghostsOf(b: Selected, skip: Set<string>) {
+// Roads and rails bound a street block. Service roads, paths and tracks run inside blocks, so they do not.
+const BLOCK_ROADS = new Set(["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "busway", "rail", "transit"]);
+const ROADS_WITHIN_M = 250;
+const GHOST_M = 26; // buildings beyond the block fade out over this distance from what is drawn
+
+/** The map's roads and rails near a point, as segments in metres around it. Empty while the map has no tiles there. */
+function roadsNear(m: maplibregl.Map, o: P2) {
+  const out: [P2, P2][] = [];
+  for (const f of m.querySourceFeatures("openmaptiles", { sourceLayer: "transportation" })) {
+    if (!BLOCK_ROADS.has(f.properties.class) || f.properties.brunnel === "tunnel") continue;
+    const g = f.geometry, lines = g.type === "LineString" ? [g.coordinates] : g.type === "MultiLineString" ? g.coordinates : [];
+    for (const line of lines) for (let i = 1; i < line.length; i++) {
+      const a = toLocal(o, line[i - 1] as P2), c = toLocal(o, line[i] as P2);
+      if (Math.min(Math.abs(a[0]), Math.abs(c[0])) < ROADS_WITHIN_M && Math.min(Math.abs(a[1]), Math.abs(c[1])) < ROADS_WITHIN_M) out.push([a, c]);
+    }
+  }
+  return out;
+}
+
+const side = (p: P2, q: P2, r: P2) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+const crosses = (a: P2, b: P2, c: P2, d: P2) => side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+
+/** The point on a segment closest to p. */
+function closest(p: P2, a: P2, b: P2): P2 {
+  const d: P2 = [b[0] - a[0], b[1] - a[1]], t = Math.max(0, Math.min(1, ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / (d[0] * d[0] + d[1] * d[1] || 1)));
+  return [a[0] + t * d[0], a[1] + t * d[1]];
+}
+
+/** The neighbours on the same street block as the chosen buildings: no road or rail between their closest points.
+ *  Without roads on the map only the ones sharing a wall count, as before. */
+function blockOf(list: Selected[], roads: [P2, P2][], o: P2) {
+  const block = new Set<string>(), chosen = new Set(list.map((b) => b.id));
+  const edges = list.flatMap((b) => (b.real?.roofs ?? []).flatMap((r) => r.ring.map((p, i) => [toLocal(o, toLngLat(b.origin, [p[0], p[1]])), toLocal(o, toLngLat(b.origin, [r.ring[(i + 1) % r.ring.length][0], r.ring[(i + 1) % r.ring.length][1]]))] as [P2, P2])));
+  for (const b of list) for (const near of b.sun?.around ?? []) {
+    if (chosen.has(near.id) || block.has(near.id) || !near.solid) continue;
+    if (near.touch) { block.add(near.id); continue; }
+    if (!roads.length || !edges.length) continue;
+    let best = { d: Infinity, from: [0, 0] as P2, to: [0, 0] as P2 };
+    for (const q of near.ring) {
+      const at = toLocal(o, [q[0], q[1]]);
+      for (const [a, c] of edges) { const p = closest(at, a, c), d = Math.hypot(at[0] - p[0], at[1] - p[1]); if (d < best.d) best = { d, from: p, to: at }; }
+    }
+    if (!roads.some(([a, c]) => crosses(best.from, best.to, a, c))) block.add(near.id);
+  }
+  return block;
+}
+
+/** The buildings around one that are not drawn as measured, as plain blocks fading out with distance from what is drawn, so the home stands in its street and not alone. */
+function ghostsOf(b: Selected, skip: Set<string>, drawn: P2[]) {
   const points: P3[] = [], alpha: number[] = [], faces: number[] = [];
   const add = (p: P3, a: number) => { points.push(p); alpha.push(1, 1, 1, a); return points.length - 1; };
+  const shown = drawn.map((p) => toLocal(b.origin, p));
   for (const near of b.sun?.around ?? []) {
-    if (skip.has(near.id) || near.solid) continue; // a building touching this one is drawn with its real roof
-    const ring = near.ring.map((p) => toLocal(b.origin, [p[0], p[1]])), fade = near.ring.map((p) => p[2] ** 1.3 * 0.92);
+    if (skip.has(near.id)) continue;
+    const ring = near.ring.map((p) => toLocal(b.origin, [p[0], p[1]]));
+    const fade = ring.map((p, i) => {
+      let d = near.ring[i][2];
+      for (const q of shown) d = Math.min(d, Math.hypot(p[0] - q[0], p[1] - q[1]));
+      return Math.max(0, 1 - d / GHOST_M) ** 1.3 * 0.92;
+    });
+    if (!fade.some((a) => a > 0)) continue;
     ring.forEach((p, i) => {
       const j = (i + 1) % ring.length, q = ring[j];
       const k = [add([p[0], p[1], 0], fade[i]), add([q[0], q[1], 0], fade[j]), add([q[0], q[1], near.h], fade[j]), add([p[0], p[1], near.h], fade[i])];
@@ -203,13 +257,13 @@ function ghostsOf(b: Selected, skip: Set<string>) {
   return new THREE.Mesh(g, material);
 }
 
-/** The buildings that share a wall with one, as they are measured, in plain tones: a flat block beside a real roof looks wrong. */
-function touchingOf(b: Selected, skip: Set<string>) {
+/** The buildings on the same street block, as they are measured, in plain tones: a flat block beside a real roof looks wrong. */
+function neighboursOf(b: Selected, skip: Set<string>, block: Set<string>) {
   const g = new THREE.Group();
   g.name = "neighbours";
   for (const near of b.sun?.around ?? []) {
-    if (skip.has(near.id) || !near.solid) continue;
-    skip.add(near.id); // once, even when it touches two parts of the home
+    if (skip.has(near.id) || !block.has(near.id) || !near.solid) continue;
+    skip.add(near.id); // once, even when it is near two of the chosen buildings
     const here = (r: P3[]) => r.map((p) => [...toLocal(b.origin, [p[0], p[1]]), p[2]] as P3);
     const polys = (list: Poly[]) => list.map((p) => ({ ring: here(p.ring), holes: p.holes.map(here) }));
     const roofs = polys(near.solid.roofs), walls = polys(near.solid.walls);
@@ -223,9 +277,16 @@ function touchingOf(b: Selected, skip: Set<string>) {
   return g;
 }
 
+/** The outline points of the block's buildings, lon and lat, once each. */
+const blockPoints = (list: Selected[], block: Set<string>) => {
+  const seen = new Set<string>(), out: P2[] = [];
+  for (const b of list) for (const near of b.sun?.around ?? []) if (block.has(near.id) && !seen.has(near.id)) { seen.add(near.id); near.ring.forEach((p) => out.push([p[0], p[1]])); }
+  return out;
+};
+
 /** Rings of growing opacity around the buildings: what is further out is covered. */
-function fadeAround(list: Selected[]) {
-  const corners = list.flatMap((b) => [b.origin, ...(b.real?.roofs ?? []).flatMap((r) => r.ring.map((p) => toLngLat(b.origin, [p[0], p[1]])))]);
+function fadeAround(list: Selected[], extra: P2[] = []) {
+  const corners = [...list.flatMap((b) => [b.origin, ...(b.real?.roofs ?? []).flatMap((r) => r.ring.map((p) => toLngLat(b.origin, [p[0], p[1]])))]), ...extra];
   const o: P2 = [(Math.min(...corners.map((p) => p[0])) + Math.max(...corners.map((p) => p[0]))) / 2, (Math.min(...corners.map((p) => p[1])) + Math.max(...corners.map((p) => p[1]))) / 2];
   const local = corners.map((p) => toLocal(o, p)), w = Math.max(...local.map((p) => Math.abs(p[0]))), h = Math.max(...local.map((p) => Math.abs(p[1])));
   const hole = (r: number): P2[] => Array.from({ length: 49 }, (_, i) => {
@@ -321,6 +382,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   const owned = useRef<Spot[]>([]);
   const ready = useRef(false);
   const shown = useRef(0); // 0: the map's blocks, 1: the measured buildings
+  const site = useRef<P2[]>([]); // the street block's outlines, lon and lat: the ground stays clear around them too
   const needle = useRef<HTMLSpanElement>(null);
   const me = useRef<maplibregl.Marker | null>(null);
   const [credits, setCredits] = useState(false);
@@ -383,8 +445,11 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   const clearModels = () => { models.current.forEach(({ scene }) => { scene.children.forEach((g) => empty(g as THREE.Group)); }); models.current = []; };
   const buildModels = () => {
     clearModels();
-    const drawn = new Set(live.current.buildings.map((x) => x.id));
-    models.current = live.current.buildings.map((b) => {
+    const list = live.current.buildings, drawn = new Set(list.map((x) => x.id));
+    const o = list[0]?.origin ?? [0, 0], block = map.current && list.length ? blockOf(list, roadsNear(map.current, o), o) : new Set<string>();
+    const around = blockPoints(list, block), solid = new Set([...drawn, ...block]);
+    site.current = around;
+    models.current = list.map((b) => {
       const { roofs, walls } = b.real ?? { roofs: [], walls: [] };
       const g = new THREE.Group(), scene = new THREE.Scene();
       const faced = (m: THREE.Mesh, poly: number) => { m.userData = { face: { building: b.id, poly }, color: (m.material as THREE.MeshBasicMaterial).color.getHex() }; g.add(m); return m; };
@@ -397,10 +462,10 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       const skins = (b.sun?.surfaces ?? []).map((x) => skinOf(x, [...roofs, ...walls][polyOf(b, x)], b.sun?.step ?? 1));
       skins.forEach((k) => g.add(k.skin, k.cover, k.plate));
       roofPhoto(b, roofMeshes, () => map.current?.triggerRepaint());
-      const ghosts = ghostsOf(b, new Set(live.current.buildings.map((x) => x.id)));
+      const ghosts = ghostsOf(b, solid, around);
       ghosts.renderOrder = -1;
       g.add(ghosts);
-      g.add(touchingOf(b, drawn));
+      g.add(neighboursOf(b, drawn, block));
       scene.add(g);
       return { scene, at: b.origin, id: b.id, polys: [...roofs, ...walls], surfaces: (b.sun?.surfaces ?? []).map((x) => ({ s: x, poly: polyOf(b, x) })), skins, ghosts };
     });
@@ -996,7 +1061,11 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   useEffect(() => { paintPanels(); }, [panels]);
   // Models are built when their sun arrives, so tiles appear without leaving the screen.
   const sunReady = buildings.filter((b) => b.sun).length;
-  useEffect(() => { if (step === "review" && shown.current === 1) { buildModels(); setShown(1); } }, [sunReady]);
+  useEffect(() => {
+    if (step !== "review" || shown.current !== 1) return;
+    buildModels(); setShown(1);
+    (map.current?.getSource(SITE) as maplibregl.GeoJSONSource | undefined)?.setData(fadeAround(live.current.buildings, site.current));
+  }, [sunReady]);
   // A building hovered in the list lights up on the map.
   useEffect(() => {
     const m = map.current;
@@ -1033,7 +1102,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     if (to) {
       camera.current = { center: m.getCenter(), zoom: m.getZoom(), bearing: m.getBearing(), pitch: m.getPitch() };
       buildModels(); setShown(0); placePins(); frame(MOVE_MS);
-      (m.getSource(SITE) as maplibregl.GeoJSONSource).setData(fadeAround(live.current.buildings));
+      (m.getSource(SITE) as maplibregl.GeoJSONSource).setData(fadeAround(live.current.buildings, site.current));
       m.setLayoutProperty(SITE, "visibility", "visible");
       m.setMaxPitch(REVIEW_PITCH);
       // Once it has arrived, nothing more loads. Closer is fine; further only until the whole site fits at any turn, and the centre stays on the buildings.

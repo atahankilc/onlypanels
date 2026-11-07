@@ -31,9 +31,10 @@ LOOK_M = 160  # shadows from further away are ignored
 LIFT_M = 0.35  # samples sit just off the surface
 PROBE_M = 1.5  # a wall is free where nothing stands this far in front of it
 MIN_FREE_M2 = 10  # a wall with less open area than this is left out
-CONTEXT_M = 26  # neighbours are shown up to this far from the building, fading out
+BLOCK_M = 70  # neighbours this close come with their measured surfaces: the page shows the ones on the same street block
+CONTEXT_M = BLOCK_M + 26  # neighbours are listed up to this far, so the page can fade them out beyond the block
 TOUCH_M = 1.0  # a neighbour this close shares a wall: roof overhangs and survey noise stay under it
-CONTEXT_STEP_M = 3  # their outlines get a point this often, so the fade runs along long walls
+CONTEXT_STEP_M = 3  # their outlines get a point this often, so a fade can run along long walls
 CLEARANCE_M = 0.5  # what a ray must clear, so a surface does not shade itself by rounding
 DIFFUSE_SHARE = 0.5  # of yearly sunlight on a surface: assumed, roughly right for central Europe
 MONTH_DAY = [21, 52, 80, 111, 141, 172, 202, 233, 264, 294, 325, 355]  # the 21st of each month, day of the year
@@ -216,13 +217,13 @@ def _dense(ring):
 
 
 def context(neighbours, own):
-    """Buildings near `own`, a list of (x, y), as outlines whose fade falls from 1 at the building to 0 at CONTEXT_M."""
+    """Buildings within CONTEXT_M of `own`, a list of (x, y), as dense outlines with each point's distance to it in metres."""
     found = []
     for other, h, ring in neighbours:
         pts = _dense(ring)
         gap = np.sqrt(((pts[:, None, :] - own[None, :, :]) ** 2).sum(2)).min(1)
         if gap.min() < CONTEXT_M:
-            found.append((other, h, pts, np.clip(1 - gap / CONTEXT_M, 0, 1)))
+            found.append((other, h, pts, gap))
     return found
 
 
@@ -306,13 +307,13 @@ def surfaces(name, building_id):
         s["at"] = [round(float(v), 7 if i % 3 < 2 else 2) for i, v in enumerate(s["at"].ravel())]
         s["seen"] = base64.b64encode(np.packbits(s["seen"], axis=1).tobytes()).decode()
     own = np.concatenate([_dense([(p[0], p[1]) for p in _metres(r["ring"], origin)]) for r in b["roofs"]])
-    around, solids = [], {}
-    for other, h, pts, fade in context(nearby, own):
+    around, close = [], {}
+    for other, h, pts, gap in context(nearby, own):
         lons, lats = lod2.TO_LONLAT.transform(pts[:, 0] + ox, pts[:, 1] + oy)
-        item = {"id": other, "h": h, "ring": [[round(a, 7), round(c, 7), round(float(f), 2)] for a, c, f in zip(lons, lats, fade)]}
-        if touches(pts, own):  # a building sharing a wall is part of the picture: it gets its measured roof, not a block
-            if other not in solids:
-                solids[other] = lod2.building(squares[other], other)
-            item["solid"] = solids[other]
-        around.append(item)
+        around.append({"id": other, "h": h, "touch": touches(pts, own), "ring": [[round(a, 7), round(c, 7), round(float(g), 1)] for a, c, g in zip(lons, lats, gap)]})
+        if gap.min() < BLOCK_M:  # the page decides which of these share the street block, from the map's roads
+            close.setdefault(squares[other], set()).add(other)
+    solids = {k: v for name, ids in close.items() for k, v in lod2.buildings(name, ids).items()}
+    for item in around:
+        item["solid"] = solids.get(item["id"])
     return {"around": around, "step": round(step, 2), "suns": [{k: s[k] for k in ("month", "hour", "az", "el", "vector", "strength")} for s in suns], "surfaces": out, "sunny": bool(any(yearly)), "missing": sum(y is None for y in yearly)}
