@@ -15,6 +15,23 @@ from .models import HP_KWH_PER_KW, HP_SIZES, TREE, _frame, snap
 
 EV_KWH_PER_KM = 0.18
 HEAT_PUMP_COP = 3.5  # the factor used in the data's own defaults
+# What the customer can tell beyond the past projects. Each stands in only for an answer that is missing, and says so in the trace.
+BASE_FEE_EUR_YEAR = 150  # the fixed part of a German electricity bill, taken off a monthly payment before it becomes kWh
+BIG_USERS_KWH = {"pool": 1500, "sauna": 1000, "ac": 600, "water": 2000}  # a year each, added only when the use is not from the bill
+HEAT_KWH_PER_M2 = {"before1979": 180, "1979to1994": 140, "1995to2009": 100, "since2010": 60}  # heat a year by build period
+BUILT_LABEL = {"before1979": "before 1979", "1979to1994": "1979–1994", "1995to2009": "1995–2009", "since2010": "2010 or later"}
+GOAL_LABEL = {"cost": "low cost", "independence": "independence", "environment": "the environment"}
+GOAL_BATTERY = {"cost": 0.7, "independence": 0.3}  # how sure the engine must be to add a battery, by the customer's priority
+GOAL_PV = {"environment": 1.2}  # more solar, within the roof, when the environment comes first
+
+
+def use_from_payment(monthly_eur, price_ct):
+    """Yearly kWh from the monthly payment on the bill: twelve payments, less the fixed fee, at the price per kWh."""
+    return max(0.0, monthly_eur * 12 - BASE_FEE_EUR_YEAR) / (price_ct / 100)
+
+
+# How much of a car's driving is charged at home, when the customer says. Not said: all of it, as before. Stated assumptions.
+HOME_SHARE = {"most": 0.9, "half": 0.5, "little": 0.2}
 EV_SIZING = 0.75  # share of a car's use that sizes solar: experts give homes with a wallbox about 1 kWp more (scripts/profile_hp_ev.py)
 KWH_PER_KWP = {"Germany": 950, "Austria": 1050, "Switzerland": 1050, "Netherlands": 900, "Other": 1000}
 # m² of usable area per panel, and yield relative to a typical roof.
@@ -185,6 +202,9 @@ class Engine:
         mount = MOUNTS[i.get("mount", "roof")]
         heat_type = i.get("heating")
         heat_mwh = i.get("heat_kwh") and i["heat_kwh"] / 1000
+        heat_from_house = False
+        if not heat_mwh and i.get("living_m2") and i.get("built") in HEAT_KWH_PER_M2:
+            heat_mwh, heat_from_house = i["living_m2"] * HEAT_KWH_PER_M2[i["built"]] / 1000, True
 
         # Heat pump: rule, too few sold systems to learn from.
         # Heat pump: a rule, too few sold systems to learn from. It enters only when the customer or planner asks (D69).
@@ -202,9 +222,18 @@ class Engine:
             hp_kw = float(HP_SIZES[np.abs(need - HP_SIZES).argmin()])
 
         # Demand that the design must serve.
-        ev_mwh = i.get("ev_km", 0) * EV_KWH_PER_KM / 1000 if i.get("ev") else 0.0
+        # The car's use at home: measured at the wallbox if the customer knows it, else driving × consumption × the share charged at home.
+        if not i.get("ev"):
+            ev_mwh = 0.0
+        elif i.get("ev_kwh_month"):
+            ev_mwh = i["ev_kwh_month"] * 12 / 1000
+        else:
+            ev_mwh = i.get("ev_km", 0) * EV_KWH_PER_KM / 1000 * HOME_SHARE.get(i.get("ev_charge_home"), 1.0)
         hp_mwh = (heat_mwh or 15.0) / HEAT_PUMP_COP if hp_wanted else 0.0
         base = i["demand_kwh"] / 1000
+        # A guessed use leaves out what the customer told us runs on electricity; a use from the bill already holds it.
+        big = 0.0 if i.get("demand_source") == "bill" else sum(BIG_USERS_KWH.get(u, 0) for u in i.get("big_users") or []) / 1000
+        base += big
         # A heat pump already there runs on its own meter, so its use is not in the house's. Given, it joins the need the solar is sized
         # for, and the model then sees a home without one, so it is not counted twice. Not given, the model's own "has a heat pump" stands.
         own_hp = (i.get("hp_kwh") or 0) / 1000 if heat_type == "Heatpump" else 0.0
@@ -234,6 +263,11 @@ class Engine:
 
         free_kwp = self.predict(row, added)[0][0]
         kwp, battery, p_battery = self.predict(row, added, max_modules, lock, extra_kwp=old_kwp)
+        goal = i.get("goal")
+        if lock is None and goal in GOAL_PV:
+            kwp = kwp * GOAL_PV[goal]
+            if max_modules is not None:
+                kwp = np.minimum(kwp, max_modules * ASSUMED_KWP_PER_MODULE)
         modules = locked_modules if lock is not None else max(1, round(kwp[0] / ASSUMED_KWP_PER_MODULE))
         kwp_final = modules * ASSUMED_KWP_PER_MODULE
         capped = lock is None and max_modules is not None and free_kwp > max_modules * ASSUMED_KWP_PER_MODULE
@@ -250,7 +284,7 @@ class Engine:
                                "low": similar["kwp_low"], "high": similar["kwp_high"]})
 
         has_storage = bool(i.get("has_storage"))
-        battery_yes = bool(p_battery[0] >= 0.5) and not has_storage
+        battery_yes = bool(p_battery[0] >= GOAL_BATTERY.get(goal, 0.5)) and not has_storage
         battery_kwh = float(battery[0]) if battery_yes else 0.0
         unsure = not has_storage and o.get("battery_kwh") is None and bool(p_battery[0] < UNSURE_BATTERY)
         catalog = [float(v) for v in self.catalog.get(i["installer"], [])]
@@ -266,7 +300,7 @@ class Engine:
         else:
             reasons.append({"code": "battery_no", "rate": similar["battery_rate"]})
 
-        wallbox = bool(i.get("ev"))
+        wallbox = bool(i.get("ev")) and not i.get("has_wallbox")  # one already on the wall is not sold again
         if o.get("wallbox") is not None:
             wallbox = o["wallbox"]
         elif wallbox:
@@ -298,9 +332,9 @@ class Engine:
         old_mwh, old_battery = (ex["mwh"], ex["battery_kwh"]) if known else (0.0, 0.0)
         # The home as a whole, both systems and both batteries. The saving is only what the new system adds to the old one.
         heat_load = (hp_mwh + own_hp) * 1000
-        estimate = simulate(base * 1000, ev_mwh * 1000, heat_load, (production + old_mwh) * 1000, battery_kwh + old_battery, price, sun=sun)
+        estimate = simulate(base * 1000, ev_mwh * 1000, heat_load, (production + old_mwh) * 1000, battery_kwh + old_battery, price, sun=sun, ev_day=bool(i.get("ev_day")))
         if known:
-            before = simulate(base * 1000, ev_mwh * 1000, heat_load, old_mwh * 1000, old_battery, price, sun=sun)
+            before = simulate(base * 1000, ev_mwh * 1000, heat_load, old_mwh * 1000, old_battery, price, sun=sun, ev_day=bool(i.get("ev_day")))
             estimate["saving_eur"] = max(0, estimate["saving_eur"] - before["saving_eur"])
         reasons.append({"code": "balance", "production": round(production, 1), "ratio": round(production / total, 1)})
 
@@ -308,6 +342,16 @@ class Engine:
         review = _review(near, similar, kwp_final, battery_kwh, total, has_storage, unsure, p_battery[0])
         if ex:
             review.extend(_existing_notes(ex))
+        if i.get("trees"):
+            review.append({"code": "trees", "level": "warn", "on": "pv", "text": "The customer says big trees stand near the roof. The 3D model has no trees: check their shade on the photo before trusting the yield."})
+        if i.get("roof_renovation") in ("yes", "unsure"):
+            review.append({"code": "roof_renovation", "level": "warn", "on": "pv", "text": "The customer plans to renew the roof soon" + (" or is not sure" if i["roof_renovation"] == "unsure" else "") + ". Renew it before the panels go on."})
+        if heat_from_house and hp_wanted:
+            review.append({"code": "heat_from_house", "level": "note", "on": "heatpump", "text": f"Heat use estimated from the house: {_num(i['living_m2'], 0)} m², built {BUILT_LABEL[i['built']]}, at {HEAT_KWH_PER_M2[i['built']]} kWh per m². Ask for the gas or oil bill."})
+        if big:
+            review.append({"code": "big_users", "level": "note", "on": "pv", "text": f"{_num(big)} MWh added for what the customer runs on electricity ({', '.join(i['big_users'])}), since the yearly use is not from the bill."})
+        if goal in GOAL_LABEL:
+            review.append({"code": "goal", "level": "note", "on": "pv", "text": f"The customer puts {GOAL_LABEL[goal]} first" + (f": a battery only when the engine is at least {round(GOAL_BATTERY[goal] * 100)}% sure." if goal in GOAL_BATTERY else f": solar up to {round((GOAL_PV[goal] - 1) * 100)}% larger, within the roof." if goal in GOAL_PV else ".")})
         trace = _trace(
             i=i, o=o, base=base, ev_mwh=ev_mwh, hp_mwh=hp_mwh, total=total, heat_type=heat_type, heat_mwh=heat_mwh,
             hp_kw=hp_kw, hp_wanted=hp_wanted, surfaces=surfaces, max_modules=max_modules, free_kwp=free_kwp,
@@ -403,8 +447,13 @@ def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_
     need_in = [fact("demand_kwh", "House", f"{_num(base * 1000, 0)} kWh")]
     how = ["The house's yearly use"]
     if ev_mwh:
-        need_in.append(fact("ev_km", "Car", f"{_num(i.get('ev_km', 0), 0)} km"))
-        how.append(f"car at {EV_KWH_PER_KM} kWh per km")
+        if i.get("ev_kwh_month"):
+            need_in.append(fact("ev_kwh_month", "Car at home", f"{_num(i['ev_kwh_month'], 0)} kWh a month"))
+            how.append("car as charged at home, from the customer's wallbox")
+        else:
+            need_in.append(fact("ev_km", "Car", f"{_num(i.get('ev_km', 0), 0)} km"))
+            share = HOME_SHARE.get(i.get("ev_charge_home"))
+            how.append(f"car at {EV_KWH_PER_KM} kWh per km" + (f", {round(share * 100)}% of it charged at home" if share else ""))
     if hp_mwh:
         need_in.append(fact("heat_kwh", "Heat", f"{_num((heat_mwh or 15.0) * 1000, 0)} kWh"))
         how.append(f"heat pump: heat ÷ {HEAT_PUMP_COP}")
@@ -487,8 +536,8 @@ def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_
                   "result": hp_res})
 
     steps.append({"id": "wallbox", "title": "Wallbox", "kind": "rule", "by": "planner" if o.get("wallbox") is not None else "engine",
-                  "inputs": [fact("ev", "Electric car", "yes" if i.get("ev") else "no")],
-                  "how": "Added when there is an electric car.", "result": "Included." if wallbox else "Not included."})
+                  "inputs": [fact("ev", "Electric car", "yes" if i.get("ev") else "no"), fact("has_wallbox", "Wallbox now", "yes" if i.get("has_wallbox") else "no")],
+                  "how": "Added when there is an electric car, unless one is already on the wall.", "result": "Included." if wallbox else ("Not included: one is already there." if i.get("ev") and i.get("has_wallbox") else "Not included.")})
 
     steps.append({"id": "energy", "title": "Energy check", "kind": "physics",
                   "inputs": [fact(None, "Production", f"{_num(production)} MWh"), fact("price_ct_kwh", "Price", f"{_num(i.get('price_ct_kwh', 32.0))} ct")],

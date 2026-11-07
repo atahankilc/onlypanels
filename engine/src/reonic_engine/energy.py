@@ -42,6 +42,9 @@ def _year(day_shape, month_weight):
 SEASON = [1.2, 1.15, 1.05, 1, .9, .85, .85, .85, .95, 1, 1.1, 1.2]
 HOUSE = _year(HOUSE_DAY, [s * d for s, d in zip(SEASON, MONTH_DAYS)])
 EV = _year(EV_DAY, MONTH_DAYS)
+# A car that stands at home in the day charges while the sun shines. Assumed shape, not measured.
+EV_SUN_DAY = [0, 0, 0, 0, 0, 0, 0, 0, .3, .8, 1.3, 1.6, 1.7, 1.6, 1.3, .8, .4, .2, .1, 0, 0, 0, 0, 0]
+EV_SUN = _year(EV_SUN_DAY, MONTH_DAYS)
 HEAT = _year([1] * 24, [20, 17, 14, 8, 3, 1, 0.5, 0.5, 2, 7, 12, 17])
 
 
@@ -107,19 +110,19 @@ def sun_shape(surfaces=None, placed=None):
     return weather()
 
 
-def simulate(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, sun=None):
+def simulate(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, sun=None, ev_day=False):
     """One estimate, averaged over the weather years. sun: hourly shapes from sun_shape(); the fallback is the clear-ish model."""
     years = sun if sun is not None else weather()
     if years is None:
-        return _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, SOLAR)
-    runs = [_year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, y) for y in np.atleast_2d(years)]
+        return _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, SOLAR, ev_day)
+    runs = [_year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, y, ev_day) for y in np.atleast_2d(years)]
     return {"self_sufficiency_pct": round(np.mean([r["self_sufficiency_pct"] for r in runs])),
             "self_use_pct": round(np.mean([r["self_use_pct"] for r in runs])),
             "saving_eur": int(round(np.mean([r["saving_eur"] for r in runs]) / 10) * 10)}
 
 
-def _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, shape):
-    load = (house_kwh * HOUSE + ev_kwh * EV + heat_kwh * HEAT).tolist()
+def _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, shape, ev_day=False):
+    load = (house_kwh * HOUSE + ev_kwh * (EV_SUN if ev_day else EV) + heat_kwh * HEAT).tolist()
     solar = (production_kwh * shape).tolist()
     capacity = battery_kwh * BATTERY_USABLE
     rate = battery_kwh * C_RATE

@@ -9,15 +9,19 @@ const BY_PEOPLE = [["1", 2000], ["2", 2700], ["3", 3500], ["4", 3800], ["5+", 45
 // Past projects hold almost only heat pump, gas and oil (scripts/profile_heating.py); anything else the engine treats as unknown.
 // What the customer can tell us beyond that is asked, never required: a heat pump's own meter, the gas or oil a year.
 const HEATING = [["Heatpump", "Heat pump"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherRenewable", "Wood or pellets"], ["unknown", "Something else or not sure"]] as const;
+const BIG_USERS = [["pool", "Pool"], ["sauna", "Sauna"], ["ac", "Air conditioning"], ["water", "Electric water heater"]] as const;
+const BUILT = [["before1979", "Before 1979"], ["1979to1994", "1979 – 1994"], ["1995to2009", "1995 – 2009"], ["since2010", "2010 or later"]] as const;
+const GOALS = [["cost", "Low cost", "A system that pays back fast"], ["independence", "Independence", "As much of my own power as I can"], ["environment", "The environment", "As much clean power as the roof gives"]] as const;
 const KWH_PER_LITRE_OIL = 10; // heating oil, about 10 kWh of heat per litre
 const FOSSIL = ["Gas", "Oil", "OtherNonRenewable"];
 const number = (v: string) => (v === "" ? null : Number(v));
 
-export type Stage = "roof" | "solar" | "battery" | "use" | "heat" | "car" | "send" | "sent";
+export type Stage = "roof" | "roofinfo" | "solar" | "battery" | "use" | "big" | "house" | "heat" | "car" | "charge" | "goal" | "send" | "sent";
 /** One topic a page. A follow-up opens on the same page, under the answer that needs it, so the count never changes. */
 // Every household sees the same pages, so the count never moves. A battery without solar is rare, but one tap answers it.
-const PAGES: Stage[] = ["roof", "solar", "battery", "use", "heat", "car", "send"];
-const flowFor = (_: Answers): Stage[] => PAGES;
+// Charging habits only follow a car, now or soon.
+const PAGES: Stage[] = ["roof", "roofinfo", "solar", "battery", "use", "big", "house", "heat", "car", "charge", "goal", "send"];
+const flowFor = (a: Answers): Stage[] => PAGES.filter((p) => p !== "charge" || a.ev);
 
 type Props = {
   stage: Stage; setStage: (s: Stage) => void; answers: Answers; setAnswers: (a: Answers) => void;
@@ -30,7 +34,8 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
 
   const at_ = Math.max(0, PAGES.indexOf(stage));
   // The electricity page shows one way of answering at a time: the number, a range, and as a last resort the household size.
-  const [way, setWay] = useState<"exact" | "range" | "people">(a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source === "people" || a.use_source === "unknown" ? "people" : "exact");
+  const [way, setWay] = useState<"exact" | "range" | "people" | "payment">(a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source === "people" || a.use_source === "unknown" ? "people" : a.use_source === "payment" ? "payment" : "exact");
+  const priceField = () => numberField(optional("Price per kWh (cents), from your bill"), a.price_known ? a.price_ct_kwh : null, (v) => setAnswers({ ...a, price_ct_kwh: v ?? 32, price_known: v != null }), "32 if you skip");
   const noIdea = <button type="button" className="textlink" onClick={() => setWay("people")}>I have no idea</button>;
   const go = (next: Stage) => {
     setFace(null);
@@ -105,6 +110,18 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
   const fossil = FOSSIL.includes(a.heating ?? "");
   return (
     <aside className="panel tall quiz" key={stage} ref={panel} onKeyDown={enter}>
+      {stage === "roofinfo" && page("Anything we should know about the roof?", "The 3D model cannot see these.", <div className="more flat">
+        <h2>Big trees near the roof?</h2>
+        <div className="pair">
+          <Button size="lg" wide aria-pressed={a.trees === true} onClick={() => setAnswers({ ...a, trees: true })}>Yes</Button>
+          <Button size="lg" wide aria-pressed={a.trees === false} onClick={() => setAnswers({ ...a, trees: false })}>No</Button>
+        </div>
+        <h2>Will the roof be renewed in the next few years?</h2>
+        <div className="answers grid3">
+          {([["yes", "Yes"], ["no", "No"], ["unsure", "Not sure"]] as const).map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.roof_renovation === v} onClick={() => setAnswers({ ...a, roof_renovation: v })}>{label}</Button>)}
+        </div>
+      </div>)}
+
       {stage === "solar" && page("Is there solar here already?", null, yesNo("has_solar", { solar_kwp: null, solar_year: null }), a.has_solar && <>
         <h2>Where are the panels?<span className="opt">Optional</span></h2>
         <p className="small muted">Mark them on the map with <b>Whole surface</b> or <b>Draw</b>. We leave that area out of your new system.</p>
@@ -129,9 +146,22 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
           <div className="answers">
             <Field label="kWh a year"><Input type="number" min={0} placeholder="e.g. 4,200" value={a.use_source === "exact" ? a.demand_kwh ?? "" : ""}
               onChange={(e) => setAnswers({ ...a, demand_kwh: number(e.target.value), use_source: e.target.value ? "exact" : null })} /></Field>
+            {priceField()}
           </div>
           <div className="switches">
             <button type="button" className="textlink" onClick={() => setWay("range")}>I don't know it exactly</button>
+            {noIdea}
+          </div>
+          <button type="button" className="textlink lone" onClick={() => setWay("payment")}>I only know my monthly payment</button>
+        </>}
+        {way === "payment" && <>
+          <p className="muted">The amount you pay each month for electricity. We work out the use from it.</p>
+          <div className="answers">
+            {numberField("Monthly payment (€)", a.monthly_eur, (monthly_eur) => setAnswers({ ...a, monthly_eur, use_source: monthly_eur ? "payment" : null, demand_kwh: null }))}
+            {priceField()}
+          </div>
+          <div className="switches">
+            <button type="button" className="textlink" onClick={() => setWay("exact")}>I know the yearly use</button>
             {noIdea}
           </div>
         </>}
@@ -165,6 +195,18 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
         <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={next}>Next</Button></div>
       </>}
 
+      {stage === "big" && page("Anything big that runs on electricity?", "Pick all that apply.", <div className="answers grid2">
+        {BIG_USERS.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.big_users.includes(v)} onClick={() => setAnswers({ ...a, big_users: a.big_users.includes(v) ? a.big_users.filter((x) => x !== v) : [...a.big_users, v] })}>{label}</Button>)}
+      </div>)}
+
+      {stage === "house" && page("About your house", null, <div className="more flat">
+        <h2>When was it built?</h2>
+        <div className="answers grid2">
+          {BUILT.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.built === v} onClick={() => setAnswers({ ...a, built: v })}>{label}</Button>)}
+        </div>
+        {numberField(optional("Living area (m²)"), a.living_m2, (living_m2) => setAnswers({ ...a, living_m2 }))}
+      </div>)}
+
       {stage === "heat" && page("How do you heat your home?", null, <div className="answers grid2">
         {HEATING.map(([value, label]) => <Button key={value} size="lg" wide aria-pressed={a.heating === value}
           onClick={() => answer({ heating: value, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null }, !(FOSSIL.includes(value) || value === "Heatpump"))}>{label}</Button>)}
@@ -186,10 +228,46 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
       </>)}
 
       {stage === "car" && page("Do you drive an electric car?", null, <div className="answers">
-        <Button size="lg" wide aria-pressed={a.ev === true && !a.ev_planned} onClick={() => answer({ ev: true, ev_planned: false }, false)}>Yes</Button>
-        <Button size="lg" wide aria-pressed={a.ev === true && a.ev_planned} onClick={() => answer({ ev: true, ev_planned: true }, false)}>Not yet, but soon</Button>
-        <Button size="lg" wide aria-pressed={a.ev === false} onClick={() => answer({ ev: false, ev_planned: false, ev_km: null })}>No</Button>
-      </div>, a.ev && numberField(optional("How far do you drive a year? (km)"), a.ev_km, (ev_km) => setAnswers({ ...a, ev_km }), "11,300 if you skip"))}
+        <Button size="lg" wide aria-pressed={a.ev === true && !a.ev_planned} onClick={() => answer({ ev: true, ev_planned: false, ev_when: null })}>Yes</Button>
+        <Button size="lg" wide aria-pressed={a.ev === true && a.ev_planned} onClick={() => answer({ ev: true, ev_planned: true, ev_kwh_month: null, has_wallbox: null })}>Not yet, but soon</Button>
+        <Button size="lg" wide aria-pressed={a.ev === false} onClick={() => answer({ ev: false, ev_planned: false, ev_km: null, ev_count: null, ev_kwh_month: null, ev_when: null, ev_charge_home: null, ev_day: null, has_wallbox: null })}>No</Button>
+      </div>, a.ev && <>
+        {a.ev_planned && <>
+          <h2>When?</h2>
+          <div className="pair">
+            <Button size="lg" wide aria-pressed={a.ev_when === "soon"} onClick={() => setAnswers({ ...a, ev_when: "soon" })}>Within a year</Button>
+            <Button size="lg" wide aria-pressed={a.ev_when === "later"} onClick={() => setAnswers({ ...a, ev_when: "later" })}>Later</Button>
+          </div>
+        </>}
+        <h2>How many?</h2>
+        <div className="pair">
+          {[1, 2].map((n) => <Button key={n} size="lg" wide aria-pressed={a.ev_count === n} onClick={() => setAnswers({ ...a, ev_count: n })}>{n === 1 ? "One" : "Two"}</Button>)}
+        </div>
+        {!a.ev_planned && numberField(optional("Charged at home a month (kWh)"), a.ev_kwh_month, (ev_kwh_month) => setAnswers({ ...a, ev_kwh_month }), "From your wallbox or car app")}
+        {numberField(optional(a.ev_planned ? "Kilometres a year you expect, all cars" : "Or: kilometres a year, all cars"), a.ev_km, (ev_km) => setAnswers({ ...a, ev_km }), `${(11300 * (a.ev_count ?? 1)).toLocaleString("en")} if you skip`)}
+      </>)}
+
+      {stage === "charge" && page("How do you charge?", null, <div className="more flat">
+        <h2>Where mostly?</h2>
+        <div className="answers">
+          {([["most", "At home"], ["half", "Half and half"], ["little", "Elsewhere"]] as const).map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.ev_charge_home === v} onClick={() => setAnswers({ ...a, ev_charge_home: v })}>{label}</Button>)}
+        </div>
+        <h2>Is the car at home during the day?</h2>
+        <p className="small muted">Then it can charge straight from the sun.</p>
+        <div className="pair">
+          <Button size="lg" wide aria-pressed={a.ev_day === true} onClick={() => setAnswers({ ...a, ev_day: true })}>Often</Button>
+          <Button size="lg" wide aria-pressed={a.ev_day === false} onClick={() => setAnswers({ ...a, ev_day: false })}>Rarely</Button>
+        </div>
+        <h2>Is there a wallbox already?</h2>
+        <div className="pair">
+          <Button size="lg" wide aria-pressed={a.has_wallbox === true} onClick={() => setAnswers({ ...a, has_wallbox: true })}>Yes</Button>
+          <Button size="lg" wide aria-pressed={a.has_wallbox === false} onClick={() => setAnswers({ ...a, has_wallbox: false })}>No</Button>
+        </div>
+      </div>)}
+
+      {stage === "goal" && page("What matters most to you?", "We size the system with this in mind.", <div className="answers">
+        {GOALS.map(([v, label, line]) => <Button key={v} size="lg" wide className="choice" aria-pressed={a.goal === v} onClick={() => setAnswers({ ...a, goal: v })}><b>{label}</b><small>{line}</small></Button>)}
+      </div>)}
     </aside>
   );
 }

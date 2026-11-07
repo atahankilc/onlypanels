@@ -133,3 +133,26 @@ def test_existing_heat_pump_use_joins_the_need_when_given(engine):
     assert given["energy"]["total_mwh"] == round(without["energy"]["total_mwh"] + 4.5, 2)
     assert given["pv"]["kwp"] >= without["pv"]["kwp"]
     assert "hp_kwh" in {f["key"] for s in given["trace"] for f in s["inputs"]}
+
+
+def test_car_charging_habits_change_the_need_and_the_wallbox(engine):
+    car = {**HOME, "ev": True, "ev_km": 15000}
+    home, away = engine.design(car), engine.design({**car, "ev_charge_home": "little"})
+    assert away["energy"]["ev_mwh"] < home["energy"]["ev_mwh"] and away["pv"]["kwp"] <= home["pv"]["kwp"]
+    assert engine.design({**car, "ev_kwh_month": 200})["energy"]["ev_mwh"] == 2.4
+    day, night = engine.design({**car, "ev_day": True}), engine.design(car)
+    assert day["energy"]["self_sufficiency_pct"] >= night["energy"]["self_sufficiency_pct"]
+    assert not engine.design({**car, "has_wallbox": True})["wallbox"]["included"]
+
+
+def test_more_answers_from_the_homeowner(engine):
+    from reonic_engine.design import use_from_payment
+    assert round(use_from_payment(100, 32)) == round((1200 - 150) / 0.32)
+    guessed, billed = {**HOME, "big_users": ["pool"]}, {**HOME, "big_users": ["pool"], "demand_source": "bill"}
+    assert engine.design(guessed)["energy"]["base_mwh"] == 7.5 and engine.design(billed)["energy"]["base_mwh"] == 6.0
+    old, new = (engine.design({**HOME, "heating": "Gas", "living_m2": 150, "built": b}, {"heatpump": True}) for b in ("before1979", "since2010"))
+    assert old["heatpump"]["kw"] >= new["heatpump"]["kw"] and old["energy"]["hp_mwh"] > new["energy"]["hp_mwh"]
+    roof = {**HOME, "surfaces": [{"max_modules": 60, "kwh_per_kwp": 950}]}
+    assert engine.design({**roof, "goal": "environment"})["pv"]["kwp"] >= engine.design(roof)["pv"]["kwp"]
+    notes = {n["code"] for n in engine.design({**HOME, "trees": True, "roof_renovation": "yes", "goal": "cost"})["review"]}
+    assert {"trees", "roof_renovation", "goal"} <= notes

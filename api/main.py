@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from reonic_engine import battery as batteries, lod2, site, sun
 from reonic_engine.data import load_dataset
-from reonic_engine.design import Engine
+from reonic_engine.design import Engine, use_from_payment
 from reonic_engine.refine import refine
 
 SQUARE = r"^\d{3}_\d{4}$"  # it becomes part of a download address
@@ -55,6 +55,21 @@ class Inputs(BaseModel):
     has_storage: bool | None = False
     ev: bool | None = False
     ev_km: float = 15000
+    # What the customer can tell about the car beyond its driving: charged at home a month (wallbox), how much is charged at home,
+    # whether it stands at home in the day, and a wallbox already there.
+    ev_kwh_month: float | None = None
+    # More the homeowner can tell: where the yearly use came from, the monthly payment, big electric users, the house, the roof, the priority.
+    demand_source: str | None = None  # bill, range, people, unknown
+    monthly_eur: float | None = None
+    big_users: list[str] | None = None  # pool, sauna, ac, water
+    living_m2: float | None = None
+    built: str | None = None  # before1979, 1979to1994, 1995to2009, since2010
+    trees: bool | None = None
+    roof_renovation: str | None = None  # yes, no, unsure
+    goal: str | None = None  # cost, independence, environment
+    ev_charge_home: str | None = None  # most, half, little
+    ev_day: bool | None = None
+    has_wallbox: bool | None = None
     surfaces: list[Surface] | None = None
     # Solar already on the building: size and year if the customer knows them, else the area they marked, and its sun.
     existing_kwp: float | None = None
@@ -86,6 +101,8 @@ def design(req: DesignRequest):
     """The planner's design. Homeowner answers may be missing; what stood in for them is listed in the answer."""
     i = req.inputs.model_dump()
     assumed = [] if i["demand_kwh"] else ["demand_kwh"]
+    if not i["demand_kwh"] and i.get("monthly_eur"):
+        i["demand_kwh"], i["demand_source"] = use_from_payment(i["monthly_eur"], i["price_ct_kwh"]), "payment"
     i["demand_kwh"] = i["demand_kwh"] or TYPICAL_USE_KWH
     o = req.overrides.model_dump()
     d = engine().design(i, o)
