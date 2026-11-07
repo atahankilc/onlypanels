@@ -5,7 +5,7 @@ from concurrent.futures import ProcessPoolExecutor
 from fastapi import FastAPI, HTTPException, Path
 from fastapi.responses import FileResponse
 
-from reonic_engine import lod2, site
+from reonic_engine import lod2, site, sun
 
 SQUARE = r"^\d{3}_\d{4}$"  # it becomes part of a download address
 app = FastAPI(title="Home energy design")
@@ -58,6 +58,15 @@ async def site_homes(name: str = Path(pattern=SQUARE)):
 async def site_edges(name: str = Path(pattern=SQUARE)):
     await built(name)
     return FileResponse(lod2.path(name, "edges"), media_type="application/octet-stream")
+
+
+@app.get("/api/site/sun/{name}/{building}")
+async def site_sun(building: str, name: str = Path(pattern=SQUARE)):
+    await built(name)
+    found = await asyncio.to_thread(sun.surfaces, name, building)
+    if found is None:
+        raise HTTPException(404, "No such building")
+    return found
 
 
 @app.get("/api/site/square/{name}/{building}")

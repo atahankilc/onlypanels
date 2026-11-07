@@ -1,0 +1,236 @@
+"""Sun on a building's surfaces: measured geometry, real sun positions, and what the neighbours block.
+
+Yearly sunlight per surface comes from PVGIS. Shadow comes from a height map of the surroundings: footprints and
+heights around the building, its own roofs exactly. The split between direct and diffuse light is an assumption.
+Only coordinates leave this machine.
+"""
+import base64
+import json
+import math
+import urllib.parse
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
+
+import numpy as np
+
+from . import lod2
+
+PVGIS = "https://re.jrc.ec.europa.eu/api/v5_3/PVcalc"
+AGENT = "energy-design-desk-demo"
+SYSTEM_LOSS_PCT = 14  # PVGIS default
+MIN_SURFACE_M2 = 10  # smaller pieces are drawn, not offered
+MAX_SAMPLES = 9000  # per building, so a huge block stays quick
+LOOK_M = 160  # shadows from further away are ignored
+LIFT_M = 0.35  # samples sit just off the surface
+PROBE_M = 1.5  # a wall is free where nothing stands this far in front of it
+MIN_FREE_M2 = 10  # a wall with less open area than this is left out
+CLEARANCE_M = 0.5  # what a ray must clear, so a surface does not shade itself by rounding
+DIFFUSE_SHARE = 0.5  # of yearly sunlight on a surface: assumed, roughly right for central Europe
+MONTH_DAY = [21, 52, 80, 111, 141, 172, 202, 233, 264, 294, 325, 355]  # the 21st of each month, day of the year
+
+
+def directions(lat):
+    """Where the sun stands each daylight hour on one day a month, in solar time. East, north, up."""
+    found = []
+    phi = math.radians(lat)
+    for month, day in enumerate(MONTH_DAY, 1):
+        dec = math.radians(23.44) * math.sin(2 * math.pi * (day - 81) / 365)
+        for hour in range(4, 21):
+            h = math.radians(15 * (hour - 12))
+            sin_el = math.sin(phi) * math.sin(dec) + math.cos(phi) * math.cos(dec) * math.cos(h)
+            if sin_el < math.sin(math.radians(4)):
+                continue
+            el = math.asin(sin_el)
+            az = math.atan2(-math.sin(h) * math.cos(dec), math.cos(phi) * math.sin(dec) - math.sin(phi) * math.cos(dec) * math.cos(h))
+            found.append({"month": month, "hour": hour, "az": round(math.degrees(az) % 360, 1), "el": round(math.degrees(el), 1),
+                          "vector": [math.sin(az) * math.cos(el), math.cos(az) * math.cos(el), math.sin(el)],
+                          "strength": 0.7 ** ((1 / sin_el) ** 0.678)})
+    return found
+
+
+def newell(points):
+    p, q = np.asarray(points), np.roll(np.asarray(points), -1, axis=0)
+    return np.array([((p[:, 1] - q[:, 1]) * (p[:, 2] + q[:, 2])).sum(), ((p[:, 2] - q[:, 2]) * (p[:, 0] + q[:, 0])).sum(), ((p[:, 0] - q[:, 0]) * (p[:, 1] + q[:, 1])).sum()])
+
+
+def inside(x, y, ring):
+    """Which points lie in a ring, all at once."""
+    hit = np.zeros(x.shape, bool)
+    for (ax, ay), (bx, by) in zip(ring, ring[1:] + ring[:1]):
+        cross = (ay > y) != (by > y)
+        if ay != by:
+            hit ^= cross & (x < (bx - ax) * (y - ay) / (by - ay) + ax)
+    return hit
+
+
+def _metres(ring, origin):
+    x, y = lod2.TO_UTM.transform([p[0] for p in ring], [p[1] for p in ring])
+    return [(a - origin[0], b - origin[1], p[2]) for a, b, p in zip(x, y, ring)]
+
+
+class Heights:
+    """Height of everything around a building, on a 1 m grid centred on it."""
+
+    def __init__(self, size):
+        self.half = size
+        self.grid = np.zeros((2 * size, 2 * size), np.float32)
+
+    def add(self, ring, height):
+        """A flat block, or with `height` None a measured surface whose ring carries its own heights."""
+        xs, ys = [p[0] for p in ring], [p[1] for p in ring]
+        x0, x1 = max(int(min(xs)) - 1, -self.half), min(int(max(xs)) + 2, self.half)
+        y0, y1 = max(int(min(ys)) - 1, -self.half), min(int(max(ys)) + 2, self.half)
+        if x0 >= x1 or y0 >= y1:
+            return
+        gx, gy = np.meshgrid(np.arange(x0, x1) + 0.5, np.arange(y0, y1) + 0.5, indexing="ij")
+        mask = inside(gx, gy, [(p[0], p[1]) for p in ring])
+        if height is None:
+            n = newell(ring)
+            if abs(n[2]) < 1e-6:
+                return
+            p = ring[0]
+            z = p[2] - (n[0] * (gx - p[0]) + n[1] * (gy - p[1])) / n[2]
+        else:
+            z = np.full(gx.shape, height)
+        view = self.grid[x0 + self.half:x1 + self.half, y0 + self.half:y1 + self.half]
+        view[mask] = np.maximum(view[mask], z[mask])
+
+    def against(self, points, normal):
+        """Which points of a wall have another building right in front of them."""
+        pos = points + PROBE_M * np.asarray(normal)
+        ix, iy = np.floor(pos[:, 0]).astype(int) + self.half, np.floor(pos[:, 1]).astype(int) + self.half
+        ok = (ix >= 0) & (iy >= 0) & (ix < 2 * self.half) & (iy < 2 * self.half)
+        found = np.zeros(len(points), bool)
+        found[ok] = self.grid[ix[ok], iy[ok]] > pos[ok, 2]
+        return found
+
+    def shaded(self, points, vector):
+        """Which points the sun cannot reach from this direction."""
+        top = float(self.grid.max())
+        blocked = np.zeros(len(points), bool)
+        d = np.asarray(vector)
+        steps = int(min(LOOK_M, (top - points[:, 2].min()) / max(d[2], 0.03))) + 2
+        for t in np.arange(1.5, steps, 1.5):
+            pos = points + t * d
+            ix, iy = np.floor(pos[:, 0]).astype(int) + self.half, np.floor(pos[:, 1]).astype(int) + self.half
+            ok = (ix >= 0) & (iy >= 0) & (ix < 2 * self.half) & (iy < 2 * self.half) & ~blocked
+            blocked[ok] |= self.grid[ix[ok], iy[ok]] > pos[ok, 2] + CLEARANCE_M
+        return blocked
+
+
+def _sample(ring, holes, step):
+    """A grid of points on a flat surface: the points, its two axes and its outward normal."""
+    p = np.asarray(ring, float)
+    n = newell(ring)
+    area = float(np.linalg.norm(n)) / 2
+    n = n / (2 * area)
+    u = np.cross([0, 0, 1], n)
+    u = np.array([1.0, 0, 0]) if np.linalg.norm(u) < 1e-6 else u / np.linalg.norm(u)
+    v = np.cross(n, u)
+    flat = lambda r: [(float((np.asarray(q) - p[0]) @ u), float((np.asarray(q) - p[0]) @ v)) for q in r]
+    a = flat(ring)
+    ga, gb = np.meshgrid(np.arange(min(x for x, _ in a) + step / 2, max(x for x, _ in a), step), np.arange(min(y for _, y in a) + step / 2, max(y for _, y in a), step), indexing="ij")
+    mask = inside(ga, gb, a)
+    for h in holes:
+        mask &= ~inside(ga, gb, flat(h))
+    return p[0] + ga[mask, None] * u + gb[mask, None] * v, u, v, n, area
+
+
+@lru_cache(maxsize=512)
+def _pvgis(lat, lon, tilt, azimuth):
+    params = urllib.parse.urlencode({"lat": lat, "lon": lon, "peakpower": 1, "loss": SYSTEM_LOSS_PCT, "angle": tilt,
+                                     "aspect": azimuth % 360 - 180, "outputformat": "json"})
+    request = urllib.request.Request(f"{PVGIS}?{params}", headers={"User-Agent": AGENT})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        totals = json.load(response)["outputs"]["totals"]["fixed"]
+    return totals["H(i)_y"], totals["E_y"]
+
+
+def _yearly(lat, lon, tilt, azimuth):
+    try:
+        return _pvgis(round(lat, 3), round(lon, 3), int(round(tilt / 5) * 5), int(round(azimuth / 10) * 10) % 360)
+    except (OSError, KeyError, ValueError):
+        return None
+
+
+@lru_cache(maxsize=32)
+def _surroundings(name, centre_x, centre_y):
+    """Footprints and heights near a point, in metres from it."""
+    found = []
+    names = {lod2.tile_name(centre_x + dx, centre_y + dy) for dx in (-LOOK_M, LOOK_M) for dy in (-LOOK_M, LOOK_M)} | {name}
+    for square in names:
+        if not lod2.built(square):
+            lod2.build(square)
+        for f in json.loads(lod2.path(square, "homes").read_bytes())["features"]:
+            x, y = lod2.TO_UTM.transform(f["properties"]["lon"], f["properties"]["lat"])
+            if abs(x - centre_x) < LOOK_M + 60 and abs(y - centre_y) < LOOK_M + 60:
+                found.append((f["properties"]["id"], f["properties"]["h"], f["geometry"]["coordinates"]))
+    return found
+
+
+def surfaces(name, building_id):
+    """Every sizeable surface of a building, sampled: sun over the year and hour by hour. None if there is no such building."""
+    b = lod2.building(name, building_id)
+    if b is None:
+        return None
+    ring0 = b["roofs"][0]["ring"]
+    lon, lat = sum(p[0] for p in ring0) / len(ring0), sum(p[1] for p in ring0) / len(ring0)
+    ox, oy = lod2.TO_UTM.transform(lon, lat)
+    origin = (ox, oy)
+    heights = Heights(LOOK_M + 60)
+    for other, h, polys in _surroundings(name, round(ox, -1), round(oy, -1)):
+        if other != building_id:
+            for rings in polys:
+                heights.add(_metres([[p[0], p[1], 0] for p in rings[0]], origin), h)
+    for roof in b["roofs"]:
+        heights.add(_metres(roof["ring"], origin), None)
+
+    items = [("roof", i, p) for i, p in enumerate(b["roofs"])] + [("wall", i, p) for i, p in enumerate(b["walls"])]
+    shapes = []
+    for kind, index, poly in items:
+        ring = _metres(poly["ring"], origin)
+        if float(np.linalg.norm(newell(ring))) / 2 < MIN_SURFACE_M2:
+            continue
+        shapes.append((kind, index, ring, [_metres(h, origin) for h in poly["holes"]]))
+    total = sum(float(np.linalg.norm(newell(s[2]))) / 2 for s in shapes)
+    step = max(1.0, math.sqrt(total / MAX_SAMPLES))
+
+    suns = directions(lat)
+    out, jobs = [], []
+    for kind, index, ring, holes in shapes:
+        if kind == "roof" and newell(ring)[2] < 0:
+            ring, holes = ring[::-1], [h[::-1] for h in holes]
+        points, u, v, n, area = _sample(ring, holes, step)
+        if kind == "wall" and len(points):
+            points = points[~heights.against(points, n)]
+            area = len(points) * step * step
+            if area < MIN_FREE_M2:
+                continue
+        if not len(points):
+            continue
+        tilt = math.degrees(math.acos(min(1, abs(n[2]))))
+        azimuth = math.degrees(math.atan2(n[0], n[1])) % 360
+        lifted = points + LIFT_M * n
+        cosines = np.array([float(n @ np.asarray(s["vector"])) for s in suns])
+        seen = np.zeros((len(points), len(suns)), bool)
+        for i, s in enumerate(suns):
+            if cosines[i] > 0.02:
+                seen[:, i] = ~heights.shaded(lifted, s["vector"])
+        weight = np.clip(cosines, 0, None) * np.array([s["strength"] for s in suns])
+        share = (seen @ weight) / max(float(weight.sum()), 1e-9)
+        lons, lats = lod2.TO_LONLAT.transform(points[:, 0] + ox, points[:, 1] + oy)
+        out.append({"kind": kind, "index": index, "m2": round(area, 1), "tilt": round(tilt), "azimuth": round(azimuth), "share": share, "seen": seen,
+                    "at": np.stack([lons, lats, points[:, 2]], 1), "u": (u * step).round(3).tolist(), "v": (v * step).round(3).tolist(), "n": n.round(4).tolist()})
+        jobs.append((lat, lon, tilt, azimuth))
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        yearly = list(pool.map(lambda j: _yearly(*j), jobs))
+    for s, y in zip(out, yearly):
+        sun = y[0] if y else None
+        s["kwh_m2"] = None if sun is None else round(sun)
+        s["kwh_per_kwp"] = None if y is None else round(y[1])
+        base = sun if sun is not None else 1000
+        s["year"] = (base * (DIFFUSE_SHARE + (1 - DIFFUSE_SHARE) * s.pop("share"))).round().astype(int).tolist()
+        s["at"] = [round(float(v), 7 if i % 3 < 2 else 2) for i, v in enumerate(s["at"].ravel())]
+        s["seen"] = base64.b64encode(np.packbits(s["seen"], axis=1).tobytes()).decode()
+    return {"step": round(step, 2), "suns": [{k: s[k] for k in ("month", "hour", "az", "el", "vector")} for s in suns], "surfaces": out, "sunny": bool(any(yearly))}
