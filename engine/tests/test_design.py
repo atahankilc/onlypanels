@@ -97,3 +97,15 @@ def test_existing_battery_means_no_new_battery_unless_planner_asks(engine):
 def test_unknown_heat_demand_is_flagged_when_a_heat_pump_is_forced(engine):
     d = engine.design(HOME, {"heatpump": True})
     assert "hp_assumed_heat" in {w["code"] for w in d["warnings"]}
+
+
+def test_alternatives_vary_one_decision_and_come_from_the_engine(engine):
+    home = {**HOME, "heating": "Gas", "heat_kwh": 18000, "surfaces": [{"kind": "roof", "max_modules": 40, "kwh_per_kwp": 1000}]}
+    d = engine.design(home)
+    alts = engine.alternatives(home, {}, d)
+    assert 1 <= len(alts) <= 2 and alts[0]["id"].startswith(("battery", "no_battery"))
+    assert alts[0]["pv"]["modules"] == d["pv"]["modules"]  # a battery variant keeps the solar
+    assert "heatpump" in {a["id"] for a in alts} and next(a for a in alts if a["id"] == "heatpump")["heatpump_kw"] > 0
+    no_gas = {**home, "heating": None}
+    large = {a["id"]: a for a in engine.alternatives(no_gas, {}, engine.design(no_gas))}.get("pv_large")
+    assert large is None or large["pv"]["kwp"] <= engine.design(no_gas)["similar"]["kwp_high"] + 1e-6  # never past what experts go to

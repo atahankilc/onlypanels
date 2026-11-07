@@ -114,3 +114,14 @@
   .offer-sheet th, .offer-sheet td, .offer-sheet .fine, .offer-sheet h4, .offer-sheet header small { color: #000; border-color: #ccc; }
   .no-print { display: none; } .print-only { display: block; }
 }
+
+/* Options: the current design and up to two engine variants. */
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
+.option { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 16px; background: var(--hud-fill); font-size: 12.5px; }
+.option.now { box-shadow: inset 0 0 0 1.5px var(--hud-route); }
+.option > b { font-size: 13.5px; font-weight: 600; }
+.option dl { margin: 0; display: flex; flex-direction: column; gap: 3px; }
+.option dl div { display: flex; justify-content: space-between; gap: 6px; } .option dt { color: var(--hud-ink-2); } .option dd { margin: 0; font-family: var(--font-mono); }
+.option dl div.moved dd { color: var(--hud-route); font-weight: 600; }
+.option small { flex: 1; color: var(--hud-ink-2); }
+.option-tag { align-self: center; padding: 9px 0; font: 500 10.5px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--hud-route); }

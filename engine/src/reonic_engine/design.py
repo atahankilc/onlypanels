@@ -114,6 +114,43 @@ class Engine:
             "learned_from": int((self.train.installer == installer).sum()),
         }
 
+    def alternatives(self, i, overrides, d):
+        """At most two variants of design d, each computed by this same engine with one more decision fixed.
+        Order follows how experts vary their own options for one home: battery first, then solar (scripts/profile_alternatives.py)."""
+        o = overrides or {}
+        kwh, sizes = d["battery"]["kwh"], sorted(d["battery"]["choices"])
+        locks = {"modules": d["pv"]["modules"]}  # a battery variant keeps the solar as it is
+        picks = []
+        if not i.get("has_storage"):
+            guide = any(n["code"] == "battery_guide" for n in d["review"])
+            if kwh and d["battery"]["unsure"]:
+                picks.append(("no_battery", "Without battery", "The battery decision is open: the same system without one.", {**locks, "battery_kwh": 0}))
+            elif kwh and guide and [s for s in sizes if s < kwh]:
+                smaller = max(s for s in sizes if s < kwh)
+                picks.append(("battery_down", "Smaller battery", f"{_num(smaller)} kWh, within the independent guideline more often.", {**locks, "battery_kwh": smaller}))
+            elif kwh and [s for s in sizes if s > kwh]:
+                bigger = min(s for s in sizes if s > kwh)
+                picks.append(("battery_up", "Larger battery", f"{_num(bigger)} kWh: more of the evening from own power.", {**locks, "battery_kwh": bigger}))
+            elif not kwh and self.habit.get(i["installer"]):
+                usual = self.habit[i["installer"]]
+                picks.append(("battery_add", "With battery", f"{_num(usual)} kWh, the size this installer sells most.", {**locks, "battery_kwh": usual}))
+        if i.get("heating") in FOSSIL and not d["heatpump"]["included"] and o.get("heatpump") is not False:
+            picks.append(("heatpump", "With heat pump", "Replaces the " + i["heating"].lower().replace("othernonrenewable", "fossil") + " heating. Solar and battery re-size around it.", {"heatpump": True}))
+        # Larger solar, as large as experts go for similar homes (9 in 10 chose less), within what the roof holds.
+        largest = int(d["similar"]["kwp_high"] // ASSUMED_KWP_PER_MODULE)
+        if d["pv"]["max_modules"]:
+            largest = min(largest, d["pv"]["max_modules"])
+        if len(picks) < 2 and largest - d["pv"]["modules"] >= 3 and o.get("modules") is None:
+            picks.append(("pv_large", "Larger solar", f"{largest} modules, about as large as experts go for similar homes: more to sell, a lower share used at home.", {"modules": largest}))
+        out = []
+        for key, title, why, extra in picks[:2]:
+            a = self.design(i, {**o, **extra})
+            out.append({"id": key, "title": title, "why": why, "overrides": extra,
+                        "pv": {"modules": a["pv"]["modules"], "kwp": a["pv"]["kwp"]}, "battery_kwh": a["battery"]["kwh"],
+                        "heatpump_kw": a["heatpump"]["kw"] if a["heatpump"]["included"] else 0, "wallbox": a["wallbox"]["included"],
+                        "energy": {k: a["energy"][k] for k in ("production_mwh", "total_mwh", "self_sufficiency_pct", "self_use_pct", "saving_eur")}})
+        return out
+
     def design(self, i, overrides=None):
         o = overrides or {}
         reasons, warnings = [], []

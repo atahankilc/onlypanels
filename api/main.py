@@ -78,7 +78,9 @@ def design(req: DesignRequest):
     i = req.inputs.model_dump()
     assumed = [] if i["demand_kwh"] else ["demand_kwh"]
     i["demand_kwh"] = i["demand_kwh"] or TYPICAL_USE_KWH
-    return {**engine().design(i, req.overrides.model_dump()), "assumed": assumed}
+    o = req.overrides.model_dump()
+    d = engine().design(i, o)
+    return {**d, "alternatives": engine().alternatives(i, o, d), "assumed": assumed}
 
 
 @app.get("/api/scores")
