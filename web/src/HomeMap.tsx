@@ -29,9 +29,11 @@ const SITE = "site-fade"; // around the chosen buildings the map fades into plai
 const SITE_FROM_M = 45, SITE_RING_M = 10, SITE_RINGS = [0.2, 0.25, 0.3, 0.4, 0.6, 1];
 const FADE_MS = 900; // from the map's blocks to the measured buildings, and back
 const AERIAL = "https://geoservices.bayern.de/od/wms/dop/v1/dop20?service=WMS&version=1.3.0&request=GetMap&layers=by_dop20c&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=512&height=512&format=image/jpeg";
-const COLORS = { roof: "#3A6FA8", wall: "#1F3A5C", edge: "#8A95A8", ownEdge: "#BFD8F5", hover: "#2F5E94", pendingDim: "#2A2C34", pendingBright: "#6F93BF", face: "#FF9F0A", otherRoof: "#3A3D47", otherWall: "#23252C", limit: "#FFD60A", land: "#0F1013" };
+const COLORS = { roof: "#3A6FA8", edge: "#8A95A8", hover: "#2F5E94", pendingDim: "#2A2C34", pendingBright: "#6F93BF", face: "#FF9F0A", otherRoof: "#3A3D47", otherWall: "#23252C", limit: "#FFD60A", land: "#0F1013" };
 // One light from the south, so the sides of a roof read apart.
 const lit = (hex: string, n: P3) => new THREE.Color(hex).multiplyScalar(0.95 - 0.35 * n[1]).getHex();
+// Walls have no up, so their normal has no reliable sign: east and west sides just sit a step darker, so corners read in daylight.
+const litWall = (hex: string, n: P3) => new THREE.Color(hex).multiplyScalar(1 - 0.24 * Math.abs(n[0])).getHex();
 const wide = () => matchMedia("(min-width: 821px)").matches;
 
 export type Picked = { id: string; home: string; square: string; at: P2 };
@@ -48,8 +50,8 @@ type Props = {
 
 // What changes with the theme on the map itself. Everything else comes from the base style.
 const TONES = {
-  dark: { ground: "#0F1013", ghost: "#3A3D47", block: "#2A2C34", edge: "#8A95A8", hover: "#2F5E94", land: "#0F1013" },
-  light: { ground: "#F1F0EC", ghost: "#CFCDC6", block: "#E4E2DC", edge: "#8E8B82", hover: "#9FC2EC", land: "#F1F0EC" },
+  dark: { ground: "#0F1013", ghost: "#3A3D47", block: "#2A2C34", edge: "#8A95A8", hover: "#2F5E94", land: "#0F1013", wall: "#1F3A5C", roof: COLORS.roof, line: "#BFD8F5" },
+  light: { ground: "#F1F0EC", ghost: "#E3E2DE", block: "#E4E2DC", edge: "#8E8B82", hover: "#9FC2EC", land: "#F1F0EC", wall: "#FFFFFF", roof: "#B0735A", line: "#55565A" },
 };
 const blockColour = (dark: boolean): maplibregl.ExpressionSpecification => { const t = TONES[dark ? "dark" : "light"]; return ["case", ["boolean", ["feature-state", "near"], false], COLORS.face, ["boolean", ["feature-state", "picked"], false], COLORS.roof, ["boolean", ["feature-state", "hover"], false], t.hover, t.block]; };
 
@@ -319,10 +321,11 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       const { roofs, walls } = b.real ?? { roofs: [], walls: [] };
       const g = new THREE.Group(), scene = new THREE.Scene();
       const faced = (m: THREE.Mesh, poly: number) => { m.userData = { face: { building: b.id, poly }, color: (m.material as THREE.MeshBasicMaterial).color.getHex() }; g.add(m); return m; };
-      walls.forEach((p, i) => faced(polygon(p.ring, p.holes, COLORS.wall), roofs.length + i));
-      const roofMeshes = roofs.map((p, poly) => faced(polygon(p.ring, p.holes, lit(COLORS.roof, normal(p.ring))), poly));
+      walls.forEach((p, i) => { faced(polygon(p.ring, p.holes, "#FFFFFF"), roofs.length + i).userData.part = "wall"; });
+      const roofMeshes = roofs.map((p, poly) => { const m = faced(polygon(p.ring, p.holes, "#FFFFFF"), poly); m.userData.part = "roof"; return m; });
       roofPhoto(b, roofMeshes, () => map.current?.triggerRepaint());
-      const line = lines(edgesOf([...walls, ...roofs]), COLORS.ownEdge, 0.5);
+      const line = lines(edgesOf([...walls, ...roofs]), COLORS.edge, 0.5);
+      line.name = "outline";
       (line.material as THREE.Material).userData.opacity = 0.5;
       g.add(line);
       const skins = (b.sun?.surfaces ?? []).map((x) => skinOf(x, [...roofs, ...walls][polyOf(b, x)], b.sun?.step ?? 1));
@@ -366,7 +369,20 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   };
 
 
-  const paintGhosts = () => models.current.forEach((x) => (x.ghosts.material as THREE.MeshBasicMaterial).color.set(TONES[live.current.dark ? "dark" : "light"].ghost));
+  // The theme's colours on the measured buildings. A roof that has its photo keeps it.
+  const paintGhosts = () => {
+    const { dark } = live.current, t = TONES[dark ? "dark" : "light"];
+    models.current.forEach((x) => {
+      (x.ghosts.material as THREE.MeshBasicMaterial).color.set(t.ghost);
+      (x.scene.children[0] as THREE.Group).children.forEach((o) => {
+        const material = (o as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        if (o.name === "outline") material.color.set(t.line);
+        if (!o.userData.part || material.map) return;
+        const n = normal(x.polys[o.userData.face.poly].ring);
+        material.color.set(o.userData.part === "roof" ? lit(t.roof, n) : dark ? t.wall : litWall(t.wall, n));
+      });
+    });
+  };
 
   // Chosen surfaces carry a colour. Everything else shows what it really is, so the eye goes to the choice.
   const paintTiles = () => {
