@@ -150,14 +150,22 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .quiz .more.flat { border-top: 0; padding-top: 0; }
 /* After sending: a check, the reference, what happens next, and what was sent. */
 .quiz .done { display: grid; place-items: center; flex: none; width: 52px; height: 52px; aspect-ratio: 1; margin: 8px 0 18px; border-radius: 50%; background: var(--hud-live); color: var(--hud-base); animation: rise 0.4s var(--ease); }
-.next-steps { list-style: none; counter-reset: step; display: grid; gap: 16px; margin: 22px 0 8px; padding: 0; }
-.next-steps li { counter-increment: step; display: grid; grid-template-columns: 28px 1fr; column-gap: 12px; row-gap: 2px; }
-.next-steps li::before { content: counter(step); grid-row: span 2; display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--hud-line); border-radius: 50%; font-size: 13px; color: var(--hud-ink-2); }
-.next-steps b { font-weight: 600; font-size: 15px; color: var(--hud-ink); }
-.next-steps span { font-size: 13px; color: var(--hud-ink-2); }
+/* Where a request is: one step a line on a rail, done steps green, the running step blue and pulsing, with what it is made of. */
+.timeline { list-style: none; display: grid; margin: 18px 0 8px; padding: 0; }
+.timeline > li { position: relative; display: grid; gap: 3px; padding: 0 0 20px 30px; }
+.timeline > li::before { content: ""; position: absolute; left: 6px; top: 5px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--hud-line); background: var(--hud-base); box-sizing: border-box; z-index: 1; }
+.timeline > li::after { content: ""; position: absolute; left: 10px; top: 16px; bottom: 0; width: 2px; background: var(--hud-line); }
+.timeline > li:last-child { padding-bottom: 0; } .timeline > li:last-child::after { display: none; }
+.timeline > li.past::before { border-color: var(--hud-live); background: var(--hud-live); } .timeline > li.past::after { background: var(--hud-live); }
+.timeline > li.now::before { border-color: var(--hud-route); background: var(--hud-route); box-shadow: 0 0 0 4px color-mix(in srgb, var(--hud-route) 25%, transparent); animation: step-blink 1.6s ease-in-out infinite; }
+.timeline b { font-size: 15px; font-weight: 600; color: var(--hud-ink-3); } .timeline .past b { color: var(--hud-ink); } .timeline .now b { color: var(--hud-route); }
+.timeline > li > span { font-size: 13px; line-height: 1.4; color: var(--hud-ink-3); } .timeline .past > span { color: var(--hud-ink-2); }
+.timeline ul { list-style: none; display: grid; gap: 4px; margin: 4px 0 0; padding: 0; }
+.timeline ul li { position: relative; padding-left: 14px; font-size: 13px; line-height: 1.4; color: var(--hud-ink-2); }
+.timeline ul li::before { content: ""; position: absolute; left: 1px; top: 0.6em; width: 5px; height: 2px; border-radius: 1px; background: var(--hud-ink-3); }
 .sent-answers { margin-top: 18px; border-top: 1px solid var(--hud-line); }
 .sent-answers > summary { padding: 14px 0 4px; font-size: 14px; color: var(--hud-ink-2); cursor: pointer; }
-.sent-answers .overview { margin-top: 4px; }
+.sent-answers .overview, .sent-answers .sendview { margin-top: 4px; }
 /* The overview: one block per question, its answers as label and value, a way back to change it. */
 .overview { display: grid; gap: 4px; margin-top: 18px; }
 .overview section { padding: 12px 0; border-top: 1px solid var(--hud-line); }
@@ -435,7 +443,8 @@ html[data-vt="out"]::view-transition-new(root) { z-index: 1; animation-name: vt-
 .tally b::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--dot); }
 .tally .is-found b::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--dot); }
 .tally span { font-size: 12px; line-height: 1.3; color: var(--hud-ink-2); }
-.overview .assumed { list-style: none; display: grid; gap: 3px; margin: 8px 0 0; padding: 0; }
-.overview .assumed li { position: relative; padding-left: 14px; font-size: 12.5px; line-height: 1.45; color: var(--hud-ink-3); }
-.overview .assumed li::before { content: ""; position: absolute; left: 1px; top: 0.55em; width: 5px; height: 5px; border-radius: 50%; background: var(--hud-warn); }
-.overview .assumed b { color: var(--hud-ink-2); font-weight: 600; }
+.overview .assumed, .sendview .assumed { list-style: none; display: grid; gap: 3px; margin: 8px 0 0; padding: 0; }
+.sendview .assumed { margin: 0; padding: 4px 14px 14px; }
+.overview .assumed li, .sendview .assumed li { position: relative; padding-left: 14px; font-size: 12.5px; line-height: 1.45; color: var(--hud-ink-3); }
+.overview .assumed li::before, .sendview .assumed li::before { content: ""; position: absolute; left: 1px; top: 0.55em; width: 5px; height: 5px; border-radius: 50%; background: var(--hud-warn); }
+.overview .assumed b, .sendview .assumed b { color: var(--hud-ink-2); font-weight: 600; }

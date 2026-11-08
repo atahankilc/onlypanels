@@ -169,6 +169,9 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
     </div> };
   };
 
+  /** The answers as they go, without the home and roof rows: SendView words those from what is actually sent. A lone row is named by its question. */
+  const givenRows = () => { const { groups } = summary(true); return groups.filter(([, to]) => !["where", "roofq", "roof", "send"].includes(to)).flatMap(([title, , rows]) => rows.map(([k, v]) => [rows.length === 1 ? title : k, v] as [string, string])).filter(([, v]) => v !== "Not given" && v !== "None picked" && v !== "Whole roof, nothing marked"); };
+
   if (stage === "send") return (
     <aside className="panel tall quiz" key="send" ref={panel}>
       <p className="count">Overview</p>
@@ -209,9 +212,8 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   if (stage === "share") {
     const out = forInstaller(request, shared), home = buildings.length > 0, roof = request.roof;
     const set = (change: Partial<Shared>) => setShared({ ...shared, ...change });
-    const { answered, groups } = summary(true); // the overview's rows that are not "Not given"
-    // The answers as they go, without the home and roof rows: SendView words those from what is actually sent.
-    const given = groups.filter(([, to]) => !["where", "roofq", "roof", "send"].includes(to)).flatMap(([title, , rows]) => rows.map(([k, v]) => [rows.length === 1 ? title : k, v] as [string, string])).filter(([, v]) => v !== "Not given" && v !== "None picked" && v !== "Whole roof, nothing marked"); // a lone row is named by its question
+    const { answered } = summary(true); // the overview's rows that are not "Not given"
+    const given = givenRows();
     return (
       <aside className="panel tall quiz" key="share" ref={panel}>
         <p className="count">Before sending</p>
@@ -237,21 +239,33 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   }
 
   if (stage === "sent") {
-    const { missing, view } = summary(false);
+    const { missing } = summary(false), at = progress ? stepOf(progress) : 0, ready = !!progress?.offer;
+    const out = forInstaller(request, shared), home = out.buildings.length > 0, roofSent = !!out.roof, place = home || !!out.answers.address;
+    const went = ["your answers", home && "your home", roofSent && "roof numbers", !home && out.answers.address && "your address", out.answers.meter_photo && "a meter photo"].filter(Boolean) as string[];
+    const assumed = pages.flatMap((p) => factsFor(p, ca, ctx).assumed);
+    // What "being planned" is made of: the planner's draft chain, in the homeowner's words, for what was actually sent.
+    const work = [
+      home ? "Sun and shade on your roof, trees included" : roofSent ? "Sun on your roof, from the numbers you sent" : "A typical roof, as none was sent",
+      `Solar and battery${a.wants_hp || a.heating === "Heatpump" ? ", and a heat pump," : ""} sized to your use`,
+      place && "Monument rules and the city's heat plan",
+      "The price, with grants taken off",
+      missing > 0 && `${missing} ${missing === 1 ? "answer" : "answers"} left open: typical values stand in`,
+    ].filter(Boolean) as string[];
     return (
       <aside className="panel tall quiz" key="sent" ref={panel}>
-        <div className="done" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></div>
-        <h1>{!progress || stepOf(progress) === 0 ? "Your request is with an installer" : stepOf(progress) === 1 ? "A planner is working on it" : "Your offer is ready"}</h1>
-        <p className="muted">Request {refId} · sent {day(progress?.sentAt ?? Date.now())}</p>
-        {progress && <Status m={progress} onPanels={onPanels} />}
-        {!progress?.offer && <ol className="next-steps">
-          {buildings.length > 0 && shared.home
-            ? <li><b>They look at your roof and your answers</b><span>On the same 3D model of your home, with its measured sun and shade.</span></li>
-            : <li><b>They look at your answers</b><span>{buildings.length > 0 ? (shared.roof && request.roof ? "With the roof numbers you sent. Your home stayed with you." : "Your home stayed with you, so they estimate the roof.") : shared.roof && request.roof ? "With your roof as you described it." : "No roof was sent, so they estimate it."}</span></li>}
-          <li><b>{missing ? `${missing} ${missing === 1 ? "answer" : "answers"} left open: we assumed ${missing === 1 ? "it" : "them"}` : "You answered everything"}</b><span>{missing ? "Your offer is built on what we assumed, as shown in what you sent." : "Your offer is built on your own answers."}</span></li>
-          <li><b>You get an offer</b><span>Solar, battery and anything else that fits, with what it makes and saves.</span></li>
+        {ready && <div className="done" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></div>}
+        {!ready && <p className="count">Request {refId}</p>}
+        <h1>{ready ? "Your offer is ready" : at === 1 ? "A planner is working on it" : "Your request is with an installer"}</h1>
+        {ready ? <p className="muted">Request {refId} · sent {day(progress?.sentAt ?? Date.now())}</p> : null}
+        {ready && progress ? <Status m={progress} onPanels={onPanels} /> : <ol className="timeline">
+          <li className="past"><b>Sent</b><span>{day(progress?.sentAt ?? Date.now())} · {went.join(", ").replace(/, ([^,]*)$/, " and $1")}</span></li>
+          <li className="now"><b>Being planned</b><ul>{work.map((w) => <li key={w}>{w}</li>)}</ul></li>
+          <li><b>Offer ready</b><span>Shown here: what it makes, costs and saves</span></li>
         </ol>}
-        <details className="sent-answers"><summary>What you sent</summary>{view}</details>
+        <details className="sent-answers"><summary>What you sent</summary>
+          <SendView full={request} out={out} answers={givenRows()} markedM2={m2} title="What went to your installer" />
+          {assumed.length > 0 && <section className="sendview"><h3>Where we assumed</h3><ul className="assumed">{assumed.map((l, i) => <li key={i}>{l.t}</li>)}</ul></section>}
+        </details>
         <div className="stick"><Button variant="solid" size="lg" wide onClick={done}>{buildings.length ? "Back to map" : "Done"}</Button></div>
       </aside>
     );

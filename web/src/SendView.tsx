@@ -26,12 +26,12 @@ function placeRows(full: Handoff, out: Handoff, markedM2: number): { sent: Row[]
   return { sent, kept };
 }
 
-export default function SendView({ full, out, answers, markedM2 }: { full: Handoff; out: Handoff; answers: Row[]; markedM2: number }) {
+export default function SendView({ full, out, answers, markedM2, title = "What leaves this browser" }: { full: Handoff; out: Handoff; answers: Row[]; markedM2: number; title?: string }) {
   const { sent, kept } = placeRows(full, out, markedM2);
   return (
-    <section className="sendview" aria-label="What leaves this browser">
+    <section className="sendview" aria-label={title}>
       <header>
-        <h2>What leaves this browser</h2>
+        <h2>{title}</h2>
       </header>
       <dl className="sv-list">
         {sent.map(([k, v]) => <div key={k + v}><dt>{k}</dt><dd>{v}</dd></div>)}

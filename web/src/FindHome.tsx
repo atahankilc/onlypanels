@@ -194,7 +194,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   /** A sent request, opened from the start page: its home on the map and where it is, read only. */
   const openRequest = (m: Mine) => {
     const h = m.handoff;
-    setFromList(true); setBuildings(h.buildings); setAnswers(h.answers); setChoice(h.choice); setRef(m.ref); setStage("sent"); setTool(null); setUndo([]);
+    setFromList(true); setBuildings(h.buildings); setAnswers(h.answers); setChoice(h.choice); setShared({ ...SHARE_ALL, ...h.shared }); setRef(m.ref); setStage("sent"); setTool(null); setUndo([]);
     setOpen(h.buildings[0]?.home ?? null); setStep("review"); setMove("in");
   };
   // The page that is leaving keeps its content while the map's edge sweeps it away; the answers are cleared once it is gone,
