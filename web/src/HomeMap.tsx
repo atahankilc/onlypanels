@@ -624,7 +624,12 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         const ring = o.ring.map((p) => toLocal(b.origin, p)), mid: P2 = [ring.reduce((a, p) => a + p[0], 0) / ring.length, ring.reduce((a, p) => a + p[1], 0) / ring.length];
         const near = nearest(mid);
         if (Math.hypot(near[0] - mid[0], near[1] - mid[1]) > 3) return; // on another building of the home
-        const hot = live.current.hotObstacle === i, pts = ring.map((p) => [p[0], p[1], nearest(p)[2] + 0.4] as P3);
+        // On the roof's own plane under its middle, so a box on a pitched roof lies on it instead of standing flat and half
+        // inside it (which showed only a corner, like a diamond). Off every roof plane, the nearest sun cell's height as before.
+        const at = (r: P3[], q: P2) => { const n = normal(r), o = r[0]; return o[2] - (n[0] * (q[0] - o[0]) + n[1] * (q[1] - o[1])) / (n[2] || 1); };
+        const plane = x.surfaces.filter(({ s }) => s.kind === "roof").map(({ poly }) => x.polys[poly]?.ring).filter((r): r is P3[] => !!r && r.length > 2 && Math.abs(normal(r)[2]) > 0.2)
+          .filter((r) => inside(mid, r.map((q) => [q[0], q[1]] as P2))).sort((a, c) => at(c, mid) - at(a, mid))[0];
+        const hot = live.current.hotObstacle === i, pts = ring.map((p) => [p[0], p[1], plane ? at(plane, p) + 0.12 : nearest(p)[2] + 0.4] as P3);
         const colour = o.on ? COLORS.face : "#8A95A8";
         const fill = mesh(pts, [0, 1, 2, 0, 2, 3], colour, o.on ? (hot ? 0.65 : 0.4) : 0.15);
         (fill.material as THREE.Material).userData.opacity = (fill.material as THREE.MeshBasicMaterial).opacity;
