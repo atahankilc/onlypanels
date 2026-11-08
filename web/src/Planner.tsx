@@ -1,5 +1,6 @@
 import { isValidElement, useEffect, useRef, useState } from "react";
-import { GAS_CT, Monument, View, monumentOf, surfaceKey } from "./api";
+import { GAS_CT, View, surfaceKey } from "./api";
+import { Monument, monumentOf } from "./monument";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
 import { Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, offerOf, refine, roofOf, turnTo } from "./plan";
@@ -156,7 +157,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const [face, setFace] = useState<Face | null>(null);
   const done = r.checked ?? [], setDone = (checked: string[]) => update(r.id, { checked });
   const out = useDesign(r, roof);
-  // Monument status from the Bavarian monument map, asked once per request; only the buildings' points leave the machine.
+  // Monument status from the Bavarian monument map, asked once per request by the page itself, never through our server.
   const [monument, setMonument] = useState<Monument | null>(null);
   useEffect(() => { let live = true; setMonument(null); monumentOf(r.buildings).then((m) => live && setMonument(m)); return () => { live = false; }; }, [r.id]);
   const first = useRef<Design | null>(null);

@@ -30,19 +30,6 @@ export const PRICE_CT = 32.4;
 // Gas in Munich, all in (base fee included, with VAT): SWM's model household, 15,000 kWh for about €1,764 a year from January 2026
 // (SWM press release of 7 November 2025, read from a search summary). Turns a yearly gas payment into kWh; shown to the planner as assumed.
 export const GAS_CT = 11.8;
-/** Monument status from the Bavarian monument office's map: the building itself listed, inside an ensemble, a listed building within
- *  about 20 m, nothing listed, or the map did not answer. A hint for the planner; the authority decides. */
-export type MonumentHit = { kind: "listed" | "ensemble"; id: string | null; name: string | null; address: string | null };
-export type Monument = { status: "listed" | "ensemble" | "near" | "none" | "unknown"; here: MonumentHit[]; near: MonumentHit[] };
-const MONUMENT_ORDER: Monument["status"][] = ["listed", "ensemble", "near", "unknown", "none"];
-/** Every part of a home asked at its middle point; the strongest status wins. */
-export const monumentOf = (buildings: Selected[]): Promise<Monument> => Promise.all(buildings.map((b) =>
-  fetch(`/api/site/monument?lat=${b.origin[1]}&lon=${b.origin[0]}`).then((r) => (r.ok ? r.json() : { status: "unknown", here: [], near: [] })).catch(() => ({ status: "unknown", here: [], near: [] })) as Promise<Monument>))
-  .then((all) => {
-    const unique = (hits: MonumentHit[]) => [...new Map(hits.map((h) => [h.id ?? h.name, h])).values()];
-    const status = MONUMENT_ORDER.find((s) => all.some((m) => m.status === s)) ?? "unknown";
-    return { status, here: unique(all.flatMap((m) => m.here)), near: unique(all.flatMap((m) => m.near)) };
-  });
 /** A photo made small enough to keep in the page: at most 1,600 px on its longer side, as JPEG. It stays in the browser. */
 export const shrinkPhoto = (file: File, side = 1600): Promise<string> => new Promise((done, fail) => {
   const img = new Image(), url = URL.createObjectURL(file);
