@@ -5,7 +5,8 @@ import { Handoff, Mine } from "./plan";
 import Requests, { RequestPage } from "./Requests";
 import HomeMap, { Face, Picked, Step, Tool, letter } from "./HomeMap";
 import { Close, Search, Undo } from "./icons";
-import Review, { Stage } from "./Review";
+import Review, { Stage, pagesFor } from "./Review";
+import { setGuideContext, useVoiceActions } from "./voiceBus";
 import SunView from "./SunView";
 import { withTrees } from "./treeShade";
 import StartChoice, { Start } from "./Start";
@@ -210,6 +211,23 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
     setStage("roof"); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef()); setFromList(false); setShared(SHARE_ALL); setView(PHOTO);
     if (savedStart() === "form") swap(() => begin("form")); // the next request starts the way this browser chose
   };
+
+  // The voice helper sees where the homeowner is and their answers, never the home, the address, the photo or the census;
+  // it starts, moves between pages and fills in answers as their own taps would (guide.py).
+  const screen = step === "pick" && start === null ? "start" : listing ? "requests" : step === "pick" ? "pick" : stage === "sent" ? "sent" : "questions";
+  const { address: _a, meter_photo: _m, area: _c, ...spoken } = answers;
+  useEffect(() => { setGuideContext({ screen, page: screen === "questions" ? stage : null, pages: [...pagesFor(buildings.length > 0), "share"], answers: spoken }); });
+  useVoiceActions((x) => {
+    if (x.type === "start" && start === null && !move) swap(() => begin(x.way));
+    if (x.type === "new" && listing) { setFormView("form"); setStage("where"); }
+    if (x.type === "goto" && step === "review" && (stage !== "sent" || listing)) setStage(x.page as Stage);
+    if (x.type === "answers" && stage !== "sent") {
+      const v = x.answers as Partial<Answers>;
+      setAnswers((a) => ({ ...a, ...v,
+        ...(v.demand_kwh != null ? { use_source: "exact" as const } : v.monthly_eur != null ? { use_source: "payment" as const } : {}),
+        ...(v.price_ct_kwh != null ? { price_known: true } : {}) }));
+    }
+  });
 
   return (
     <main className={`stage ${step}${bare ? " bare" : ""}`}>

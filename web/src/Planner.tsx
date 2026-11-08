@@ -21,6 +21,7 @@ import { AgentPanel } from "./Agent";
 import type { RoofNumbers } from "./share";
 import { BatteryCurve } from "./BatteryCurve";
 import { CostTab, PriceBook } from "./Costs";
+import { EvidenceCard } from "./Evidence";
 import { Money, moneyOf, useCosts } from "./money";
 import { Button, Check, Field, IconButton, Input, Segmented, Select, Slider } from "./ui";
 import { setDeskContext, setOpenContext, useVoiceActions } from "./voiceBus";
@@ -247,7 +248,13 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const warns = d ? d.review.filter((n) => n.level === "warn") : [];
   const left = confirm.length + checks.filter((c) => !done.includes(c.id)).length;
   const allowed = (r as Req).allowed ?? DEFAULT_ALLOWED; // the same default the sent offer carries
-  const send = () => { update(r.id, { status: "sent", ...(d ? { offer: offerOf(d, r) } : {}) }); answer(r.ref ?? "-"); back(); }; // a new offer answers what the customer asked
+  const send = () => {
+    update(r.id, { status: "sent", ...(d ? { offer: offerOf(d, r) } : {}) }); answer(r.ref ?? "-"); // a new offer answers what the customer asked
+    // The desk learns the planner's usual changes: the engine's first draft next to what was sent (learning.py, kept locally).
+    const draft = first.current ?? d;
+    if (d && draft) fetch("/api/approved", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...designBody(r.inputs, { ...r.overrides, modules: d.pv.modules, battery_kwh: d.battery.kwh }, roof, r.off, r.existing, r.strict).body, draft: { modules: draft.pv.modules, battery_kwh: draft.battery.kwh }, ref: r.ref ?? r.id }) }).catch(() => undefined);
+    back();
+  };
   const asks = useAsks(r.ref ?? "-").filter((x) => !x.answered);
   // What the voice sees of this request, and the clicks it may make here: the same handlers as the buttons.
   useEffect(() => {
@@ -469,6 +476,7 @@ function DesignTab({ d, first, r, setO, apply, lit, scores }: { d: Design; first
   return <>
     {changed && <p className="delta"><span>AI draft</span> {summary(first)}<br /><span>Now</span> {summary(d)}</p>}
     {d.review.filter((n) => n.level === "warn").map((n) => <p key={n.code} className="flag">{n.text}</p>)}
+    <EvidenceCard d={d} onForget={() => setO({}, "Learned offers forgotten")} />
     <Options d={d} pick={(a) => setO(a.overrides, `Option: ${a.title.toLowerCase()}`)} />
     <Validate r={r} d={d} />
     {!r.inputs.has_storage && <BatteryCurve d={d} pick={(kwh) => setO({ battery_kwh: kwh })} />}

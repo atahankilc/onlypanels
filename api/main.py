@@ -21,7 +21,7 @@ from reonic_engine.design import Engine, use_from_payment
 from reonic_engine.advise import advise
 from reonic_engine.agent import agent_events, run_agent
 from reonic_engine import casework, obstacles
-from reonic_engine import costs, pricebook
+from reonic_engine import costs, evidence, learning, pricebook
 from reonic_engine.refine import refine
 from reonic_engine import voice
 
@@ -163,7 +163,42 @@ def design(req: DesignRequest):
     d = decided(i, o)
     curve = batteries.curve(i, d)
     money = costs.battery_options(i, d, curve, pricebook.book(i.get("installer"))) if d["pv"]["modules"] and not i.get("has_storage") else []
-    return {**d, "alternatives": engine().alternatives(i, o, d), "battery_curve": curve, "battery_money": money, "assumed": assumed}
+    need, car = need_of(d)
+    seen = evidence.evidence(engine().offers, i, d, need, car, approved=d.get("learned"))
+    return {**d, "alternatives": engine().alternatives(i, o, d), "battery_curve": curve, "battery_money": money, "evidence": seen, "assumed": assumed}
+
+
+def need_of(d):
+    """The yearly use that similar homes are matched on: without the car (past projects rarely recorded it) and without
+    what a system already on the roof covers, as the engine's own similar homes. With it, whether a car comes."""
+    e = d["energy"]
+    covered = e.get("existing_mwh") or 0 if e.get("existing_kwp") is not None else 0
+    return max(0.5, e["total_mwh"] - e["ev_mwh"] - covered), e["ev_mwh"] > 0
+
+
+def unlocked(d, o):
+    """A design run with engine-made choices as overrides shows only the planner's own as locked."""
+    d["pv"]["locked"], d["battery"]["locked"] = o.get("modules") is not None, o.get("battery_kwh") is not None
+    d["reasons"] = [r for r in d["reasons"] if r.get("code") not in ("pv_locked", "battery_locked")]
+    return d
+
+
+def learned(i, o, d):
+    """The planner's usual change to drafts for homes like this one (learning.py), applied where the planner fixed nothing."""
+    need, car = need_of(d)
+    change = learning.usual_change(i["installer"], need, car, i.get("goal") == "cost")
+    moves = learning.adjusted(d, change, o, i) if change["enough"] else {}
+    if moves:
+        was = d
+        d = unlocked(engine().design(i, {**o, **moves}), o)
+        words = lambda x: f"{x['pv']['modules']} modules, " + (f"{x['battery']['kwh']:g} kWh battery" if x["battery"]["kwh"] else "no battery")
+        how = (f"{change['homes']} offers you approved for similar homes; you changed the draft in {change['changed']}. "
+               f"Your usual change: {change['modules']:+d} modules, {change['battery_kwh']:+g} kWh battery (median, an unchanged offer counts as zero).")
+        d["trace"].append({"id": "learned", "title": "Learned from your approved offers", "kind": "learned", "by": "planner",
+                           "inputs": [{"key": None, "label": "Approved offers like this", "value": str(change["homes"])}], "how": how, "result": f"{words(was)} → {words(d)}"})
+        d["review"].append({"code": "learned", "level": "note", "on": "pv", "text": f"Moved by what you sent before for {change['homes']} similar homes: {words(was)} became {words(d)}. Your own choice here still overrides it."})
+    d["learned"] = {**change, "applied": moves}
+    return d, moves
 
 
 PICKS: dict[str, dict | None] = {}
@@ -173,11 +208,11 @@ def decided(i, o):
     """The engine's design. For a customer who puts low cost first, the battery and module count are then chosen by money
     (costs.best_for_money), within what experts use for similar homes and never dearer than the draft. A planner's own
     choice always stands; the locks the page shows stay the planner's."""
-    d = engine().design(i, o)
+    d, moves = learned(i, o, engine().design(i, o))
     if i.get("goal") != "cost":
         return d
     book = pricebook.book(i.get("installer"))
-    key = json.dumps([i, o, [(x["id"], x["fixed"], x["per_unit"], x["vat"], x["when"]) for x in book["items"]], {k: v["value"] for k, v in book["rates"].items()}], sort_keys=True, default=str)
+    key = json.dumps([i, o, moves, [(x["id"], x["fixed"], x["per_unit"], x["vat"], x["when"]) for x in book["items"]], {k: v["value"] for k, v in book["rates"].items()}], sort_keys=True, default=str)
     if key not in PICKS:  # the search runs the engine about 35 times: the design and cost views share one answer
         if len(PICKS) > 64:
             PICKS.clear()
@@ -186,9 +221,12 @@ def decided(i, o):
     if not pick:
         return d
     if pick["overrides"]:
-        d = engine().design(i, {**o, **pick["overrides"]})
-        d["pv"]["locked"], d["battery"]["locked"] = o.get("modules") is not None, o.get("battery_kwh") is not None
-        d["reasons"] = [r for r in d["reasons"] if r.get("code") not in ("pv_locked", "battery_locked")]
+        keep = {k: d[k] for k in ("learned",) if k in d}
+        extra = [t for t in d["trace"] if t["id"] == "learned"], [n for n in d["review"] if n["code"] == "learned"]
+        d = unlocked(engine().design(i, {**o, **moves, **pick["overrides"]}), o)
+        d.update(keep)
+        d["trace"] += extra[0]
+        d["review"] += extra[1]
     d["money_pick"] = pick
     words = lambda m, kb: f"{m} modules, {'no battery' if not kb else f'{kb:g} kWh battery'}"
     why = ": the system already on the roof covers much of the use" if i.get("existing_kwp") or i.get("has_solar") else ""
@@ -468,3 +506,33 @@ def cost_view(req: CostRequest):
                 for a in engine().alternatives(i, o, d)]
     return {**money, "battery_options": options, "heatpump_money": heat, "variants": variants,
             "notes": costs.notes(i, d, money, options, heat), "design": {"kwp": d["pv"]["kwp"], "modules": d["pv"]["modules"], "battery_kwh": d["battery"]["kwh"]}}
+
+
+# Learning from approved offers (learning.py): the page reports each sent offer with the engine's first draft.
+class Approved(DesignRequest):
+    draft: dict[str, float] | None = None  # what the page showed first; kept for reference, the change is measured from the engine itself
+    ref: str | None = None  # only hashed, so a request sent again replaces its record
+
+
+@app.post("/api/approved")
+def approved(req: Approved):
+    i, _ = prepared(req)
+    o = req.overrides.model_dump()
+    d = engine().design(i, o)  # the system as sent: the planner's choices are in the overrides
+    # The change is measured from the engine's own draft, before anything learned or chosen by money: an offer approved
+    # after the draft already followed the planner's habit then still counts as that habit, so learning does not fade.
+    raw = engine().design(i, {k: o.get(k) for k in ("heatpump", "wallbox")})
+    need, car = need_of(raw)
+    return learning.remember(i, need, car, {"modules": raw["pv"]["modules"], "battery_kwh": raw["battery"]["kwh"]},
+                             {"modules": d["pv"]["modules"], "battery_kwh": d["battery"]["kwh"]}, req.ref)
+
+
+@app.get("/api/approved")
+def approved_summary():
+    return learning.summary()
+
+
+@app.delete("/api/approved")
+def approved_forget():
+    learning.forget()
+    return learning.summary()

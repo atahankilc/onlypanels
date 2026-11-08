@@ -4,6 +4,7 @@ import { Mark } from "./icons";
 import { DEMO_COUNT, loadDemo } from "./demo";
 import { Handoff, Mine, Progress } from "./plan";
 import Planner from "./Planner";
+import VoiceDock from "./Voice";
 import { sunOf } from "./api";
 import { Button, Segmented } from "./ui";
 
@@ -49,6 +50,7 @@ export default function App() {
       </header>
       <FindHome onSend={(h, out) => sent(h, Date.now(), out)} requests={mine} loading={loading} />
       {view === "planner" && <Planner handoffs={handoffs} onProgress={progress} loading={loading} />}
+      {view === "homeowner" && <VoiceDock who="homeowner" />}
     </div>
   );
 }

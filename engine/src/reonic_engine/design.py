@@ -10,6 +10,7 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 
 from .data import ASSUMED_KWP_PER_MODULE, battery_catalog
+from .evidence import offers_of
 from .derive import COP_HOT_WATER, HOT_WATER_KWH, cop, derive
 from .energy import BATTERY_USABLE, FEED_IN_CT_KWH, simulate, sun_shape
 from .models import HP_KWH_PER_KW, HP_SIZES, TREE, _frame, snap
@@ -142,6 +143,7 @@ class Engine:
         self.catalog = battery_catalog(options)
         self.train = train[pv].copy()
         self.habit = self._habit(train)
+        self.offers = offers_of(train, options)  # every option experts offered, for the evidence range (evidence.py)
         return self
 
     def _habit(self, train):

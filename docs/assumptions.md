@@ -143,6 +143,8 @@ The data holds no prices. Every price below is a typical German end-customer pri
 | Munich FKG: 15% on KfW's eligible costs, at most 60% together, not with KfW's speed or income bonus | Heat pump grant path | Munich FKG guideline of 28 Sep 2026, ch. 2.2.1 | `incentives.py`, `costs.py` grant |
 | EEG 2027 draft: 5.2 ct for 36 months, then 4 ct, feed-in capped at 50% | Second payback, for a system switched on from 2027 | Cabinet draft of 29 July 2026 (homeandsmart, advant-beiten; one source says 6.2 ct) | `incentives.py` |
 | €300 over 20 years | Least gain for which a low-cost customer's design moves away from the engine's first draft | Our choice | `costs.py` MONEY_WORTH_EUR |
+| 10–90% of similar homes' offers, each home one vote; at least 30 homes, use within 25% | The evidence range | Our choice, as the engine's similar homes; coverage measured in `scripts/check_evidence.py` | `evidence.py` |
+| 3 approved offers, a change of at least 2 modules or 2 kWh, median | When and how far the desk follows the planner's past changes | Our choice | `learning.py` |
 
 ## Not available
 

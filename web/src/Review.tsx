@@ -15,7 +15,7 @@ export type Stage = "where" | "roofq" | "roof" | "solar" | "battery" | "use" | "
 // How the car charges opens on the car page, under the answer that needs it.
 const PAGES: Stage[] = ["roof", "solar", "battery", "use", "big", "house", "heat", "car", "goal", "send"];
 // Without a home on the map there is no roof to mark: questions only start with where the home is and its roof, in words.
-const pagesFor = (mapped: boolean): Stage[] => (mapped ? PAGES : ["where", "roofq", ...PAGES.filter((p) => p !== "roof")]); // without the map the home is told in words
+export const pagesFor = (mapped: boolean): Stage[] => (mapped ? PAGES : ["where", "roofq", ...PAGES.filter((p) => p !== "roof")]); // without the map the home is told in words
 const flowFor = (_a: Answers, mapped = true): Stage[] => pagesFor(mapped);
 
 type Props = {

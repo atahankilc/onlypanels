@@ -1,6 +1,11 @@
-/* The planner's voice, after Steward's Guide: a column at the bottom right of the map, left of the map's own buttons,
-   the bubble above the talk ball. Tokens from styles.css. */
-.voicedock { position: fixed; right: 76px; bottom: 20px; z-index: 40; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; width: 360px; pointer-events: none; }
+/* The voice, after Steward's Guide: a column at the bottom left (of the map, beside a side panel), the bubble above
+   the talk ball. The map's With/Without switch sits at the bottom right, beside the map's buttons. Tokens from styles.css. */
+.voicedock { position: fixed; left: 12px; bottom: 16px; z-index: 40; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 360px; pointer-events: none; }
+/* Beside a side panel the ball sits at the bottom left of the map, and the map's hint moves right of it. */
+body:has(.stage.review:not(.bare)) .voicedock.homeowner { left: calc(424px + 16px); }
+body:has(main.plan) .voicedock.planner { left: calc(548px + 16px); }
+body:has(.inbox-page) .voicedock.planner { left: 24px; }
+body:has(.voicedock) .maphint { left: calc(var(--left, 424px) + 104px); }
 .voicedock > * { pointer-events: auto; }
 
 .voicebubble { width: fit-content; min-width: 240px; max-width: 100%; display: grid; gap: 6px; padding: 11px 15px 13px; border: 1px solid var(--hud-line); border-radius: 20px; background: var(--hud-glass-2); -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4); box-shadow: var(--hud-shadow); animation: rise 0.2s var(--ease); }
@@ -21,6 +26,9 @@
 .voiceacts li { padding: 3px 9px; border-radius: 999px; background: var(--hud-fill); font: 500 11px var(--font-mono); color: var(--hud-live); }
 .voiceerr { color: var(--hud-bad); font-size: 13px; }
 .voicebubble form { margin-top: 4px; }
+.voicechoice { display: flex; gap: 8px; margin-top: 4px; }
+/* The homeowner's helper also sits over the start dialog, so it can help choose how to begin. */
+.voicedock.homeowner { z-index: 60; }
 .voiceshow { padding: 0; border: 0; background: none; color: var(--hud-ink-3); font: 500 10.5px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; }
 
 /* The talk ball (Steward's hud.css): a canvas painted by VoiceCore.tsx over the same palette as a CSS gradient, shown until WebGL draws */

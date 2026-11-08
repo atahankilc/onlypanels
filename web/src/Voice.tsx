@@ -1,16 +1,24 @@
-// The planner's voice: tap the ball, speak, tap again. ElevenLabs hears it, Claude works the desk through its MCP tools,
-// the desk does what was asked as clicks would, and the answer is spoken back. Typing works the same way without a mic.
-// Planner only: the homeowner's pages never record or send audio. The ball (Core) and the bubble come from Steward.
+// The voice: tap the ball, speak, tap again. ElevenLabs hears it, Claude works the app through an MCP server, the page
+// does what was asked as taps would, and the answer is spoken back. Typing works the same way without a mic.
+// Planner: the desk (desk.py). Homeowner: a helper through the questions (guide.py), off until they allow it, since what
+// they say leaves the browser before Send; it never gets the home, the address or the meter photo, and shows no result.
+// The ball (Core) and the bubble come from Steward.
 import { useEffect, useRef, useState } from "react";
-import { Input } from "./ui";
+import { Button, Input } from "./ui";
 import { Core, VoiceState } from "./VoiceCore";
-import { VoiceAction, runActions, voiceContext } from "./voiceBus";
+import { VoiceAction, guideContext, runActions, voiceContext } from "./voiceBus";
 import "./voice.css";
 
 type Turn = { heard: string; reply: string; actions: VoiceAction[]; audio: string | null; source: string };
 const MAX_SECONDS = 25;
-const history: { role: "planner" | "desk"; text: string }[] = []; // kept while the page is open, across requests
-const WORDS: Record<VoiceAction["type"], string> = { open: "Opened", back: "Back to the list", page: "Page", tab: "Section", set: "Design changed", confirm: "Confirmed", check: "Checks", fact: "Fact changed", send: "Offer sent" };
+type Who = "planner" | "homeowner";
+const histories: Record<Who, { role: "planner" | "desk"; text: string }[]> = { planner: [], homeowner: [] }; // kept while the page is open
+const WORDS: Record<VoiceAction["type"], string> = { open: "Opened", back: "Back to the list", page: "Page", tab: "Section", set: "Design changed", confirm: "Confirmed", check: "Checks", fact: "Fact changed", send: "Offer sent", start: "Started", goto: "Page", new: "New request", answers: "Noted" };
+const SIDE = {
+  planner: { url: "/api/voice/turn", context: voiceContext, hint: "Ask about this request or tell the desk what to do: “open Watteaustraße”, “what does it cost without a battery?”, “yearly use is 5,000 kWh”, “tick the roof check”.", placeholder: "Or type to the desk" },
+  homeowner: { url: "/api/guide/turn", context: guideContext, hint: "I can walk you through, explain any question and fill in what you tell me: “what is this question for?”, “we use about 4,000 kWh and heat with gas”, “next page”.", placeholder: "Or type to the helper" },
+};
+const CONSENT_KEY = "voice-helper-allowed";
 const chip = (a: VoiceAction) => WORDS[a.type] + (a.type === "tab" ? `: ${a.tab}` : a.type === "page" ? `: ${a.page}` : a.type === "check" ? (a.done ? ": ticked" : ": unticked") : "");
 // Inputs that carry no voice (Steward's mic.ts): Chrome may record from one of these and only silence arrives.
 const VIRTUAL = /virtual|background music|blackhole|soundflower|loopback|teams audio|zoomaudio|aggregate/i;
@@ -26,12 +34,17 @@ async function microphone(): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({ audio: { ...AUDIO, deviceId: { exact: real.deviceId } } });
 }
 
-export default function VoiceDock() {
+export default function VoiceDock({ who = "planner" }: { who?: Who }) {
+  const side = SIDE[who], history = histories[who];
+  // A homeowner allows the helper once in this browser: what they say and their answers then go to ElevenLabs and Anthropic.
+  const [allowed, setAllowed] = useState(() => who === "planner" || localStorage.getItem(CONSENT_KEY) === "yes");
+  const [asking, setAsking] = useState(false);
+  const allow = () => { localStorage.setItem(CONSENT_KEY, "yes"); setAllowed(true); setAsking(false); };
   const [ready, setReady] = useState<{ speech: boolean; agent: boolean } | null>(null);
   const [state, setState] = useState<VoiceState>("off");
   const [last, setLast] = useState<Turn | null>(null);
   const [error, setError] = useState("");
-  const [hidden, setHidden] = useState(false);
+  const [hidden, setHidden] = useState(who === "homeowner");
   const [text, setText] = useState("");
   const level = useRef(0); // 0..1, read by the ball every frame
   const rec = useRef<MediaRecorder | null>(null), chunks = useRef<Blob[]>([]), timer = useRef(0), player = useRef<HTMLAudioElement | null>(null);
@@ -63,12 +76,12 @@ export default function VoiceDock() {
   async function send(recorded: Blob | null, typed?: string) {
     setState("thinking"); setError(""); setHidden(false);
     const form = new FormData();
-    form.append("context", JSON.stringify(voiceContext()));
+    form.append("context", JSON.stringify(side.context()));
     form.append("history", JSON.stringify(history.slice(-8)));
     if (recorded) form.append("audio", recorded, `speech.${recorded.type.includes("mp4") ? "mp4" : "webm"}`);
     if (typed) form.append("text", typed);
     try {
-      const res = await fetch("/api/voice/turn", { method: "POST", body: form });
+      const res = await fetch(side.url, { method: "POST", body: form });
       if (!res.ok) throw new Error(`The desk did not answer (${res.status})`);
       const t: Turn = await res.json();
       setLast(t);
@@ -96,6 +109,7 @@ export default function VoiceDock() {
   const stop = () => { player.current?.pause(); quiet(); setState("off"); }; // a tap while it speaks stops it
   async function listen() {
     setError(""); setHidden(false);
+    if (!allowed) { setAsking(true); return; }
     if (!ready?.speech) { setError("Voice needs ELEVENLABS_API_KEY in .env and a restarted API. Typing works."); return; }
     try {
       const stream = await microphone();
@@ -120,21 +134,27 @@ export default function VoiceDock() {
     }
   }
 
-  const busy = state === "thinking";
-  const who = state === "listening" ? "Listening · tap the ball to send" : state === "thinking" ? "Working on it" : state === "speaking" ? "Desk · tap the ball to stop" : last ? "Desk" : "Tap the ball and speak";
-  return <div className={`voicedock ${state}`}>
-    {!hidden && <div className="voicebubble" aria-live="polite">
-      <p className={`who${state === "listening" ? " live" : state === "speaking" ? " speaking" : ""}`}>{who}<button type="button" className="voicehide" aria-label="Hide" onClick={() => setHidden(true)}>×</button></p>
+  const busy = state === "thinking", name = who === "planner" ? "Desk" : "Helper";
+  const label = state === "listening" ? "Listening · tap the ball to send" : state === "thinking" ? "Working on it" : state === "speaking" ? `${name} · tap the ball to stop` : last ? name : who === "planner" ? "Tap the ball and speak" : "Voice helper";
+  const typed = (e: React.FormEvent) => { e.preventDefault(); if (!allowed) { setAsking(true); return; } if (text.trim() && !busy) { send(null, text.trim()); setText(""); } };
+  return <div className={`voicedock ${who} ${state}`}>
+    {!hidden && (asking ? <div className="voicebubble" role="dialog" aria-label="Turn on the voice helper">
+      <p className="who">Voice helper<button type="button" className="voicehide" aria-label="Not now" onClick={() => { setAsking(false); setHidden(true); }}>×</button></p>
+      <p className="said">The helper walks you through, explains each question and fills in what you tell it.</p>
+      <p className="asked">To do that, what you say or type to it and your answers go to ElevenLabs (speech) and Anthropic (Claude), both in the USA, before you send. Your home, the address and photos never do. It shows no prices or sizes: those come from your installer.</p>
+      <div className="voicechoice"><Button variant="solid" onClick={allow}>Turn on</Button><Button variant="plain" onClick={() => { setAsking(false); setHidden(true); }}>Not now</Button></div>
+    </div> : <div className="voicebubble" aria-live="polite">
+      <p className={`who${state === "listening" ? " live" : state === "speaking" ? " speaking" : ""}`}>{label}<button type="button" className="voicehide" aria-label="Hide" onClick={() => setHidden(true)}>×</button></p>
       {last?.heard && state !== "listening" && <p className="asked">“{last.heard}”</p>}
       {last && state !== "listening" && <p className="said">{last.reply}</p>}
-      {!last && !error && state !== "listening" && <p className="said hint">Ask about this request or tell the desk what to do: “open Watteaustraße”, “what does it cost without a battery?”, “yearly use is 5,000 kWh”, “tick the roof check”.</p>}
+      {!last && !error && state !== "listening" && <p className="said hint">{side.hint}</p>}
       {last && last.actions.length > 0 && state !== "listening" && <ul className="voiceacts">{last.actions.map((a, i) => <li key={i}>{chip(a)}</li>)}</ul>}
       {error && <p className="voiceerr">{error}</p>}
-      <form onSubmit={(e) => { e.preventDefault(); if (text.trim() && !busy) { send(null, text.trim()); setText(""); } }}>
-        <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Or type to the desk" disabled={busy || ready?.agent === false} aria-label="Type to the desk" />
+      <form onSubmit={typed}>
+        <Input value={text} onChange={(e) => setText(e.target.value)} onFocus={() => !allowed && setAsking(true)} placeholder={side.placeholder} disabled={busy || ready?.agent === false} aria-label={side.placeholder} />
       </form>
-    </div>}
+    </div>)}
     <Core state={state} level={level} busy={busy} onListen={listen} onFinish={finish} onStop={stop} />
-    {hidden && <button type="button" className="voiceshow" onClick={() => setHidden(false)}>Show answer</button>}
+    {hidden && <button type="button" className="voiceshow" onClick={() => (allowed ? setHidden(false) : (setHidden(false), setAsking(true)))}>{allowed ? (last ? "Show answer" : "Show helper") : "Voice helper"}</button>}
   </div>;
 }

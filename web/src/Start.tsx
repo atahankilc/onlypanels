@@ -6,7 +6,7 @@ import { Button } from "./ui";
 export type Start = "map" | "form";
 
 const PROMISES: [string, string][] = [
-  ["We see nothing until you send.", "Your answers and the home you pick stay in this browser until you send. The map only loads public map pieces of the area."],
+  ["We see nothing until you send.", "Your answers and the home you pick stay in this browser until you send. The map only loads public map pieces of the area. The voice helper is the one exception, and only if you turn it on: then what you say to it and your answers go to ElevenLabs and Anthropic in the USA, never your home or address."],
   ["No location needed.", "Type an address or move the map. We only ask for your location if you tap the locate button."],
   ["Only Bavarian and EU data.", "Roof, sun and address come only from Bavaria and the EU. The street map comes from OpenStreetMap."],
   ["You decide what goes.", "Before sending, leave out the address, the building or the roof shape."],

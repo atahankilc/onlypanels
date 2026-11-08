@@ -12,7 +12,12 @@ export type VoiceAction =
   | { type: "confirm"; keys: string[] }
   | { type: "check"; ids: string[]; done: boolean }
   | { type: "fact"; inputs: Partial<Inputs> }
-  | { type: "send" };
+  | { type: "send" }
+  // the homeowner's helper (guide.py)
+  | { type: "start"; way: "map" | "form" }
+  | { type: "goto"; page: string }
+  | { type: "new" }
+  | { type: "answers"; answers: Record<string, unknown> };
 
 export type DeskContext = {
   page: "requests" | "prices" | "proof" | "request";
@@ -30,6 +35,12 @@ export const voiceContext = () => context;
 export const setDeskContext = (c: Omit<DeskContext, "open">) => { context = { ...context, ...c }; };
 export const setOpenContext = (open: DeskContext["open"]) => { context = { ...context, open, page: open ? "request" : context.page === "request" ? "requests" : context.page }; };
 
+/** What the homeowner's helper sees: where they are and their answers. Never the home, the address or the meter photo. */
+export type GuideContext = { screen: "start" | "pick" | "questions" | "requests" | "sent"; page: string | null; pages: string[]; answers: Record<string, unknown> };
+let guide: GuideContext = { screen: "start", page: null, pages: [], answers: {} };
+export const guideContext = () => guide;
+export const setGuideContext = (g: GuideContext) => { guide = g; };
+
 const bus = new EventTarget();
 /** Several design changes or confirmations in one turn become one each: the screen updates from one request state per
  * render, so two in a row would each start from the same old state and the second would undo the first. */
@@ -38,6 +49,7 @@ const merged = (actions: VoiceAction[]) => actions.reduce<VoiceAction[]>((out, a
   if (a.type === "set" && last?.type === "set") { last.overrides = { ...last.overrides, ...a.overrides }; return out; }
   if (a.type === "confirm" && last?.type === "confirm") { last.keys = [...new Set([...last.keys, ...a.keys])]; return out; }
   if (a.type === "fact" && last?.type === "fact") { last.inputs = { ...last.inputs, ...a.inputs }; return out; }
+  if (a.type === "answers" && last?.type === "answers") { last.answers = { ...last.answers, ...a.answers }; return out; }
   return [...out, { ...a }];
 }, []);
 export const runActions = (actions: VoiceAction[]) => merged(actions).forEach((a) => bus.dispatchEvent(new CustomEvent("act", { detail: a })));
