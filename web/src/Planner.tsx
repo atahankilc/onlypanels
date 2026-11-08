@@ -349,7 +349,8 @@ function Workspace({ r, update, back, scores, veiled = false, leaving = false, o
   const checks = d ? checkList(r, d, monument, heatPlan, r.shade ?? null, spot) : [];
   const confirm = d ? toConfirm(r, d) : [];
   const warns = d ? d.review.filter((n) => n.level === "warn") : [];
-  const left = confirm.length + checks.filter((c) => !done.includes(c.id)).length;
+  const tasks = checks.filter((c) => !c.info); // what to check on site; the rest is found for the planner and needs nothing
+  const left = tasks.filter((c) => !done.includes(c.id)).length; // the facts to confirm have their own card in Design
   const allowed = (r as Req).allowed ?? DEFAULT_ALLOWED; // the same default the sent offer carries
   const send = () => {
     // The sent design is frozen into the request's own choices, so reopening it shows what was sent even after prices,
@@ -405,7 +406,7 @@ function Workspace({ r, update, back, scores, veiled = false, leaving = false, o
         {!d && <DraftChain id={r.id} full />}
         {asks.map((x) => <AskCard key={x.id} x={x} tried={() => tryAsk(x)} done={() => answer(r.ref ?? "-", x.id)} />)}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
-        {d && tab === "design" && <><ConfirmCard r={r} d={d} confirm={confirm} setI={setI} confirmFacts={(keys) => update(r.id, { sources: { ...r.sources, ...Object.fromEntries(keys.map((k) => [k, "planner" as Source])) } })} more={() => setTab("home")} /><Brief points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
+        {d && tab === "design" && <><ConfirmCard r={r} d={d} confirm={confirm} setI={setI} confirmFacts={(keys) => update(r.id, { sources: { ...r.sources, ...Object.fromEntries(keys.map((k) => [k, "planner" as Source])) } })} more={() => setTab("home")} /><Brief points={warns.length} site={tasks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
             energy={<Fold title="Energy in a year" summary={`Makes ${d.energy.production_mwh.toFixed(1)} MWh against ${d.energy.total_mwh.toFixed(1)} MWh needed; ${d.energy.self_sufficiency_pct}% from own power`}><Energy d={d} inputs={r.inputs} measured={home} /></Fold>} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /></>}
         {tab === "home" && <><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} auto={photo} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, withPhotoSolar(r, obstacles)); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "cost" && (pricing ? <PriceBook installer={r.inputs.installer} close={() => setPricing(false)} />
@@ -414,7 +415,7 @@ function Workspace({ r, update, back, scores, veiled = false, leaving = false, o
         {d && tab === "checks" && <Checks r={r} d={d} confirm={confirm} checks={checks} done={done} setDone={setDone} warns={warns.map((n) => ({ code: n.code, text: n.text }))}
           confirmFacts={(keys) => update(r.id, { sources: { ...r.sources, ...Object.fromEntries(keys.map((k) => [k, "planner" as Source])) } })} change={() => setTab("design")} />}
         {d && tab === "offer" && <Offer r={r} d={d} costs={costs} first={first.current} roof={roof} panels={out?.panels ?? {}} toConfirm={confirm.length} allowed={allowed} setAllowed={(a) => update(r.id, { allowed: a } as Partial<Request>)} send={send}
-          conditions={checks.filter((c) => !done.includes(c.id)).map((c) => c.title)}
+          conditions={tasks.filter((c) => !done.includes(c.id)).map((c) => c.title)}
           facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]),
             ...EXTRA.filter((k) => !r.sources[k] && sourceOf(r, k) && (r.inputs.ev || !k.startsWith("ev_") && k !== "has_wallbox")).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[sourceOf(r, k)!]] as [string, string, string]), home ? ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"] : ["Roof", r.roofNumbers ? roofWords(r.roofNumbers) : "not shared", r.roofNumbers ? (r.roofNumbers.told ? "from the customer's description" : "from the customer, rounded") : "to be confirmed"]]} />}
       </div>
@@ -422,7 +423,7 @@ function Workspace({ r, update, back, scores, veiled = false, leaving = false, o
       <div className="stick">
         <Button size="lg" onClick={back}>Requests</Button>
         {r.status === "sent" ? <Button variant="solid" size="lg" wide disabled>Offer sent</Button>
-          : confirm.length ? <Button variant="solid" size="lg" wide disabled={!d} onClick={() => setTab("checks")}>Confirm {confirm.length} {confirm.length === 1 ? "fact" : "facts"} to send</Button>
+          : confirm.length ? <Button variant="solid" size="lg" wide disabled={!d} onClick={() => setTab("design")}>Confirm {confirm.length} {confirm.length === 1 ? "fact" : "facts"} to send</Button>
           : home && photo === "looking" ? <Button variant="solid" size="lg" wide disabled><span className="spinner" aria-hidden="true" />Checking the roof photo</Button>
           : <Button variant="solid" size="lg" wide disabled={!d} onClick={send}>Send offer</Button>}
       </div>
@@ -515,7 +516,7 @@ function NoHomeRoof({ r }: { r: Request }) {
 }
 
 function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: HeatPlan | null, shade: Shade | null, spot?: Place | null) {
-  const list: { id: string; title: string; why: string }[] = [];
+  const list: SiteCheck[] = [];
   const dist = r.inputs.heat_dist;
   if (d.heatpump.included) list.push({ id: "flow", title: "Check radiators and flow temperature", why:
     dist === "floor" ? "The customer has underfloor heating, which usually suits a heat pump. Confirm the flow temperature it needs in winter."
@@ -565,32 +566,33 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
 }
 
 /** Trees from Bavaria's tree map on the roof's sun, worded as a check. Their loss is already in the yield, the design and the energy check. */
-function shadeCheck(t: Shade | null): { id: string; title: string; why: string } {
+function shadeCheck(t: Shade | null): SiteCheck {
   if (!t) return { id: "trees", title: "Check trees that shade the roof", why: "Putting trees from Bavaria's tree map on the roof's sun…" };
   const m = (v: number | null) => (v == null ? "" : `${Math.round(v)} m`);
-  const which = t.surfaces.map((s) => `${s.name.toLowerCase()} loses ${Math.round(s.lost * 100)}%`).join(", ");
-  const trees = `${t.trees} ${t.trees === 1 ? "tree" : "trees"} up to ${m(t.tallest)} tall, the closest ${m(t.nearest)} away`;
-  const after = "This is already in the yield, the design and the energy estimate. Look at the photo and ask whether the trees stay; without them the roof gets more.";
-  if (t.status === "much") return { id: "trees", title: "Trees shade the roof", why: `Of the yearly sun, ${which}: ${trees}, on Bavaria's tree map. ${after}` };
-  if (t.status === "some") return { id: "trees", title: "Trees take some of the roof's sun", why: `Of the yearly sun, ${which}: ${trees}, on Bavaria's tree map. ${after}` };
-  if (t.status === "none") return { id: "trees", title: "Check trees that shade the roof", why: "No tree on Bavaria's tree map (2024) takes more than a trace of the roof's sun. Trees under 5.5 m and newer ones are not on it." };
+  const side = (name: string) => name.toLowerCase().replace(/^roof, /, "").replace(/ side$/, "");
+  const which = t.surfaces.map((s) => `${side(s.name)} ${Math.round(s.lost * 100)}%`).join(", ");
+  const trees = `${t.trees} ${t.trees === 1 ? "tree" : "trees"} up to ${m(t.tallest)}, the closest ${m(t.nearest)} away (Bavaria's tree map)`;
+  const after = "Already in the yield. Ask whether the trees stay: without them the roof gets more.";
+  if (t.status === "much") return { id: "trees", title: "Trees shade the roof", why: `${trees}. Sun lost a year: ${which}. ${after}` };
+  if (t.status === "some") return { id: "trees", title: "Trees take some of the roof's sun", why: `${trees}. Sun lost a year: ${which}. ${after}` };
+  if (t.status === "none") return { id: "trees", info: true, title: "No tree takes the roof's sun", why: "No tree on Bavaria's tree map (2024) takes more than a trace of the roof's sun. Trees under 5.5 m and newer ones are not on it." };
   return { id: "trees", title: "Check trees that shade the roof", why: "Bavaria's tree map could not be loaded, so the roof's sun leaves trees out. Look for trees on the photo." };
 }
 
 /** What Munich's heat plan says at the home, worded as a check. Where a heat network is coming, a heat pump may be the wrong offer. */
-function heatPlanCheck(p: HeatPlan | null, heating: string | null, heatPump: boolean): { id: string; title: string; why: string } {
+function heatPlanCheck(p: HeatPlan | null, heating: string | null, heatPump: boolean): SiteCheck {
   const more = p?.details.length ? `. The plan notes: ${p.details.join("; ")}` : "";
   if (!p) return { id: "heatplan", title: "Check the city's heat plan", why: "Asking Munich's heat plan map…" };
   if (p.area === "network") return { id: "heatplan", title: "Heat network area in the city's heat plan", why: `The city's heat plan puts this home in a heat network area${more}.` +
     (heating === "District" ? " The home already has district heating." : heatPump ? " The design has a heat pump: compare it with a district heating connection before offering it." : " If a heat pump comes up, compare it with a district heating connection first.") };
-  if (p.area === "own") return { id: "heatplan", title: "Heat plan: homes here heat on their own", why: `The city's heat plan expects homes here to have their own heating, mostly heat pumps, and plans no heat network${more}.` };
+  if (p.area === "own") return { id: "heatplan", info: true, title: "Heat plan: homes here heat on their own", why: `The city's heat plan expects homes here to have their own heating, mostly heat pumps, and plans no heat network${more}.` };
   if (p.area === "other") return { id: "heatplan", title: "Check the city's heat plan", why: /prüf/i.test(p.label ?? "") ? `The city's heat plan has not decided this area yet (Prüfgebiet)${more}. A heat network may still come: ask the city or SWM before offering a heat pump.` : `The city's heat plan marks this home as: ${p.label}${more}.` };
   if (p.area === "none") return { id: "heatplan", title: "Check the city's heat plan", why: "No heat plan area found at this home. The plan covers the city of Munich only." };
   return { id: "heatplan", title: "Check the city's heat plan", why: "Munich's heat plan map did not answer. Look the address up in the Geoportal München." };
 }
 
 /** What the Bavarian monument map says, worded as a check. Never a ruling: the lower monument authority decides. */
-function monumentCheck(m: Monument | null): { id: string; title: string; why: string } {
+function monumentCheck(m: Monument | null): SiteCheck {
   const named = (h: { name: string | null; address: string | null; id: string | null }) => [h.name, h.address].filter(Boolean).join(", ") + (h.id ? ` (${h.id})` : "");
   const listed = m?.here.filter((h) => h.kind === "listed") ?? [], ensemble = m?.here.filter((h) => h.kind === "ensemble") ?? [];
   const authority = "Ask the lower monument authority before planning further; panels usually need a permit and may have to stay out of sight.";
@@ -598,7 +600,7 @@ function monumentCheck(m: Monument | null): { id: string; title: string; why: st
   if (m.status === "listed") return { id: "monument", title: "Listed building: permit needed", why: `The Bavarian monument list has this building: ${listed.map(named).join("; ")}.` + (ensemble.length ? ` It also lies in the ensemble ${ensemble.map(named).join("; ")}.` : "") + ` ${authority}` };
   if (m.status === "ensemble") return { id: "monument", title: "In a protected ensemble: permit likely", why: `The home lies in the ensemble ${ensemble.map(named).join("; ")}. Solar visible from the street usually needs a permit. ${authority}` };
   if (m.status === "near") return { id: "monument", title: "Listed building next door", why: `Within about 20 m: ${m.near.map(named).join("; ")}. Its setting can be protected, so panels in view of it may need a permit. Ask the lower monument authority.` };
-  if (m.status === "none") return { id: "monument", title: "Check monument status", why: "No entry in the Bavarian monument list at this home or next to it. A hint, not a ruling: the lower monument authority decides." };
+  if (m.status === "none") return { id: "monument", info: true, title: "No monument entry here", why: "No entry in the Bavarian monument list at this home or next to it. A hint, not a ruling: the lower monument authority decides." };
   return { id: "monument", title: "Check monument status", why: "The Bavarian monument map did not answer. Look the address up in the Bayerischer Denkmal-Atlas." };
 }
 
@@ -682,27 +684,32 @@ const CHECK_GROUPS: [string, string[]][] = [
   ["Heating", ["flow", "heatplan"]],
   ["Customer and paperwork", ["who", "grants"]],
 ];
-type SiteCheck = { id: string; title: string; why: string };
+type SiteCheck = { id: string; title: string; why: string; info?: boolean }; // info: found for the planner, nothing to do on site
 
 /** Before sending, the facts to confirm; before installing, the site checks by topic; both with how far along they are. */
 function Checks({ r, d, confirm, checks, done, setDone, warns, confirmFacts, change }: { r: Request; d: Design; confirm: string[]; checks: SiteCheck[]; done: string[]; setDone: (x: string[]) => void;
   warns: { code: string; text: string }[]; confirmFacts: (keys: string[]) => void; change: () => void }) {
-  const ticked = checks.filter((c) => done.includes(c.id)).length;
+  const tasks = checks.filter((c) => !c.info), found = checks.filter((c) => c.info);
+  const ticked = tasks.filter((c) => done.includes(c.id)).length;
   const known = new Set(CHECK_GROUPS.flatMap(([, ids]) => ids));
-  const groups: [string, SiteCheck[]][] = [...CHECK_GROUPS.map(([t, ids]) => [t, checks.filter((c) => ids.includes(c.id))] as [string, SiteCheck[]]), ["Other", checks.filter((c) => !known.has(c.id))] as [string, SiteCheck[]]].filter(([, l]) => l.length);
+  const groups: [string, SiteCheck[]][] = [...CHECK_GROUPS.map(([t, ids]) => [t, tasks.filter((c) => ids.includes(c.id))] as [string, SiteCheck[]]), ["Other", tasks.filter((c) => !known.has(c.id))] as [string, SiteCheck[]]].filter(([, l]) => l.length);
   return <>
     <div className="progress">
       <div className={confirm.length ? "todo" : "ok"}><span>Before sending</span><b>{confirm.length ? `${confirm.length} ${confirm.length === 1 ? "fact" : "facts"} to confirm` : "Every fact confirmed"}</b></div>
-      <div className={ticked === checks.length ? "ok" : ""}><span>Before installing</span><b>{ticked} of {checks.length} site checks done</b><i><em style={{ width: `${checks.length ? (ticked / checks.length) * 100 : 100}%` }} /></i></div>
+      <div className={ticked === tasks.length ? "ok" : ""}><span>Before installing</span><b>{ticked} of {tasks.length} site checks done</b><i><em style={{ width: `${tasks.length ? (ticked / tasks.length) * 100 : 100}%` }} /></i></div>
     </div>
     {confirm.length > 0 && <Button variant="plain" className="tofacts" onClick={change}>Confirm the {confirm.length} {confirm.length === 1 ? "fact" : "facts"} first, at the top of Design →</Button>}
     {warns.length > 0 && <><h3>Points from the review</h3>{warns.map((n) => <p key={n.code} className="flag">{n.text}</p>)}</>}
-    <h3>To check before installation</h3>
-    <p className="small muted">Open items print on the offer as conditions. Tick what you have checked.</p>
+    <h3>To check on site</h3>
+    <p className="checks-rule">Tick what you have checked. <b>Anything not ticked prints on the offer as a condition.</b></p>
     {groups.map(([title, list]) => <section key={title} className="checkgroup">
       <h4>{title}<small>{list.filter((c) => done.includes(c.id)).length} of {list.length}</small></h4>
       <ul className="tasks">{list.map((c) => <li key={c.id} className={done.includes(c.id) ? "done" : undefined}><Check checked={done.includes(c.id)} onChange={(v) => setDone(v ? [...done, c.id] : done.filter((x) => x !== c.id))}><b>{c.title}</b><small>{c.why}</small></Check></li>)}</ul>
     </section>)}
+    {found.length > 0 && <section className="found" aria-label="Found for you">
+      <h4>Found for you<small>nothing to do</small></h4>
+      <ul>{found.map((c) => <li key={c.id}><b>{c.title}</b><small>{c.why}</small></li>)}</ul>
+    </section>}
     {r.meterPhoto && <figure className="cabinet"><img src={r.meterPhoto} alt="The customer's meter cabinet" /><figcaption className="small muted">Meter cabinet, photo from the customer.</figcaption></figure>}
   </>;
 }

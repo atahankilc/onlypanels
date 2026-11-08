@@ -452,3 +452,10 @@
 /* Cost tab (Costs.tsx): what the desk's money row does not say, on one line; the first year's sum under its table. */
 .money-lede { margin: 0; font-size: 13px; color: var(--hud-ink-2); }
 .money-sum { margin: 0; font-size: 13px; color: var(--hud-ink-2); } .money-sum b { color: var(--hud-live); font-weight: 650; }
+
+/* Checks: the rule for what is not ticked said plainly; what was found for the planner apart and quiet. */
+.checks-rule { margin: 0; font-size: 13px; line-height: 1.4; color: var(--hud-ink-2); } .checks-rule b { color: var(--hud-warn); font-weight: 600; }
+.found { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--hud-fill) 60%, transparent); }
+.found h4 { display: flex; justify-content: space-between; margin: 0; font-size: 13px; color: var(--hud-ink-2); } .found h4 small { font-weight: 400; color: var(--hud-ink-3); }
+.found ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.found li { display: grid; gap: 2px; max-width: none; margin: 0; } .found li b { font-size: 13px; font-weight: 600; color: var(--hud-ink); } .found li small { font-size: 12px; line-height: 1.4; color: var(--hud-ink-3); }
