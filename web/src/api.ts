@@ -21,7 +21,7 @@ export const surfaceName = (s: SunSurface) => (s.kind === "roof" ? (s.tilt < 8 ?
 export const polyOf = (b: Selected, s: SunSurface) => (s.kind === "roof" ? s.index : (b.real?.roofs.length ?? 0) + s.index);
 
 /** What the design engine needs from the household, named as it names them. Null is not answered yet. */
-export type Answers = { demand_kwh: number | null; price_ct_kwh: number; has_solar: boolean | null; solar_kwp: number | null; solar_year: number | null; has_storage: boolean | null; battery_kwh: number | null; heating: string | null; heat_kwh: number | null; oil_l: number | null; hp_kwh: number | null; wants_hp: boolean | null; ev: boolean | null; ev_planned: boolean; ev_km: number | null; ev_count: number | null; ev_kwh_month: number | null; ev_when: "soon" | "later" | null; ev_charge_home: "most" | "half" | "little" | null; ev_day: boolean | null; has_wallbox: boolean | null; use_source: "band" | "range" | "exact" | "people" | "payment" | "unknown" | null; price_known: boolean; monthly_eur: number | null; big_users: string[]; living_m2: number | null; built: string | null; cert_kwh_m2: number | null; trees: boolean | null; roof_renovation: "yes" | "no" | "unsure" | null; goal: "cost" | "independence" | "environment" | null; use_range: [number | null, number | null] };
+export type Answers = { demand_kwh: number | null; price_ct_kwh: number; has_solar: boolean | null; solar_kwp: number | null; solar_year: number | null; has_storage: boolean | null; battery_kwh: number | null; heating: string | null; heat_kwh: number | null; oil_l: number | null; hp_kwh: number | null; wants_hp: boolean | null; ev: boolean | null; ev_planned: boolean; ev_km: number | null; ev_count: number | null; ev_kwh_month: number | null; ev_when: "soon" | "later" | null; ev_charge_home: "most" | "half" | "little" | null; ev_day: boolean | null; has_wallbox: boolean | null; use_source: "band" | "range" | "exact" | "people" | "payment" | "unknown" | null; price_known: boolean; monthly_eur: number | null; big_users: string[]; living_m2: number | null; built: string | null; cert_kwh_m2: number | null; area: Area | null; trees: boolean | null; roof_renovation: "yes" | "no" | "unsure" | null; goal: "cost" | "independence" | "environment" | null; use_range: [number | null, number | null] };
 // Munich's basic supply (SWM M-Strom), per kWh with VAT, since 1 February 2026. The prototype is Munich only.
 export const PRICE_CT = 32.4;
 /** A rough living area from the measured model: footprint × full floors (eave height ÷ 3 m), half a floor more under a pitched roof,
@@ -37,7 +37,7 @@ export const modelM2 = (buildings: Selected[]) => {
   }
   return sum ? Math.round(sum / 5) * 5 : null;
 };
-export const NO_ANSWERS: Answers = { demand_kwh: null, price_ct_kwh: PRICE_CT, has_solar: null, solar_kwp: null, solar_year: null, has_storage: null, battery_kwh: null, heating: null, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null, ev: null, ev_planned: false, ev_km: null, ev_count: null, ev_kwh_month: null, ev_when: null, ev_charge_home: null, ev_day: null, has_wallbox: null, use_source: null, price_known: false, monthly_eur: null, big_users: [], living_m2: null, built: null, cert_kwh_m2: null, trees: null, roof_renovation: null, goal: null, use_range: [null, null] };
+export const NO_ANSWERS: Answers = { demand_kwh: null, price_ct_kwh: PRICE_CT, has_solar: null, solar_kwp: null, solar_year: null, has_storage: null, battery_kwh: null, heating: null, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null, ev: null, ev_planned: false, ev_km: null, ev_count: null, ev_kwh_month: null, ev_when: null, ev_charge_home: null, ev_day: null, has_wallbox: null, use_source: null, price_known: false, monthly_eur: null, big_users: [], living_m2: null, built: null, cert_kwh_m2: null, area: null, trees: null, roof_renovation: null, goal: null, use_range: [null, null] };
 export type View = { layer: "photo" | "sun"; moment: { month: number; hour: number } | null };
 /** Every free roof starts wholly chosen, walls start free: we have no measure of what a surface yields once obstacles are known, so nothing is ruled out for the user.
  *  What the homeowner draws is kept per surface as the sample cells they marked; a surface not listed is as it started, so a building added later starts the same way.
@@ -80,6 +80,9 @@ export const paintChoice = (buildings: Selected[], c: Choice, cells: Record<stri
 
 const get = <T,>(url: string): Promise<T> => fetch(url).then((r) => { if (!r.ok) throw new Error(); return r.json(); });
 export const searchPlace = (q: string) => get<Place[]>(`/api/site/search?q=${encodeURIComponent(q)}`);
+/** The 2022 census around a point: the most common build period and heating, with their shares. Empty where there is no data. */
+export type Area = { built?: string | null; built_share?: number; heating?: string | null; heating_share?: number };
+export const areaAt = (lat: number, lon: number) => get<Area>(`/api/site/area?lat=${lat}&lon=${lon}`);
 export const placeAt = (lat: number, lon: number) => get<Place>(`/api/site/reverse?lat=${lat}&lon=${lon}`);
 export const squaresIn = (west: number, south: number, east: number, north: number) => get<Square[]>(`/api/site/squares?west=${west}&south=${south}&east=${east}&north=${north}`);
 /** The map's own worker fetches and reads this, so it costs the page nothing. Its worker needs a full address. */

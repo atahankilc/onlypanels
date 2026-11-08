@@ -18,8 +18,9 @@ HEAT_PUMP_COP = 3.5  # the factor used in the data's own defaults
 # What the customer can tell beyond the past projects. Each stands in only for an answer that is missing, and says so in the trace.
 BASE_FEE_EUR_YEAR = 150  # the fixed part of a German electricity bill, taken off a monthly payment before it becomes kWh
 BIG_USERS_KWH = {"pool": 1500, "sauna": 1000, "ac": 600, "water": 2000}  # a year each, added only when the use is not from the bill
-HEAT_KWH_PER_M2 = {"before1979": 180, "1979to1994": 140, "1995to2009": 100, "since2010": 60}  # heat a year by build period
-BUILT_LABEL = {"before1979": "before 1979", "1979to1994": "1979–1994", "1995to2009": "1995–2009", "since2010": "2010 or later"}
+# Heat a year per m² by build period, in the 2022 census classes, so the census can stand in for an unknown period.
+HEAT_KWH_PER_M2 = {"before1979": 180, "1979to1990": 140, "1991to2000": 120, "2001to2010": 90, "since2011": 60}
+BUILT_LABEL = {"before1979": "before 1979", "1979to1990": "1979–1990", "1991to2000": "1991–2000", "2001to2010": "2001–2010", "since2011": "2011 or later"}
 GOAL_LABEL = {"cost": "low cost", "independence": "independence", "environment": "the environment"}
 GOAL_BATTERY = {"cost": 0.7, "independence": 0.3}  # how sure the engine must be to add a battery, by the customer's priority
 GOAL_PV = {"environment": 1.2}  # more solar, within the roof, when the environment comes first
@@ -208,6 +209,10 @@ class Engine:
             heat_mwh, heat_from_house = i["living_m2"] * i["cert_kwh_m2"] / 1000, f"its energy certificate, {_num(i['cert_kwh_m2'], 0)} kWh per m²"
         elif not heat_mwh and i.get("living_m2") and i.get("built") in HEAT_KWH_PER_M2:
             heat_mwh, heat_from_house = i["living_m2"] * HEAT_KWH_PER_M2[i["built"]] / 1000, f"built {BUILT_LABEL[i['built']]}, at {HEAT_KWH_PER_M2[i['built']]} kWh per m²"
+        elif not heat_mwh and i.get("living_m2") and i.get("area_built") in HEAT_KWH_PER_M2:
+            # The customer did not say when the house was built: the most common period around it in the 2022 census stands in.
+            b = i["area_built"]
+            heat_mwh, heat_from_house = i["living_m2"] * HEAT_KWH_PER_M2[b] / 1000, f"build period unknown, so the area's most common from the 2022 census ({BUILT_LABEL[b]}, {round((i.get('area_built_share') or 0) * 100)}% of homes nearby), at {HEAT_KWH_PER_M2[b]} kWh per m²"
 
         # Heat pump: rule, too few sold systems to learn from.
         # Heat pump: a rule, too few sold systems to learn from. It enters only when the customer or planner asks (D69).

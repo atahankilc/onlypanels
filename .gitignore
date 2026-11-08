@@ -35,3 +35,6 @@ dist/
 
 # Vite
 web/dist/
+
+# Public open data (Zensus 2022, dl-de/by-2-0): large downloads, rebuilt by scripts/build_zensus.py
+data/external/

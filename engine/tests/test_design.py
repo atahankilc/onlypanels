@@ -150,7 +150,7 @@ def test_more_answers_from_the_homeowner(engine):
     assert round(use_from_payment(100, 32)) == round((1200 - 150) / 0.32)
     guessed, billed = {**HOME, "big_users": ["pool"]}, {**HOME, "big_users": ["pool"], "demand_source": "bill"}
     assert engine.design(guessed)["energy"]["base_mwh"] == 7.5 and engine.design(billed)["energy"]["base_mwh"] == 6.0
-    old, new = (engine.design({**HOME, "heating": "Gas", "living_m2": 150, "built": b}, {"heatpump": True}) for b in ("before1979", "since2010"))
+    old, new = (engine.design({**HOME, "heating": "Gas", "living_m2": 150, "built": b}, {"heatpump": True}) for b in ("before1979", "since2011"))
     assert old["heatpump"]["kw"] >= new["heatpump"]["kw"] and old["energy"]["hp_mwh"] > new["energy"]["hp_mwh"]
     roof = {**HOME, "surfaces": [{"max_modules": 60, "kwh_per_kwp": 950}]}
     assert engine.design({**roof, "goal": "environment"})["pv"]["kwp"] >= engine.design(roof)["pv"]["kwp"]
@@ -162,3 +162,11 @@ def test_energy_certificate_comes_before_the_build_period(engine):
     gas = {**HOME, "heating": "Gas", "living_m2": 100, "built": "before1979"}
     cert = engine.design({**gas, "cert_kwh_m2": 60}, {"heatpump": True})
     assert cert["energy"]["hp_mwh"] < engine.design(gas, {"heatpump": True})["energy"]["hp_mwh"]
+
+
+def test_census_build_period_stands_in_only_when_the_customer_gives_none(engine):
+    gas = {**HOME, "heating": "Gas", "living_m2": 120, "area_built": "before1979", "area_built_share": 0.8}
+    area = engine.design(gas, {"heatpump": True})
+    own = engine.design({**gas, "built": "since2011"}, {"heatpump": True})
+    assert area["energy"]["hp_mwh"] > own["energy"]["hp_mwh"]
+    assert any("2022 census" in n["text"] for n in area["review"])

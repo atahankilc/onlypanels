@@ -24,7 +24,9 @@ Code locations: engine `engine/src/reonic_engine/` (design.py, energy.py, models
 | Value | Used for | Applies when | Source | Where |
 |---|---|---|---|---|
 | Footprint × floors × 0.8 | Living area hint and stand-in | No living area given | Our assumption. Footprint from the measured roofs, full floors = eave height ÷ 3 m, half a floor more under a pitched roof (more than 2 m from eave to ridge), 0.8 for walls and stairs | `api.ts` modelM2 |
-| 180 / 140 / 100 / 60 kWh per m² a year | Heat use by build period: before 1979, 1979–1994, 1995–2009, 2010 or later | No gas or oil figure and no energy certificate | Our assumption, in the range of typical German values by insulation standard; check | `design.py` HEAT_KWH_PER_M2 |
+| 180 / 140 / 120 / 90 / 60 kWh per m² a year | Heat use by build period: before 1979, 1979–1990, 1991–2000, 2001–2010, 2011 or later (the 2022 census classes) | No gas or oil figure and no energy certificate | Our assumption, in the range of typical German values by insulation standard; check | `design.py` HEAT_KWH_PER_M2 |
+| Most common build period nearby | Build period in the heat estimate | Customer gives no build period | Zensus 2022, 100 m grid, buildings by build year, summed over 300 m (700 m if fewer than 5 buildings). © Statistisches Bundesamt (Destatis), 2024, dl-de/by-2-0. `scripts/build_zensus.py` | `zensus.py`, `design.py` area_built |
+| Most common heating nearby | "Common here" hint on the heating question; not used by the engine | Always shown as a hint | Zensus 2022, 100 m grid, residential buildings by heating energy, same area and licence | `zensus.py` |
 | Energy certificate kWh per m² × area | Heat use | Certificate value given, no gas or oil figure | The customer's certificate | `design.py` |
 | 10 kWh per litre | Heating oil → heat | Oil given in litres | Common conversion for heating oil (about 10 kWh per litre) | `Review.tsx` KWH_PER_LITRE_OIL |
 | Pool 1,500, sauna 1,000, air conditioning 600, electric water heater 2,000 kWh a year | Added to the household use | Ticked, and the yearly use is not from the bill | Our assumption; check | `design.py` BIG_USERS_KWH |

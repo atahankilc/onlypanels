@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Path
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from reonic_engine import battery as batteries, lod2, site, sun
+from reonic_engine import battery as batteries, lod2, site, sun, zensus
 from reonic_engine.data import load_dataset
 from reonic_engine.design import Engine, use_from_payment
 from reonic_engine.refine import refine
@@ -65,7 +65,9 @@ class Inputs(BaseModel):
     living_m2: float | None = None
     living_from_model: bool | None = None  # the area is the 3D model's estimate, not the customer's
     cert_kwh_m2: float | None = None  # from the energy certificate, heat a year per m²
-    built: str | None = None  # before1979, 1979to1994, 1995to2009, since2010
+    built: str | None = None  # before1979, 1979to1990, 1991to2000, 2001to2010, since2011 (the census classes)
+    area_built: str | None = None  # the most common build period around the address, from the 2022 census
+    area_built_share: float | None = None
     trees: bool | None = None
     roof_renovation: str | None = None  # yes, no, unsure
     goal: str | None = None  # cost, independence, environment
@@ -154,6 +156,12 @@ def site_search(q: str):
         return site.suggest(q)
     except OSError:
         raise HTTPException(502, "Address search is not reachable")
+
+
+@app.get("/api/site/area")
+def site_area(lat: float, lon: float):
+    """What the 2022 census says about the homes around a point: most common build period and heating. Empty without the data."""
+    return zensus.around(lon, lat) or {}
 
 
 @app.get("/api/site/reverse")

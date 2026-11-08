@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Answers, NO_ANSWERS, Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, chosenKeys, homeParts, homesIn, NO_CHOICE, Choice, sunOf, markedOf, markedM2, paintChoice, panelsOf, panelsM2 } from "./api";
+import { Answers, NO_ANSWERS, Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, chosenKeys, homeParts, homesIn, NO_CHOICE, Choice, sunOf, areaAt, markedOf, markedM2, paintChoice, panelsOf, panelsM2 } from "./api";
 import { P2, P3, toLocal } from "./geometry";
 import { Handoff } from "./plan";
 import HomeMap, { Face, Picked, Step, Tool, letter } from "./HomeMap";
@@ -109,6 +109,9 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
   useEffect(() => {
     if (!waiting || measuring) return;
     setWaiting(false); setOpen(buildings[0]?.home ?? null); setStep("review"); setMove("in");
+    // The census around the home, as hints for the house and heating questions. Quietly skipped if it fails.
+    const at = buildings[0]?.origin;
+    if (at) areaAt(at[1], at[0]).then((area) => setAnswers((x) => ({ ...x, area }))).catch(() => undefined);
   }, [waiting, measuring]);
   const goTo = (id: string) => { setOpen(id); setLook({ id }); };
 

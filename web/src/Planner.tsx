@@ -20,7 +20,7 @@ const summary = (d: Design) => `${d.pv.kwp.toFixed(1)} kWp · ${d.battery.kwh ? 
 const FACT: Record<string, string> = { demand_kwh: "Yearly electricity", price_ct_kwh: "Price", heating: "Heating", heat_kwh: "Yearly heat", ev: "Electric car", ev_km: "Driving", has_solar: "Existing solar", has_storage: "Existing battery", installer: "Catalog",
   ev_kwh_month: "Car charged at home", ev_charge_home: "Charging at home", ev_day: "Car charges in daytime", has_wallbox: "Wallbox already there", hp_kwh: "Heat pump use now", monthly_eur: "Monthly payment",
   big_users: "Big users", living_m2: "Living area", cert_kwh_m2: "Energy certificate", built: "Built", trees: "Big trees near the roof", roof_renovation: "Roof renewal soon", goal: "Customer's priority" };
-const BUILT: [string, string][] = [["", "Not given"], ["before1979", "Before 1979"], ["1979to1994", "1979 – 1994"], ["1995to2009", "1995 – 2009"], ["since2010", "2010 or later"]];
+const BUILT: [string, string][] = [["", "Not given"], ["before1979", "Before 1979"], ["1979to1990", "1979 – 1990"], ["1991to2000", "1991 – 2000"], ["2001to2010", "2001 – 2010"], ["since2011", "2011 or later"]];
 const HOME_SHARE: [string, string][] = [["", "Not given"], ["most", "Most"], ["half", "About half"], ["little", "Little"]];
 const RENEWAL: [string, string][] = [["", "Not given"], ["yes", "Yes"], ["no", "No"], ["unsure", "Not sure"]];
 const GOAL: [string, string][] = [["", "Not given"], ["cost", "Lower cost"], ["independence", "Independence"], ["environment", "Environment"]];

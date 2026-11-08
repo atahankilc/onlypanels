@@ -10,7 +10,7 @@ const BY_PEOPLE = [["1", 2000], ["2", 2700], ["3", 3500], ["4", 3800], ["5+", 45
 // What the customer can tell us beyond that is asked, never required: a heat pump's own meter, the gas or oil a year.
 const HEATING = [["Heatpump", "Heat pump"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherRenewable", "Wood or pellets"], ["unknown", "Something else or not sure"]] as const;
 const BIG_USERS = [["pool", "Pool"], ["sauna", "Sauna"], ["ac", "Air conditioning"], ["water", "Electric water heater"]] as const;
-const BUILT = [["before1979", "Before 1979"], ["1979to1994", "1979 – 1994"], ["1995to2009", "1995 – 2009"], ["since2010", "2010 or later"]] as const;
+const BUILT = [["before1979", "Before 1979"], ["1979to1990", "1979 – 1990"], ["1991to2000", "1991 – 2000"], ["2001to2010", "2001 – 2010"], ["since2011", "2011 or later"]] as const;
 const GOALS = [["cost", "Low cost", "A system that pays back fast"], ["independence", "Independence", "As much of my own power as I can"], ["environment", "The environment", "As much clean power as the roof gives"]] as const;
 const KWH_PER_LITRE_OIL = 10; // heating oil, about 10 kWh of heat per litre
 const FOSSIL = ["Gas", "Oil", "OtherNonRenewable"];
@@ -202,15 +202,17 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
       {stage === "house" && page("About your house", null, <div className="more flat">
         <h2>When was it built?</h2>
         <div className="answers grid2">
-          {BUILT.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.built === v} onClick={() => setAnswers({ ...a, built: v })}>{label}</Button>)}
+          {BUILT.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.built === v} onClick={() => setAnswers({ ...a, built: v })}>{label}{a.area?.built === v && <span className="common">Common here</span>}</Button>)}
         </div>
+        {a.area?.built && <p className="small muted">"Common here": {Math.round((a.area.built_share ?? 0) * 100)}% of homes nearby, Census 2022.</p>}
         {numberField(optional("Living area (m²)"), a.living_m2, (living_m2) => setAnswers({ ...a, living_m2 }), modelM2(buildings) ? `About ${modelM2(buildings)} from the 3D model` : undefined)}
         {numberField(optional("Energy certificate (kWh per m² a year)"), a.cert_kwh_m2, (cert_kwh_m2) => setAnswers({ ...a, cert_kwh_m2 }), "If you have one")}
       </div>)}
 
       {stage === "heat" && page("How do you heat your home?", null, <div className="answers grid2">
         {HEATING.map(([value, label]) => <Button key={value} size="lg" wide aria-pressed={a.heating === value}
-          onClick={() => answer({ heating: value, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null }, !(FOSSIL.includes(value) || value === "Heatpump"))}>{label}</Button>)}
+          onClick={() => answer({ heating: value, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null }, !(FOSSIL.includes(value) || value === "Heatpump"))}>{label}{a.area?.heating === value && <span className="common">Common here</span>}</Button>)}
+        {a.area?.heating && <p className="small muted span2">{a.area.heating === "District" ? "Most homes nearby use district heating" : a.area.heating === "Electric" ? "Most homes nearby heat with electricity" : `"Common here": ${Math.round((a.area.heating_share ?? 0) * 100)}% of homes nearby`}, Census 2022.</p>}
       </div>, a.heating === "Heatpump" ? <>
         {numberField(optional("Its electricity a year (kWh)"), a.hp_kwh, (hp_kwh) => setAnswers({ ...a, hp_kwh }), "From its own meter or bill")}
         <p className="small muted">The new solar can cover it too.</p>
