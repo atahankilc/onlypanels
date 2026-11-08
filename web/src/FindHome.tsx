@@ -127,9 +127,18 @@ export default function FindHome({ dark, onSend, requests }: { dark: boolean; on
     setFromList(true); setBuildings(h.buildings); setAnswers(h.answers); setChoice(h.choice); setRef(m.ref); setStage("sent"); setTool(null); setUndo([]);
     setOpen(h.buildings[0]?.home ?? null); setStep("review"); setMove("in");
   };
+  // The page that is leaving keeps its content while the map's edge sweeps it away; the answers are cleared once it is gone,
+  // so the first question does not flash up on the way out. Meanwhile the start page shows the list, not a picked home.
+  const clearAfter = useRef(false);
   const newRequest = () => {
-    setFace(null); setStep("pick"); setMove("out"); setStage("roof"); setTool(null); setUndo([]);
-    setBuildings([]); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef()); setFromList(false);
+    setFace(null); setStep("pick"); setMove("out"); setTool(null); setUndo([]); setBuildings([]); setFromList(true);
+    clearAfter.current = true;
+  };
+  const moved = () => {
+    setMove(null);
+    if (!clearAfter.current) return;
+    clearAfter.current = false;
+    setStage("roof"); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef()); setFromList(false);
   };
 
   return (
@@ -143,10 +152,10 @@ export default function FindHome({ dark, onSend, requests }: { dark: boolean; on
         <IconButton variant="glass" size="lg" label="Undo" disabled={!undo.length} onClick={stepBack}><Undo /></IconButton>
       </div>}
       {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
-      {step === "pick" && <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</Button>}
+      {step === "pick" && <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "3D buildings" : "Photo only"}</Button>}
       {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
-      {(step === "pick" || move === "in") && <Curtain move={move} done={() => setMove(null)}>
+      {(step === "pick" || move === "in") && <Curtain move={move} done={moved}>
       <div className="finder">
         <div className="field-pill">
           <Search />
@@ -177,7 +186,7 @@ export default function FindHome({ dark, onSend, requests }: { dark: boolean; on
       </aside>}
       </Curtain>}
 
-      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && setMove(null)}><Review refId={ref} progress={requests.find((m) => m.ref === ref)} done={newRequest} stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={() => { setFace(null); setStep("pick"); setMove("out"); }} /></div>}
+      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && moved()}><Review refId={ref} progress={requests.find((m) => m.ref === ref)} done={newRequest} stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={() => { setFace(null); setStep("pick"); setMove("out"); }} /></div>}
     </main>
   );
 }

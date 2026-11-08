@@ -151,7 +151,7 @@ export default function Review({ refId, progress, done, stage, setStage, answers
           <li><b>You get an offer</b><span>Solar, battery and anything else that fits, with what it makes and saves.</span></li>
         </ol>}
         <details className="sent-answers"><summary>What you sent</summary>{view}</details>
-        <div className="stick"><Button variant="solid" size="lg" wide onClick={done}>Back to the start page</Button></div>
+        <div className="stick"><Button variant="solid" size="lg" wide onClick={done}>Back to map</Button></div>
       </aside>
     );
   }
