@@ -73,8 +73,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 2. Check the engine fixes in `reports/`: 2 m² per panel, price in sizing, roof area as limit. They change scored numbers
 3. Check the own-electricity share and saving before a planner quotes them
 4. Decide where expert comparison and results go
-5. Planner view plan proposed in `reports/Planner planı.md`, awaiting the user's answers to its five questions
-6. Pitch deck and demo recording, following `docs/demo-script.md`. Feature freeze at 12:00
+5. Pitch deck and demo recording, following `docs/demo-script.md`. Feature freeze at 12:00
 
 ## Parked
 
