@@ -55,7 +55,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 
 ## Not done
 
-- Pitch deck, demo recording: not started
+- Pitch deck, demo recording: not started. Demo script and README rewritten on 8 November around one idea, data is everything (`docs/demo-script.md`), with numbers read off the screen
 - Every assumed value and default, with its source, is in `docs/assumptions.md`. Keep it current when a constant changes
 
 ## Next steps
@@ -65,7 +65,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 3. Check the own-electricity share and saving before a planner quotes them
 4. Decide where expert comparison and results go
 5. Planner view plan proposed in `reports/Planner planı.md`, awaiting the user's answers to its five questions
-6. Pitch deck and demo recording, with `docs/demo-script.md` rewritten for this flow and the final test numbers. Feature freeze at 12:00
+6. Pitch deck and demo recording, following `docs/demo-script.md`. Feature freeze at 12:00
 
 ## Parked
 

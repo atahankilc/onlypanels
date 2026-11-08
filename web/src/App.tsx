@@ -39,7 +39,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="logo"><Mark /><h1>Energy Design Desk</h1></div>
+        <div className="logo"><Mark size={30} /><h1>Only<span>Panels</span></h1></div>
         <div className="dev" ref={devRef}>
           <Button variant="dev" aria-expanded={devOpen} aria-label="Demo tools" onClick={() => setDevOpen(!devOpen)}>DEV</Button>
           {devOpen && <div className="devmenu" role="group" aria-label="Demo tools">

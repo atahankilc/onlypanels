@@ -43,8 +43,10 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .topbar > * { pointer-events: auto; }
 .blank { position: fixed; z-index: 4; inset: 0; display: grid; place-items: center; background: var(--hud-land); }
 .blank p { margin: 0; }
-.logo { display: flex; align-items: center; gap: 12px; text-shadow: 0 1px 12px var(--hud-land); }
-.logo h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
+.topbar::before { content: ""; position: absolute; z-index: -1; inset: 0 0 auto 0; height: 110px; background: linear-gradient(180deg, rgba(15, 16, 19, 0.88), rgba(15, 16, 19, 0)); pointer-events: none; }
+.logo { display: flex; align-items: center; gap: 12px; }
+.logo h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.logo svg, .logo h1 span { color: #00aff0; }
 
 /* ---------- stage: the map fills the screen, the panel floats on it ---------- */
 .stage { position: fixed; inset: 0; overflow: hidden; background: var(--hud-base); transition: background-color 0.3s; }

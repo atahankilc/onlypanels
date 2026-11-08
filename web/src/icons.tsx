@@ -12,9 +12,15 @@ export const Needle = path("M12 3l4 9h-8zM8 12l4 9 4-9");
 export const Back = path("M15 6l-6 6 6 6");
 export const Undo = path("M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3");
 export const Photo = path("M4 6h16v12H4zM4 15l5-4 4 3 3-2 4 3");
+/** OnlyPanels: a ring with a solar panel locked into its upper right, in the brand blue (set by .logo). */
 export const Mark = ({ size = 28 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="16" cy="9" r="4" fill="currentColor" stroke="none" /><path d="M3 26L16 16l13 10M9 26h14" />
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+    <mask id="op-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32">
+      <rect width="32" height="32" fill="#fff" />
+      <path d="M17.00 2.50L30.00 2.50L27.50 11.50L14.50 11.50z" fill="#000" stroke="#000" strokeWidth="3.2" strokeLinejoin="round" />
+    </mask>
+    <circle cx="12.5" cy="19" r="8.5" stroke="currentColor" strokeWidth="5.5" mask="url(#op-cut)" />
+    <path d="M17.00 2.50L20.81 2.50L19.74 6.37L15.93 6.37zM21.85 2.50L25.15 2.50L24.07 6.37L20.78 6.37zM26.19 2.50L30.00 2.50L28.93 6.37L25.11 6.37zM15.57 7.63L19.39 7.63L18.31 11.50L14.50 11.50zM20.43 7.63L23.72 7.63L22.65 11.50L19.35 11.50zM24.76 7.63L28.57 7.63L27.50 11.50L23.69 11.50z" fill="currentColor" />
   </svg>
 );
 export const Mic = path("M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3");
