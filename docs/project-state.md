@@ -81,7 +81,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 
 ## Not done
 
-- Demo recording: not started. Pitch deck done on 8 November: `OnlyPanels-pitch.pdf`, source `docs/pitch/deck.html`, led by the same-request finding (`scripts/profile_same_request.py`). Submission text in `docs/submission.md`, team name OnlyPanels. Two-minute video plan in `docs/demo-video.md`. Demo script and README rewritten on 8 November around one idea, data is everything (`docs/demo-script.md`), with numbers read off the screen
+- Submitted on 8 November before 14:00, with the demo video (user). Pitch deck: `OnlyPanels-pitch.pdf` and `OnlyPanels-pitch.pptx`, eight slides, source `docs/pitch/deck.html`, led by the same-request finding (`scripts/profile_same_request.py`). Submission text in `docs/submission.md`, team name OnlyPanels. Video plan in `docs/demo-video.md`, longer demo script in `docs/demo-script.md`
 - Every assumed value and default, with its source, is in `docs/assumptions.md`. Keep it current when a constant changes
 
 ## Next steps
