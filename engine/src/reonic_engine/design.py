@@ -76,6 +76,32 @@ def existing_pv(i, typical):
             "ended": age is not None and age >= FEED_IN_YEARS, "battery_kwh": float(i.get("existing_battery_kwh") or 0)}
 
 
+# A roof's sun moves the size the experts' habits give for a typical roof (KWH_PER_KWP): a weaker roof needs more modules for
+# the same power, a stronger one fewer, within a fifth either way. Below POOR_ROOF of a typical yield a module earns too
+# little to add more: the system shrinks instead, to half at a roof with half the sun. The two meet at POOR_ROOF.
+# Within SUN_CALM of a typical roof nothing moves, so rounding alone never adds or drops a module.
+SUN_SCALE = (0.8, 1.2)
+POOR_ROOF = 0.75
+POOR_FLOOR = 0.5
+SUN_CALM = 0.05
+
+
+def sun_factor(share):
+    """Modules on this roof per module on a typical one, by the roof's yield as a share of the typical yield."""
+    low, high = SUN_SCALE
+    if share >= POOR_ROOF:
+        f = min(max(1 / share, low), high)
+        return float(1 + (1 if f > 1 else -1) * max(0.0, abs(f - 1) - SUN_CALM))
+    return POOR_FLOOR + max(0.0, share - POOR_FLOOR) / (POOR_ROOF - POOR_FLOOR) * (high - SUN_CALM - POOR_FLOOR)
+
+
+def site_yield(modules, surfaces, fallback):
+    """kWh per kWp over the surfaces these modules would fill, best first as placed."""
+    placed = place(modules, surfaces)
+    total = sum(placed)
+    return sum(n * (s.get("kwh_per_kwp") or fallback) for n, s in zip(placed, surfaces)) / total if total else fallback
+
+
 def place(modules, surfaces):
     """Fill surfaces in the homeowner's order. Anything beyond capacity lands on the last one."""
     placed, left = [], modules
@@ -285,6 +311,13 @@ class Engine:
             kwp = kwp * GOAL_PV[goal]
             if max_modules is not None:
                 kwp = np.minimum(kwp, max_modules * ASSUMED_KWP_PER_MODULE)
+        sun_share, before_sun = None, None
+        if lock is None and surfaces:
+            # The roof's sun moves the size before the roof limits it: a strong roof too small for the need stays full.
+            free = self.predict(row, added, None, None, extra_kwp=old_kwp)[0] * GOAL_PV.get(goal, 1.0)
+            before_sun = max(1, round(min(free[0], max_modules * ASSUMED_KWP_PER_MODULE) / ASSUMED_KWP_PER_MODULE))
+            sun_share = site_yield(before_sun, surfaces, typical * mount["yield"]) / typical
+            kwp = np.minimum(free * sun_factor(sun_share), max_modules * ASSUMED_KWP_PER_MODULE)
         modules = locked_modules if lock is not None else max(1, round(kwp[0] / ASSUMED_KWP_PER_MODULE))
         kwp_final = modules * ASSUMED_KWP_PER_MODULE
         capped = lock is None and max_modules is not None and free_kwp > max_modules * ASSUMED_KWP_PER_MODULE
@@ -357,6 +390,12 @@ class Engine:
 
         near = self.near(i["installer"], like, car=bool(ev_mwh))
         review = _review(near, similar, kwp_final, battery_kwh, total, has_storage, unsure, p_battery[0])
+        if sun_share is not None and modules != before_sun:
+            site = round(sun_share * typical)
+            if sun_share < POOR_ROOF:
+                review.append({"code": "roof_sun_poor", "level": "warn", "on": "pv", "text": f"This roof gets little sun: {site} kWh per kWp a year, {round(sun_share * 100)}% of a typical {typical}. Each module earns less, so the system is smaller: {modules} modules instead of {before_sun}. Tell the customer, or look for a better surface."})
+            else:
+                review.append({"code": "roof_sun", "level": "note", "on": "pv", "text": f"Sized for this roof's sun: {site} kWh per kWp a year against a typical {typical}, so {modules} modules instead of {before_sun}."})
         standing = _standing(near, kwp_final, battery_kwh, heat_mwh, hp_wanted or heat_type == "Heatpump")
         if ex:
             review.extend(_existing_notes(ex))

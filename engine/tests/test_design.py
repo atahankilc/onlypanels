@@ -199,3 +199,18 @@ def test_standing_ranks_a_planners_design_among_similar_homes(engine):
     assert big["battery"]["value"] == 15 and big["battery"]["below"] is not None
     hp = engine.design({**HOME, "heating": "Gas", "heat_kwh": 18000}, {"heatpump": True})["standing"]["heatpump"]
     assert hp["heat_known"] and hp["need_kw"] > 0
+
+
+def test_sun_factor_is_continuous_and_bounded():
+    from reonic_engine.design import POOR_ROOF, sun_factor
+    assert sun_factor(1.0) == sun_factor(0.97) == sun_factor(1.04) == 1.0 and sun_factor(0.3) == 0.5
+    assert abs(sun_factor(2.0) - 0.85) < 1e-9
+    assert abs(sun_factor(POOR_ROOF) - sun_factor(POOR_ROOF + 1e-9)) < 1e-6
+
+
+def test_roof_sun_moves_the_module_count(engine):
+    home = {"installer": "2a8ba8e2", "demand_kwh": 6000, "price_ct_kwh": 32}
+    count = lambda kwh: engine.design({**home, "surfaces": [{"max_modules": 60, "kwh_per_kwp": kwh, "tilt": 35, "azimuth": 180}]})["pv"]["modules"]
+    typical, east, north = count(950), count(800), count(450)
+    assert east > typical > north
+    assert north <= typical * 0.55
