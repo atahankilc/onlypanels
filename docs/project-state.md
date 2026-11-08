@@ -40,7 +40,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 ## Not done
 
 - Pitch deck, demo recording, final test-set run: not started
-- Questions-only path (D104) asks no address or roof by hand. It shows no map: the questions sit in the middle, with a Map or Questions switch and the earlier requests on top. The choice is kept in the browser
+- Questions-only path (D104) shows no map: the questions sit in the middle, with a With map or Without map switch and the earlier requests on top; the choice is kept in the browser. It asks the address (text, never looked up) and the roof in words, sent as roof numbers. Open on the planner side: an unknown direction counts as south, and the planner does not yet show a sent address
 - Team decisions in `docs/decisions.md` marked Proposed are not yet agreed
 - Every assumed value and default, with its source, is in `docs/assumptions.md`. Keep it current when a constant changes
 
