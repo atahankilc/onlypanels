@@ -97,13 +97,13 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 /* The drawing tools sit on the map, centred over it, like an editor's toolbar. */
 .tools { position: absolute; z-index: 2; top: 24px; left: calc(var(--left, 424px) + (100% - var(--left, 424px)) / 2); transform: translateX(-50%); display: flex; gap: 8px; animation: rise 0.35s var(--ease); }
 /* The shape being drawn on the roof: white lines with a dark edge, so they read on any photo. */
-.draft { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.draft .line, .draft .next { fill: none; stroke: #FFFFFF; stroke-width: 2.5; stroke-linejoin: round; filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.8)); }
-.draft .next { stroke-dasharray: 6 5; opacity: 0.85; }
-.draft .pt { fill: #FFFFFF; stroke: #0F1013; stroke-width: 2; }
-.draft .pt.end { fill: var(--hud-route, #0A84FF); stroke: #FFFFFF; }
-.draft .aim { fill: none; stroke: #FFFFFF; stroke-width: 2; }
-.draft .aim.on { fill: #FFFFFF; }
+.draw-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.draw-layer .line , .draw-layer .next { fill: none; stroke: #FFFFFF; stroke-width: 2.5; stroke-linejoin: round; filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.8)); }
+.draw-layer .next { stroke-dasharray: 6 5; opacity: 0.85; }
+.draw-layer .pt { fill: #FFFFFF; stroke: #0F1013; stroke-width: 2; }
+.draw-layer .pt.end { fill: var(--hud-route, #0A84FF); stroke: #FFFFFF; }
+.draw-layer .aim { fill: none; stroke: #FFFFFF; stroke-width: 2; }
+.draw-layer .aim.on { fill: #FFFFFF; }
 .quiz .marked { margin: 18px 0 4px; color: var(--hud-ink-2); }
 .quiz .marked b { color: var(--hud-ink); font: 650 28px/1 var(--font-ui); letter-spacing: -0.015em; }
 /* The map's sun choice: top right of the map window, apart from the questions. */

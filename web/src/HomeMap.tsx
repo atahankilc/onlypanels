@@ -1106,7 +1106,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     // The shape being drawn: points in the model, so it stays put while the map turns. Lines join point to point; clicking the first point closes it.
     let draft: Spot3[] = [], hoverAt: maplibregl.Point | null = null;
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.classList.add("draft");
+    svg.classList.add("draw-layer");
     m.getCanvasContainer().appendChild(svg);
     const drawDraft = () => {
       const on = drawing() && live.current.tool === "draw";
