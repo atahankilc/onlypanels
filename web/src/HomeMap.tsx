@@ -658,7 +658,9 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       const b = live.current.buildings.find((x) => x.id === m.id);
       if (!b?.sun) return;
       const suns = b.sun.suns, moment = view.moment ? suns.findIndex((x) => x.month === view.moment?.month && x.hour === view.moment.hour) : -1;
-      for (const { s: x, pixels, source, texture, cover, plate, holes, mask, fitted, fit } of m.skins) {
+      for (const { s: built, pixels, source, texture, cover, plate, holes, mask, fitted, fit } of m.skins) {
+        // The surface as it is now, not as it was when the model was built: in the planner, trees arrive on its sun later.
+        const x = b.sun.surfaces.find((s) => s.kind === built.kind && s.index === built.index) ?? built;
         const key = surfaceKey(b, x), count = x.year.length;
         // Cells with panels keep their photo under amber; free cells not chosen are hatched; chosen cells look as they are. Without a drawing a surface is all in or all out.
         const full = new Set(x.year.map((_, n) => n)), none = new Set<number>();
@@ -683,7 +685,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
           if (view.layer === "sun") {
             if (!view.moment) c = heat((value - low) / Math.max(1, high - low));
             else if (moment < 0) c = HEAT[0];
-            else { const v = suns[moment].vector; c = heat(read(i, moment) ? Math.max(0, x.n[0] * v[0] + x.n[1] * v[1] + x.n[2] * v[2]) : 0); }
+            else { const v = suns[moment].vector; c = heat(read(i, moment) ? Math.max(0, x.n[0] * v[0] + x.n[1] * v[1] + x.n[2] * v[2]) * through(i, moment) : 0); }
             alpha = 0.94;
           }
           if (over) { c = c.clone().lerp(mark, 0.45); alpha = Math.max(alpha, 0.55); }
@@ -709,6 +711,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       tag.type = "button";
       tag.className = "pin";
       tag.textContent = text;
+        const light = x.light ? atob(x.light) : null, through = (i: number, sun: number) => (light ? light.charCodeAt(i * suns.length + sun) / 255 : 1);
       tag.dataset.z = String(z);
       tag.addEventListener("click", (e) => { e.stopPropagation(); click(); });
       pins.current.push(new maplibregl.Marker({ element: tag }).setLngLat(at).addTo(m));
@@ -1263,7 +1266,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
   // The search dot helps find the area; once buildings are chosen it only sits in the way.
   useEffect(() => { const dot = spot.current?.getElement(); if (dot) dot.style.display = step === "review" ? "none" : ""; }, [step]);
   useEffect(placePins, [buildings, step, open]);
-  useEffect(paintTiles, [view, chosen, face, installed, marked, taken]);
+  useEffect(paintTiles, [view, chosen, face, installed, marked, taken, buildings]); // buildings: trees reach the planner's sun after arrival
   // While drawing, a left drag paints; right drag still turns and the wheel still zooms.
   useEffect(() => {
     const m = map.current;

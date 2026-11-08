@@ -11,8 +11,9 @@ export type Poly = { ring: P3[]; holes: P3[][] };
 export type Square = { name: string; ring: P2[] };
 /** Its surfaces, in metres around the building's origin. */
 export type Real = { roofs: Poly[]; walls: Poly[] };
-/** One surface of a building, sampled. `at` is lon, lat, height per sample; `seen` says which sun positions reach each one. */
-export type SunSurface = { kind: "roof" | "wall"; index: number; m2: number; tilt: number; azimuth: number; kwh_m2: number | null; kwh_per_kwp: number | null; year: number[]; at: number[]; seen: string; cells: number[]; outline: P2[]; holes: P2[][]; n: P3 };
+/** One surface of a building, sampled. `at` is lon, lat, height per sample; `seen` says which sun positions reach each one.
+ *  `light`, once trees are on the sun (planner only): one byte per sample and sun position, how much of that sun gets past the trees (255 all). */
+export type SunSurface = { kind: "roof" | "wall"; index: number; m2: number; tilt: number; azimuth: number; kwh_m2: number | null; kwh_per_kwp: number | null; year: number[]; at: number[]; seen: string; light?: string; cells: number[]; outline: P2[]; holes: P2[][]; n: P3 };
 /** A building nearby. `ring` is its outline as lon, lat and metres to this building; `touch` says it shares a wall. `solid` comes with
  *  the close ones: its measured surfaces, lon, lat and height above its own floor. */
 export type Near = { id: string; h: number; touch: boolean; ring: P3[]; solid?: { roofs: Poly[]; walls: Poly[] } | null };

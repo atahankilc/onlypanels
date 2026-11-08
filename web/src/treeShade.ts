@@ -58,6 +58,8 @@ function hits(p: [number, number, number], ux: number, uy: number, tanEl: number
   return low <= t[2] && high >= CROWN_FROM * t[2];
 }
 
+/** Bytes as base64, in pieces small enough for the call stack. */
+const pack = (bytes: Uint8Array) => { let text = ""; for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(text); };
 const bits = (s: SunSurface, suns: number) => { const raw = atob(s.seen), width = Math.ceil(suns / 8); return (row: number, sun: number) => (raw.charCodeAt(row * width + (sun >> 3)) >> (7 - (sun & 7))) & 1; };
 
 /** The home with trees on its sun: every surface's yearly sun per point, scaled by what the crowns take. Plus what the check says. */
@@ -102,6 +104,7 @@ export async function withTrees(buildings: Selected[]): Promise<{ buildings: Sel
         return along > -extent && Math.abs(dx * x.uy - dy * x.ux) < r + extent && t[2] >= low + Math.max(0, along - extent - r) * x.tanEl;
       }) : []));
       const seen = bits(s, suns.length);
+      const light = new Uint8Array(s.year.length * suns.length).fill(255); // what the map's sun-by-time view draws
       let before = 0, after = 0;
       const year = s.year.map((value, row) => {
         let open = 0, through = 0;
@@ -115,6 +118,7 @@ export async function withTrees(buildings: Selected[]): Promise<{ buildings: Sel
             if (!blocking.has(k) || d < blocking.get(k)!) blocking.set(k, d);
           }
           through += weight[i] * pass;
+          if (pass < 1) light[row * suns.length + i] = Math.round(pass * 255);
         });
         const was = DIFFUSE_SHARE + (1 - DIFFUSE_SHARE) * open / wsum, now = DIFFUSE_SHARE + (1 - DIFFUSE_SHARE) * through / wsum;
         const next = Math.round(value * (now / was));
@@ -122,7 +126,7 @@ export async function withTrees(buildings: Selected[]): Promise<{ buildings: Sel
         return next;
       });
       if (s.kind === "roof" && before > 0 && after < before) lost.push({ name: surfaceName(s), lost: 1 - after / before });
-      return after < before ? { ...s, year } : s;
+      return after < before ? { ...s, year, light: pack(light) } : s;
     });
     return { ...b, sun: { ...b.sun, surfaces } };
   });
