@@ -21,6 +21,7 @@ import { AgentPanel } from "./Agent";
 import type { RoofNumbers } from "./share";
 import { BatteryCurve } from "./BatteryCurve";
 import { CostTab, PriceBook } from "./Costs";
+import { DeskSummary } from "./DeskSummary";
 import { EvidenceCard } from "./Evidence";
 import { Money, moneyOf, useCosts } from "./money";
 import { Button, Check, Field, IconButton, Input, Segmented, Select, Slider } from "./ui";
@@ -282,11 +283,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         <div className="grow"><h1>{splitLabel(r.label)[0]}</h1><p className="muted">{[splitLabel(r.label)[1], `${r.from} request`, r.ref].filter(Boolean).join(" · ")}</p></div>
         <span className={`reqstate ${r.status === "sent" ? "is-sent" : "is-open"}`}>{r.status === "sent" ? "Offer sent" : "Draft"}</span>
       </header>
-      {d && <dl className="kpis">
-        <div><dt>Solar</dt><dd>{d.pv.kwp.toFixed(1)}<small> kWp</small></dd></div><div><dt>Modules</dt><dd>{d.pv.modules}</dd></div>
-        <div><dt>Battery</dt><dd>{d.battery.kwh || (r.inputs.has_storage && r.existing.battery_kwh ? r.existing.battery_kwh : "–")}{d.battery.kwh || (r.inputs.has_storage && r.existing.battery_kwh) ? <small> kWh{!d.battery.kwh ? " there" : ""}</small> : null}</dd></div>
-        <div><dt>Need</dt><dd>{d.energy.total_mwh.toFixed(1)}<small> MWh</small></dd></div><div><dt>Makes</dt><dd>{d.energy.production_mwh.toFixed(1)}<small> MWh</small></dd></div>
-      </dl>}
+      {d && <DeskSummary r={r} d={d} costs={costs} go={setTab} />}
       <div className="desktabs"><Segmented wide label="Sections" value={tab} onChange={setTab} options={[{ value: "home", label: "Home" }, { value: "design", label: "Design" }, { value: "cost", label: "Cost" }, { value: "checks", label: left ? `Checks ${left}` : "Checks" }, { value: "offer", label: "Offer" }]} /></div>
       <div className="deskbody">
         {!d && <p className="muted">The engine is working…</p>}

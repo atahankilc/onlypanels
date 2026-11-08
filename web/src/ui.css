@@ -62,3 +62,9 @@
 .slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8px; border: 0; border-radius: 50%; background: var(--hud-solid); box-shadow: var(--hud-shadow); }
 .slider::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: var(--hud-solid); }
 
+
+.amount { display: inline-flex; align-items: center; gap: 5px; width: auto; padding: 0 12px; cursor: text; }
+.amount:focus-within { border-color: var(--hud-route); }
+.amount input { all: unset; width: calc(var(--w, 4) * 1ch); min-width: 3ch; font: 500 14px var(--font-ui); font-variant-numeric: tabular-nums; color: var(--hud-ink); text-align: right; }
+.amount input::-webkit-inner-spin-button, .amount input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.amount i { font: 400 12.5px var(--font-ui); font-style: normal; color: var(--hud-ink-3); white-space: nowrap; }

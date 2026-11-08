@@ -49,3 +49,11 @@ export function Slider({ min = 0, max = 100, value, ...rest }: Omit<InputHTMLAtt
   const at = max > min ? ((value - min) / (max - min)) * 100 : 0;
   return <input type="range" className="slider" style={{ "--at": `${at}%` } as React.CSSProperties} min={min} max={max} value={value} {...rest} />;
 }
+
+/** A number field with its unit inside the pill: "€ 115 / module". Commits on blur or Enter, like the other fields. */
+export function Amount({ prefix, suffix, className, value, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "prefix"> & { prefix?: string; suffix?: string }) {
+  const w = Math.max(3, String(value ?? rest.defaultValue ?? "").length + 1);
+  return <span className={cx("control", "amount", className)} style={{ "--w": w } as React.CSSProperties}>
+    {prefix && <i>{prefix}</i>}<input type="number" step="any" value={value} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} {...rest} />{suffix && <i>{suffix}</i>}
+  </span>;
+}

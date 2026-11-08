@@ -1,8 +1,10 @@
 // The desk's Cost tab and the price book. What the homeowner pays, the KfW grant, the year's money before and after,
 // when it pays back and how. Every number is the API's (costs.py); the planner edits prices and ticks extras here.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Book, Costs, Money, PriceItem, addItem, eur, getBook, standing, resetItem, resetRates, setItem, setRates, years } from "./money";
-import { Button, Check, Field, Input, Select } from "./ui";
+import { Amount, Button, Check, Field, IconButton, Input, Select } from "./ui";
+import { Back, Info, Plus } from "./icons";
+import { RatesIcon, TECH_ICON } from "./techIcons";
 import "./money.css";
 
 const TECH: Record<string, string> = { solar: "Solar", battery: "Battery", wallbox: "Wallbox", heatpump: "Heat pump" };
@@ -128,40 +130,126 @@ function Payback({ c }: { c: Costs }) {
   </figure>;
 }
 
-/** The price book: every part an offer can hold, with its default, source and the planner's own price. */
+/** The price book: every part an offer can hold, by technology, with its default, its source and the planner's own price. */
 export function PriceBook({ installer, close }: { installer?: string; close?: () => void }) {
   const [book, setBook] = useState<Book | null>(null);
   const [error, setError] = useState("");
+  const [find, setFind] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [at, setAt] = useState("solar");
+  const root = useRef<HTMLDivElement>(null);
   useEffect(() => { getBook(installer).then(setBook).catch(() => setError("The price book could not be loaded. Is the API running the latest version?")); }, [installer]);
   const run = (p: Promise<Book>) => p.then((b) => { setBook(b); setError(""); }).catch((e: Error) => setError(e.message));
+  // The group in view is the one lit on the left.
+  useEffect(() => {
+    if (!book || !root.current) return;
+    const io = new IntersectionObserver((es) => { const e = es.filter((x) => x.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]; if (e) setAt(e.target.id.slice(3)); }, { rootMargin: "-90px 0px -60% 0px" });
+    root.current.querySelectorAll(".pb-sec").forEach((x) => io.observe(x));
+    return () => io.disconnect();
+  }, [book, find]);
   if (!book) return <p className={error ? "flag" : "muted"}>{error || "Loading prices…"}</p>;
-  return <div className="pricebook">
-    {close && <div className="money-actions"><Button onClick={close}>Back to the cost</Button></div>}
-    <p className="small muted">Net prices to the customer, as in autumn 2026, each with where it came from. Set your own and every offer uses it at once. VAT: 0% for solar and battery up to 30 kWp (UStG §12(3)), 19% for wallbox and heat pump.</p>
-    {error && <p className="flag">{error}</p>}
-    {Object.entries(book.techs).map(([t, label]) => <section key={t}>
-      <h3>{label}</h3>
-      <table className="grid prices"><thead><tr><th>Part</th><th>Fixed</th><th>Per unit</th><th>VAT</th><th /></tr></thead><tbody>
-        {book.items.filter((i) => i.tech === t).map((i) => <PriceRow key={i.id} i={i} book={book} save={(f) => run(setItem(i.id, f))} reset={() => run(resetItem(i.id))} />)}
-      </tbody></table>
-    </section>)}
-    <AddPart book={book} add={(f) => run(addItem(f))} />
-    <h3>Running prices</h3>
-    <div className="facts">{Object.entries(book.rates).map(([k, r]) => <Field key={k} label={r.label} hint={r.source}>
-      <Input type="number" step="any" defaultValue={r.value} key={`${k}${r.value}`} onBlur={(e) => { const v = Number(e.target.value); if (e.target.value !== "" && v !== r.value) run(setRates({ [k]: v })); }} /></Field>)}</div>
-    <div className="money-actions"><Button variant="plain" onClick={() => run(resetRates())}>Running prices back to defaults</Button></div>
-  </div>;
+  const q = find.trim().toLowerCase();
+  const items = book.items.filter((i) => !q || `${i.name} ${book.techs[i.tech]} ${book.kinds[i.kind]}`.toLowerCase().includes(q));
+  const rates = Object.entries(book.rates).filter(([, r]) => !q || r.label.toLowerCase().includes(q));
+  const yours = book.items.filter((i) => i.edited || i.custom).length + Object.values(book.rates).filter((r) => r.value !== r.default).length;
+  const sections = [...Object.keys(book.techs), "rates"];
+  const jump = (id: string) => { setAt(id); root.current?.querySelector(`#pb-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  return <div className="pb-wrap"><div className={`pb${close ? " in-desk" : ""}`} ref={root}>
+    <nav className="pb-nav" aria-label="Price groups">
+      {close && <Button onClick={close}><Back /> Back to the cost</Button>}
+      <Input type="search" placeholder="Find a part or price" value={find} onChange={(e) => setFind(e.target.value)} aria-label="Find a part or price" />
+      <ul>{sections.map((t) => {
+        const Icon = TECH_ICON[t], n = t === "rates" ? rates.length : items.filter((i) => i.tech === t).length;
+        const mine = t === "rates" ? Object.values(book.rates).some((r) => r.value !== r.default) : book.items.some((i) => i.tech === t && (i.edited || i.custom));
+        return <li key={t}><button type="button" className={at === t ? "on" : undefined} onClick={() => jump(t)} disabled={!n}>
+          <span className={`pb-ico t-${t}`}><Icon size={16} /></span><span>{t === "rates" ? "Running prices" : book.techs[t]}</span>{mine && <i className="pb-mine" title="Has your prices" />}<em>{n}</em></button></li>;
+      })}</ul>
+      <div className="pb-legend small">
+        <p><b>Net</b> to the customer, autumn 2026.</p>
+        <p><b>0% VAT</b> solar and battery up to 30 kWp (UStG §12(3)). <b>19%</b> wallbox and heat pump.</p>
+        <p>{yours ? <><b className="yours">{yours} {yours === 1 ? "price is" : "prices are"} yours.</b> Every offer uses them at once.</> : "Change a price and every offer uses it at once."}</p>
+      </div>
+      <Button variant={adding ? "plain" : "solid"} onClick={() => setAdding(!adding)}>{adding ? "Close" : <><Plus /> Add a part</>}</Button>
+    </nav>
+    <div className="pb-main">
+      {error && <p className="flag">{error}</p>}
+      {adding && <AddPart book={book} add={(f) => { run(addItem(f)); setAdding(false); setAt(String(f.tech)); }} />}
+      {Object.entries(book.techs).map(([t, label]) => {
+        const mine = items.filter((i) => i.tech === t);
+        if (!mine.length) return null;
+        const base = mine.filter((i) => i.when !== "extra"), extra = mine.filter((i) => i.when === "extra");
+        const Icon = TECH_ICON[t];
+        return <section key={t} id={`pb-${t}`} className="pb-sec">
+          <header><span className={`pb-ico t-${t}`}><Icon /></span><h2>{label}</h2><small>{base.length} in every offer{extra.length ? ` · ${extra.length} extras` : ""}</small></header>
+          {base.length > 0 && <ul className="pb-list">{base.map((i) => <PartRow key={i.id} i={i} book={book} save={(f) => run(setItem(i.id, f))} reset={() => run(resetItem(i.id))} />)}</ul>}
+          {extra.length > 0 && <><h3 className="pb-sub">Extras, ticked per home<small>How often each installer added it in past offers</small></h3>
+            <ul className="pb-list">{extra.map((i) => <PartRow key={i.id} i={i} book={book} save={(f) => run(setItem(i.id, f))} reset={() => run(resetItem(i.id))} />)}</ul></>}
+        </section>;
+      })}
+      {rates.length > 0 && <section id="pb-rates" className="pb-sec">
+        <header><span className="pb-ico t-rates"><RatesIcon /></span><h2>Running prices</h2><small>What the years after the sale cost and pay</small></header>
+        <div className="pb-rates">{RATE_GROUPS.map(([title, keys]) => {
+          const here = rates.filter(([k]) => keys.includes(k));
+          return here.length ? <div key={title} className="pb-card"><h3>{title}</h3>{here.map(([k, r]) => <RateRow key={k} k={k} r={r} save={(v) => run(setRates({ [k]: v }))} />)}</div> : null;
+        })}{(() => { const rest = rates.filter(([k]) => !RATE_GROUPS.some(([, keys]) => keys.includes(k))); return rest.length ? <div className="pb-card"><h3>Other</h3>{rest.map(([k, r]) => <RateRow key={k} k={k} r={r} save={(v) => run(setRates({ [k]: v }))} />)}</div> : null; })()}</div>
+        {Object.values(book.rates).some((r) => r.value !== r.default) && <div className="money-actions"><Button variant="plain" onClick={() => run(resetRates())}>Running prices back to defaults</Button></div>}
+      </section>}
+      {!items.length && !rates.length && <p className="muted">Nothing matches “{find}”.</p>}
+    </div>
+  </div></div>;
 }
 
-function PriceRow({ i, book, save, reset }: { i: PriceItem; book: Book; save: (f: Partial<PriceItem>) => void; reset: () => void }) {
-  const num = (k: "fixed" | "per_unit" | "vat", v: number) => <Input type="number" step="any" aria-label={`${i.name}: ${k}`} defaultValue={v} key={`${i.id}${k}${v}`}
+const RATE_GROUPS: [string, string[]][] = [
+  ["Energy prices", ["feed_in_ct", "feed_in_above_ct", "draft_feed_ct", "gas_ct", "oil_ct"]],
+  ["Over the years", ["electricity_rise_pct", "fuel_rise_pct", "degradation_pct", "inverter_life", "years"]],
+  ["Every year", ["pv_upkeep_eur", "hp_upkeep_eur", "boiler_upkeep_eur", "smart_meter_eur", "grid_rebate_eur"]],
+  ["Grid rules", ["neg_price_share_pct"]],
+];
+const UNIT_TAIL: Record<string, string> = { job: "", module: "/ module", kwp: "/ kWp", kwh: "/ kWh", kw_inverter: "/ kW", kw_heatpump: "/ kW", metre: "/ m", piece: "/ piece" };
+const WHEN_CHIP: Record<string, string> = { pitched: "Pitched roof only", flat: "Flat roof only", backup: "With backup power", replace: "Replaces old heating", oil: "Old oil heating" };
+
+/** One part: name, what kind and when it is in, its price in place, and on demand where the price came from. */
+function PartRow({ i, book, save, reset }: { i: PriceItem; book: Book; save: (f: Partial<PriceItem>) => void; reset: () => void }) {
+  const [open, setOpen] = useState(false);
+  const mine = i.edited || i.custom;
+  const amount = (k: "fixed" | "per_unit" | "vat", v: number, prefix: string, suffix: string, label: string) => <Amount prefix={prefix} suffix={suffix} aria-label={`${i.name}: ${label}`} defaultValue={v} key={`${i.id}${k}${v}`}
     onBlur={(e) => { const x = Number(e.target.value); if (e.target.value !== "" && x !== v) save({ [k]: x }); }} />;
-  const share = i.share ? Object.values(i.share) : [];
-  return <tr className={i.edited || i.custom ? "edited" : ""}>
-    <th scope="row">{i.name}<small>{book.when[i.when]}{i.unit !== "job" ? ` · ${book.units[i.unit]}` : ""}{share.length ? ` · in ${share.map((s) => `${Math.round(s * 100)}%`).join(" / ")} of offers (A / B)` : ""}</small><small className="src">{i.source}</small></th>
-    <td>{num("fixed", i.fixed)}</td><td>{i.unit === "job" ? <span className="muted">–</span> : num("per_unit", i.per_unit)}</td><td>{num("vat", i.vat)}</td>
-    <td>{i.custom ? <Button variant="plain" onClick={reset}>Remove</Button> : i.edited ? <Button variant="plain" onClick={reset} title={`Default: fixed €${i.default?.fixed}, per unit €${i.default?.per_unit}`}>Default</Button> : null}</td>
-  </tr>;
+  const perUnit = i.unit !== "job", showFixed = !perUnit || i.fixed !== 0;
+  const share = i.share ? Object.entries(i.share) : [];
+  return <li className={`pb-row${mine ? " mine" : ""}${open ? " open" : ""}`}>
+    <div className="pb-name">
+      <b>{i.name}</b>
+      <span className="pb-chips"><em>{book.kinds[i.kind] ?? i.kind}</em>{WHEN_CHIP[i.when] && <em className="cond">{WHEN_CHIP[i.when]}</em>}{i.vat > 0 && <em>{i.vat}% VAT</em>}{mine && <em className="yours">{i.custom ? "Your part" : "Your price"}</em>}</span>
+      {share.length > 0 && <span className="pb-share" aria-label={`Added in ${share.map(([, s]) => `${Math.round(s * 100)}%`).join(" and ")} of offers`}>{share.map(([k, s], n) => <span key={k}><small>{share.length > 1 ? `Installer ${String.fromCharCode(65 + n)}` : "Offers"}</small><i><b style={{ width: `${Math.max(2, s * 100)}%` }} /></i><small>{Math.round(s * 100)}%</small></span>)}</span>}
+    </div>
+    <div className="pb-price">
+      {showFixed && amount("fixed", i.fixed, "€", perUnit ? "fixed" : "", "fixed price")}
+      {showFixed && perUnit && <span className="plus">+</span>}
+      {perUnit && amount("per_unit", i.per_unit, "€", UNIT_TAIL[i.unit] ?? "", "price per unit")}
+    </div>
+    <IconButton variant="plain" label={open ? "Hide details" : "Source and VAT"} aria-expanded={open} onClick={() => setOpen(!open)}><Info /></IconButton>
+    {open && <div className="pb-more">
+      <p><b>Source</b> {i.source}</p>
+      <div className="pb-more-edit">
+        {!showFixed && <label>Fixed {amount("fixed", i.fixed, "€", "", "fixed price")}</label>}
+        <label>VAT {amount("vat", i.vat, "", "%", "VAT")}</label>
+        {i.edited && i.default && <span className="small muted">Default: €{i.default.fixed.toLocaleString("en")}{perUnit ? ` + €${i.default.per_unit.toLocaleString("en")} ${UNIT_TAIL[i.unit]}` : ""}</span>}
+        {i.custom ? <Button variant="plain" onClick={reset}>Remove part</Button> : i.edited ? <Button variant="plain" onClick={reset}>Back to default</Button> : null}
+      </div>
+    </div>}
+  </li>;
+}
+
+/** A running price: its label without the unit, which moves into the field, and the default when it was changed. */
+function RateRow({ k, r, save }: { k: string; r: Book["rates"][string]; save: (v: number) => void }) {
+  const m = r.label.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  const label = m ? m[1] : r.label, unit = m ? m[2] : "";
+  const [prefix, suffix] = unit.startsWith("€/") ? ["€", unit.slice(1)] : unit === "years" ? ["", "years"] : ["", unit];
+  const changed = r.value !== r.default;
+  return <div className={`pb-rate${changed ? " mine" : ""}`}>
+    <div><b>{label}</b><small>{r.source}</small>{changed && <small className="yours">Default {r.default}{suffix && suffix !== "%" ? ` ${suffix}` : suffix}</small>}</div>
+    <Amount prefix={prefix} suffix={suffix} aria-label={r.label} defaultValue={r.value} key={`${k}${r.value}`} onBlur={(e) => { const v = Number(e.target.value); if (e.target.value !== "" && v !== r.value) save(v); }} />
+  </div>;
 }
 
 function AddPart({ book, add }: { book: Book; add: (f: Partial<PriceItem>) => void }) {
@@ -170,11 +258,11 @@ function AddPart({ book, add }: { book: Book; add: (f: Partial<PriceItem>) => vo
   const set = (k: keyof typeof blank, v: string) => setF((x) => ({ ...x, [k]: v }));
   const opts = (m: Record<string, string>) => Object.entries(m).map(([k, l]) => <option key={k} value={k}>{l}</option>);
   const when = useMemo(() => Object.fromEntries(Object.entries(book.when).filter(([k]) => ["always", "extra"].includes(k) || (f.tech === "solar" && ["pitched", "flat"].includes(k)) || (f.tech === "battery" && k === "backup") || (f.tech === "heatpump" && ["replace", "oil"].includes(k)))), [book, f.tech]);
-  return <section>
+  return <section className="pb-card pb-add">
     <h3>Add a part</h3>
     <p className="small muted">It joins every offer with its technology, or shows as an extra to tick. A negative price works for a discount or a local grant.</p>
     <form className="facts" onSubmit={(e) => { e.preventDefault(); if (!f.name.trim()) return; add({ name: f.name.trim(), tech: f.tech, kind: f.kind, unit: f.unit, when: f.when, fixed: Number(f.fixed || 0), per_unit: Number(f.per_unit || 0) }); setF(blank); }}>
-      <Field label="Name"><Input value={f.name} placeholder="e.g. Bird protection" onChange={(e) => set("name", e.target.value)} /></Field>
+      <Field label="Name"><Input value={f.name} placeholder="e.g. Bird protection" onChange={(e) => set("name", e.target.value)} autoFocus /></Field>
       <Field label="Goes with"><Select value={f.tech} onChange={(e) => set("tech", e.target.value)}>{opts(book.techs)}</Select></Field>
       <Field label="Kind"><Select value={f.kind} onChange={(e) => set("kind", e.target.value)}>{opts(book.kinds)}</Select></Field>
       <Field label="Counted"><Select value={f.unit} onChange={(e) => set("unit", e.target.value)}>{opts(book.units)}</Select></Field>

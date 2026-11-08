@@ -42,8 +42,8 @@ export function EvidenceCard({ d, onForget }: { d: Design; onForget?: () => void
       <b className="draft" style={{ left: x(d.pv.kwp) }} />
     </div>
     <div className="evidence-scale small" aria-hidden="true">
-      <span style={{ left: x(k.low) }}>{k.low}</span><span style={{ left: x(k.high) }}>{k.high} kWp</span>
-      {k.roof != null && Math.abs(k.roof - k.high) > (hi - lo) * 0.12 && <span className="roof" style={{ left: x(k.roof) }}>roof {k.roof}</span>}
+      <span style={{ left: x(k.low) }}>{k.low}{k.roof != null && Math.abs(k.roof - k.low) <= (hi - lo) * 0.12 ? " · roof" : ""}</span><span style={{ left: x(k.high) }}>{k.high} kWp{k.roof != null && Math.abs(k.roof - k.low) > (hi - lo) * 0.12 && Math.abs(k.roof - k.high) <= (hi - lo) * 0.12 ? " · roof" : ""}</span>
+      {k.roof != null && Math.abs(k.roof - k.high) > (hi - lo) * 0.12 && Math.abs(k.roof - k.low) > (hi - lo) * 0.12 && <span className="roof" style={{ left: x(k.roof) }}>roof {k.roof}</span>}
     </div>
     <p className="small muted evidence-key"><i className="dot" /> the draft, {d.pv.kwp.toFixed(1)} kWp · <i className="tick" /> the middle offer{k.roof != null ? <> · <i className="line" /> what the roof holds</> : null}</p>
     <dl className="evidence-rows">
