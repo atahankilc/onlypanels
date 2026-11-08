@@ -1,5 +1,6 @@
 // The top of the planner's desk: the system as four parts, what it makes against what the home needs, and what it costs.
 // Every number is the engine's (design) or the API's (costs); a click opens the section that explains it.
+import { useState } from "react";
 import { Costs, eur } from "./money";
 import { Design, Overrides, Request } from "./plan";
 import { BatteryIcon, HeatIcon, SolarIcon, WallboxIcon } from "./techIcons";
@@ -50,13 +51,46 @@ export function DeskSummary({ r, d, costs, go }: { r: Request; d: Design; costs:
       </div>
       <p className="sysum-energy-key"><span><i className="k own" />{one(own)} MWh own solar</span><span><i className="k grid" />{one(grid)} MWh from the grid</span><span className="sysum-made">Makes {one(e.production_mwh)} MWh · sells {one(sold)}</span></p>
     </div>
-    <button type="button" className="sysum-money" onClick={() => go("cost")} title="Open the cost">
-      {priced ? <>
-        <span><small>Homeowner pays</small><b>{eur(priced.pays_eur)}</b></span>
-        <span><small>Pays back</small><b className={priced.payback_years == null ? "warn" : undefined}>{priced.payback_years != null ? `${priced.payback_years.toLocaleString("en", { maximumFractionDigits: 1 })} years` : `Not in ${priced.assumptions.years} years`}</b></span>
-        {/* Saving and payback answer different questions: a year's saving can be real while the price never comes back. */}
-        <span><small>{priced.year1.total_eur >= 0 ? "Saves in year 1" : "Costs in year 1"}</small><b className={priced.payback_years == null ? undefined : priced.year1.total_eur >= 0 ? "up" : "down"}>{eur(Math.abs(priced.year1.total_eur))}</b></span>
-      </> : <span className="muted small">Pricing the design…</span>}
-    </button>
+    <div className="sysum-money">
+      <button type="button" className="sysum-money-figs" onClick={() => go("cost")} title="Open the cost">
+        {priced ? <>
+          <span><small>{priced.grant?.eur ? "Homeowner pays, after grants" : "Homeowner pays"}</small><b>{eur(priced.pays_eur)}</b></span>
+          <span><small>Pays back</small><b className={priced.payback_years == null ? "warn" : undefined}>{priced.payback_years != null ? `${priced.payback_years.toLocaleString("en", { maximumFractionDigits: 1 })} years` : `Not in ${priced.assumptions.years} years`}</b></span>
+          {/* The whole run, not one year: a first year's saving read as if every year saved the same. */}
+          <span><small>After {priced.assumptions.years} years</small><b className={priced.gain_eur >= 0 ? "up" : "down"}>{priced.gain_eur >= 0 ? "+" : "−"}{eur(Math.abs(priced.gain_eur))}</b></span>
+        </> : <span className="muted small">Pricing the design…</span>}
+      </button>
+      {priced && priced.rows.length > 1 && <MoneyRun c={priced} />}
+    </div>
   </div>;
+}
+
+const BATTERY_LIFE = 15; // years the battery is counted: costs.py BATTERY_LIFE
+
+/** The homeowner's money year by year, as a running total from minus the price: under the line it is still being paid back,
+ *  over it the home is ahead. Each year is the Cost tab's own row: prices rise, panels age, the inverter is replaced once and the
+ *  battery's part ends with its life. A year's column says its figures on hover; no year is said alone, so none reads as every year. */
+function MoneyRun({ c }: { c: Costs }) {
+  const [at, setAt] = useState<number | null>(null);
+  const rows = c.rows, start = -c.pays_eur;
+  const top = Math.max(0, ...rows.map((r) => r.total)), low = Math.min(start, ...rows.map((r) => r.total)), span = Math.max(top - low, 1);
+  const zero = (top / span) * 100; // the zero line, from the top, in %
+  const swap = c.assumptions.inverter_life + 1;
+  const why = (t: number) => [t === swap && "inverter replaced", t === BATTERY_LIFE + 1 && `battery counted for ${BATTERY_LIFE} years`].filter(Boolean).join("; ");
+  const r = at != null ? rows[at] : null;
+  const signed = (v: number) => `${v >= 0 ? "+" : "−"}${eur(Math.abs(v))}`;
+  return <figure className="mrun" onMouseLeave={() => setAt(null)}>
+    <div className="mrun-plot" role="img" aria-label={`Running total over ${rows.length} years, from ${signed(start)} today to ${signed(rows[rows.length - 1].total)}${c.payback_years != null ? `, paid back after ${c.payback_years} years` : ""}.`}>
+      <i className="mrun-zero" style={{ top: `${zero}%` }} />
+      {rows.map((x, k) => {
+        const h = (Math.abs(x.total) / span) * 100;
+        return <span key={x.year} className={`mrun-col${at === k ? " on" : ""}`} onMouseEnter={() => setAt(k)}>
+          <b className={x.total >= 0 ? "up" : "down"} style={x.total >= 0 ? { bottom: `${100 - zero}%`, height: `${h}%` } : { top: `${zero}%`, height: `${h}%` }} />
+        </span>;
+      })}
+    </div>
+    <figcaption>{r
+      ? <><b>Year {r.year}</b> {r.total >= 0 ? `${eur(r.total)} ahead` : `${eur(-r.total)} still to pay back`} · that year {signed(r.eur)}{why(r.year) ? ` (${why(r.year)})` : ""}</>
+      : <>Running total from {signed(start)} today · electricity +{c.assumptions.electricity_rise_pct}% a year, panels −{c.assumptions.degradation_pct}% · inverter replaced in year {swap}</>}</figcaption>
+  </figure>;
 }
