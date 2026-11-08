@@ -48,24 +48,29 @@ const useDesign = (r: Request, roof: Spot[]) => {
   return out;
 };
 
+// The desk's requests outlive the desk: switching to the homeowner view and back must not lose the planner's work.
+let kept: Request[] = [];
+
 // A public sample home, so the desk is not empty before a homeowner has sent anything.
 const SAMPLE = { square: "682_5336", home: "DEBY_LOD2_4545924" };
 
 export default function Planner({ dark, handoff, onProgress }: { dark: boolean; handoff?: Handoff | null; onProgress?: (ref: string, p: Progress) => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [page, setPage] = useState<"requests" | "proof">("requests");
-  const [requests, setRequests] = useState<Request[]>([]);
+  const [requests, setRequests] = useState<Request[]>(() => kept);
+  useEffect(() => { kept = requests; }, [requests]);
   const [scores, setScores] = useState<Scores | null>(null);
   const update = (id: string, p: Partial<Request>) => setRequests((l) => l.map((r) => (r.id === id ? { ...r, ...p } : r)));
   useEffect(() => { fetch("/api/scores").then((r) => r.json()).then(setScores).catch(() => undefined); }, []);
   useEffect(() => {
-    loadHome(SAMPLE.square, SAMPLE.home).then((buildings) => setRequests((l) => [...l.filter((r) => r.id !== "sample"), {
+    if (kept.some((r) => r.id === "sample")) return;
+    loadHome(SAMPLE.square, SAMPLE.home).then((buildings) => setRequests((l) => l.some((r) => r.id === "sample") ? l : [...l, {
       id: "sample", label: buildings[0].label, from: "Phone call", buildings, status: "draft", overrides: {}, off: [], installed: [], walls: [], existing: { kwp: null, year: null, battery_kwh: null },
       inputs: { installer: "2a8ba8e2", demand_kwh: 4200, price_ct_kwh: 32, heating: "Gas", heat_kwh: null, has_solar: false, has_storage: false, ev: false, ev_km: 11300 },
       sources: { demand_kwh: "customer", price_ct_kwh: "assumed", heating: "customer", heat_kwh: "assumed", ev: "customer", ev_km: "assumed", has_solar: "customer", has_storage: "customer" },
     }])).catch(() => undefined);
   }, []);
-  useEffect(() => { if (handoff?.buildings.length) { const r = fromHomeowner(handoff); setRequests((l) => [r, ...l.filter((x) => x.id !== r.id)]); } }, [handoff]);
+  useEffect(() => { if (handoff?.buildings.length) { const r = fromHomeowner(handoff); setRequests((l) => (l.some((x) => x.id === r.id) ? l : [r, ...l])); } }, [handoff]);
   // The homeowner follows their request: opened by a planner, then the offer once it is sent.
   useEffect(() => { requests.forEach((r) => r.ref && onProgress?.(r.ref, { opened: !!r.opened, offer: r.status === "sent" ? r.offer ?? null : null })); }, [requests]);
   useEffect(() => { if (openId) update(openId, { opened: true }); }, [openId]);
@@ -132,7 +137,7 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
   const [roof] = useState(() => roofOf(r.buildings, r.installed));
   const [view, setView] = useState<View>({ layer: "photo", moment: null });
   const [face, setFace] = useState<Face | null>(null);
-  const [done, setDone] = useState<string[]>([]);
+  const done = r.checked ?? [], setDone = (checked: string[]) => update(r.id, { checked });
   const out = useDesign(r, roof);
   const first = useRef<Design | null>(null);
   if (out && !first.current) first.current = out.d;

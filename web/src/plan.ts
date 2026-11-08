@@ -20,6 +20,7 @@ export type Design = {
 };
 export type Source = "customer" | "assumed" | "planner";
 export type Request = {
+  checked?: string[]; // site checks the planner has ticked
   ref?: string; // the reference the homeowner was shown after sending, so a call can find the request
   id: string; label: string; from: string; buildings: Selected[]; inputs: Inputs; sources: Record<string, Source>; overrides: Overrides;
   off: string[]; installed: string[]; walls: string[]; existing: Existing; status: "draft" | "sent";
