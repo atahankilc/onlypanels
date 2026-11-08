@@ -232,7 +232,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
       <div className="deskbody">
         {!d && <p className="muted">The engine is working…</p>}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
-        {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><Advisor key={JSON.stringify([r.inputs, r.overrides, r.off, r.strict])} d={d} ask={() => advise(r.inputs, r.overrides, roof, r.off, r.existing, r.strict)} use={(o, label) => setO(o, label)} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} /></>}
+        {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><Advisor key={JSON.stringify([r.inputs, r.overrides, r.off, r.strict])} d={d} ask={() => advise(r.inputs, r.overrides, roof, r.off, r.existing, r.strict)} use={(o, label) => setO(o, label)} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} measured={home} /></>}
         {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, { obstacles }); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "checks" && <>
           <h3>Confirm before sending</h3>
@@ -509,7 +509,7 @@ function Facts({ r, d, setI }: { r: Request; d?: Design; setI: (c: Partial<Input
   </div>;
 }
 
-function Energy({ d, inputs }: { d: Design; inputs: Inputs }) {
+function Energy({ d, inputs, measured }: { d: Design; inputs: Inputs; measured: boolean }) {
   const e = d.energy, top = Math.max(e.total_mwh, e.production_mwh, 0.1);
   const row = (label: string, v: number, strong?: boolean) => <div className={`bar${strong ? " strong" : ""}`} key={label}><span>{label}</span><i><b style={{ width: `${(v / top) * 100}%` }} /></i><em>{v.toFixed(1)} MWh</em></div>;
   return <>
@@ -521,6 +521,6 @@ function Energy({ d, inputs }: { d: Design; inputs: Inputs }) {
       <div><dt>Saving a year at {inputs.price_ct_kwh} ct</dt><dd>€{e.saving_eur.toLocaleString("en")}</dd></div>
     </dl>
     <p className="small muted">Estimates: real weather years for Munich, this roof's directions, an assumed household day, battery losses. Checked against HTW Berlin reference values (scripts/check_energy.py).{d.heatpump.included ? " The saving counts electricity only, not the fuel no longer bought." : ""}</p>
-    <p className="small muted">Production uses this roof's measured sun and shade. There are no prices in our data, so no system cost or payback.</p>
+    <p className="small muted">Production uses {measured ? "this roof's measured sun and shade" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}. There are no prices in our data, so no system cost or payback.</p>
   </>;
 }
