@@ -156,6 +156,16 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .quiz .more .textlink { justify-self: start; padding-left: 0; }
 .answers.grid2 { grid-template-columns: 1fr 1fr; }
 .quiz .more.flat { border-top: 0; padding-top: 0; }
+/* After sending: a check, the reference, what happens next, and what was sent. */
+.quiz .done { display: grid; place-items: center; width: 52px; height: 52px; margin: 8px 0 18px; border-radius: 50%; background: var(--hud-live); color: var(--hud-base); animation: rise 0.4s var(--ease); }
+.next-steps { list-style: none; counter-reset: step; display: grid; gap: 16px; margin: 22px 0 8px; padding: 0; }
+.next-steps li { counter-increment: step; display: grid; grid-template-columns: 28px 1fr; column-gap: 12px; row-gap: 2px; }
+.next-steps li::before { content: counter(step); grid-row: span 2; display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--hud-line); border-radius: 50%; font-size: 13px; color: var(--hud-ink-2); }
+.next-steps b { font-weight: 600; font-size: 15px; color: var(--hud-ink); }
+.next-steps span { font-size: 13px; color: var(--hud-ink-2); }
+.sent-answers { margin-top: 18px; border-top: 1px solid var(--hud-line); }
+.sent-answers > summary { padding: 14px 0 4px; font-size: 14px; color: var(--hud-ink-2); cursor: pointer; }
+.sent-answers .overview { margin-top: 4px; }
 /* The overview: one block per question, its answers as label and value, a way back to change it. */
 .overview { display: grid; gap: 4px; margin-top: 18px; }
 .overview section { padding: 12px 0; border-top: 1px solid var(--hud-line); }

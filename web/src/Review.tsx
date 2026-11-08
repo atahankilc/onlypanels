@@ -44,6 +44,7 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
   const flow = flowFor(a), here = Math.max(0, flow.indexOf(stage));
   // Changing an answer from the overview brings you straight back to it.
   const [fromOverview, setFromOverview] = useState(false);
+  const request = useRef(`R-${Math.random().toString(36).slice(2, 7).toUpperCase()}`); // a reference the homeowner can quote
   const next = () => go(fromOverview ? "send" : flow[here + 1]);
   const nextLabel = fromOverview ? "Go to overview" : "Next";
   const previous = () => (here ? go(flow[here - 1]) : back());
@@ -93,7 +94,8 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
     </aside>
   );
 
-  if (stage === "send") {
+  /** Everything the homeowner told us, grouped as the questions were. On the overview each group can be changed; after sending it is read only. */
+  const summary = (editable: boolean) => {
     // Everything the homeowner told us, grouped as the questions were, each group with a way back to change it.
     const no = "Not given", n = (v: number | null | undefined, unit: string) => (v ? `${Math.round(v).toLocaleString("en")} ${unit}` : no);
     const label = <T extends readonly (readonly string[])[]>(list: T, v: string | null | undefined) => list.find((x) => x[0] === v)?.[1] ?? no;
@@ -116,29 +118,40 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
         ["Home in the day", yes(a.ev_day, "Often", "Rarely")], ["Wallbox", yes(a.has_wallbox, "Already there", "Not yet")]]] as [string, Stage, [string, string][]]] : []),
       ["What matters most", "goal", [["Priority", GOALS.find((x) => x[0] === a.goal)?.[1] ?? no]]],
     ];
+    return { missing: groups.flatMap(([, , rows]) => rows).filter(([, v]) => v === no).length, view: <div className="overview">
+      {groups.map(([title, to, rows]) => <section key={to}>
+        <header><h2>{title}</h2>{editable && <button type="button" className="textlink" onClick={() => { setFromOverview(true); go(to); }}>Change</button>}</header>
+        <dl>{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={v === no ? "none" : undefined}>{v}</dd></div>)}</dl>
+      </section>)}
+    </div> };
+  };
+
+  if (stage === "send") return (
+    <aside className="panel tall quiz" key="send" ref={panel}>
+      <p className="count">Overview</p>
+      <h1>Is everything right?</h1>
+      <p className="muted">An installer plans your system from this and sends you an offer. "Not given" is fine: they will ask you.</p>
+      {summary(true).view}
+      <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={() => go("sent")}>Send to an installer</Button></div>
+    </aside>
+  );
+
+  if (stage === "sent") {
+    const { missing, view } = summary(false);
     return (
-      <aside className="panel tall quiz" key="send" ref={panel}>
-        <p className="count">Overview</p>
-        <h1>Is everything right?</h1>
-        <p className="muted">An installer plans your system from this and sends you an offer. "Not given" is fine: they will ask you.</p>
-        <div className="overview">
-          {groups.map(([title, to, rows]) => <section key={to}>
-            <header><h2>{title}</h2><button type="button" className="textlink" onClick={() => { setFromOverview(true); go(to); }}>Change</button></header>
-            <dl>{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={v === no ? "none" : undefined}>{v}</dd></div>)}</dl>
-          </section>)}
-        </div>
-        <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={() => go("sent")}>Send to an installer</Button></div>
+      <aside className="panel tall quiz" key="sent" ref={panel}>
+        <div className="done" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></div>
+        <h1>Your request is with an installer</h1>
+        <p className="muted">Request {request.current} · sent {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long" })}</p>
+        <ol className="next-steps">
+          <li><b>They look at your roof and your answers</b><span>On the same 3D model of your home, with its measured sun and shade.</span></li>
+          <li><b>{missing ? `They may ask about ${missing} ${missing === 1 ? "answer" : "answers"} you left open` : "They may call with a question or two"}</b><span>{missing ? "Have your electricity and heating bills at hand." : "You answered everything, so it should be quick."}</span></li>
+          <li><b>You get an offer</b><span>Solar, battery and anything else that fits, with what it makes and saves.</span></li>
+        </ol>
+        <details className="sent-answers"><summary>What you sent</summary>{view}</details>
       </aside>
     );
   }
-
-  if (stage === "sent") return (
-    <aside className="panel tall quiz" key="sent" ref={panel}>
-      <p className="count">Sent</p>
-      <h1>An installer is on it</h1>
-      <p className="muted">They will be in touch with your offer.</p>
-    </aside>
-  );
 
   const fossil = FOSSIL.includes(a.heating ?? "");
   return (
