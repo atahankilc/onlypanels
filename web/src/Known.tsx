@@ -134,7 +134,7 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
     if (a.big_users.length && fromBill) add(known, a.use_source === "payment" ? "Already inside what you pay, so nothing is added" : "Already inside your bill's number, so nothing is added", MATH);
     if (a.big_users.includes("water") && a.wants_hp) add(known, "The electric water heater's power moves to the heat pump, which makes the hot water", MATH);
     if (!a.big_users.length) add(assumed, "None picked: nothing is added to your use");
-    add(later, "Sees each one beside your use, so a high number has a reason");
+    add(later, "Knows what drives your use, so a high number is no surprise");
   }
 
   if (stage === "house") {
