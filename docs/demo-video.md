@@ -8,8 +8,8 @@ The voiceover is about 270 words, so it fits two minutes at a calm pace. Numbers
 
 | Time | On screen | Voiceover |
 |---|---|---|
-| 0:00 | Deck slide 1, "Same request. Different offer." | In Reonic's past projects, 59% of solar requests are identical to another customer's, field for field. Yet in 99% of them the experts designed something different. They knew what the request did not say: the roof, the shade, the street. |
-| 0:15 | Deck slide 4, everything we use | AI is smart enough. What it lacks is context. So OnlyPanels gathers it. |
+| 0:00 | Deck slide 2, "Same request. Different offer." | In Reonic's past projects, 59% of solar requests are identical to another customer's, field for field. Yet in 99% of them the experts designed something different. They knew what the request did not say: the roof, the shade, the street. |
+| 0:15 | Deck slide 5, everything we use | AI is smart enough. What it lacks is context. So OnlyPanels gathers it. |
 | 0:20 | Homeowner, with map. Type "Agnes-Bernauer-Straße 98", pick the suggestion, let the 3D city fly in | A homeowner finds their house on a 3D map of Munich: Bavaria's real roofs on the aerial photo. |
 | 0:32 | Click the house behind the pin, Continue, Start. Question 1: the "We know" card, "2 sides, 128 m²" | One click, and we know every roof side: area, slope, direction. Every question is optional. Under each one it says what we know, what we assume if it is skipped, and what it is for. Nothing leaves the browser before Send, and the homeowner chooses what goes. |
 | 0:55 | Planner, Requests: the three requests with their draft steps | On the installer's side, a full draft is already waiting: home loaded, trees checked, roof space, system sized, rules checked, priced. About a second. |
@@ -28,7 +28,7 @@ If voice works on the day, it can replace the Home tab shot at 1:45: ElevenLabs 
 3. Open Sondermeierstraße 74 once and wait until the list shows every step done, so the draft, shade and prices are cached. Fly to Agnes-Bernauer-Straße once so its map squares are cached.
 4. Homeowner side: clear the browser's local storage for the app, so it opens on the start page.
 5. Chrome full screen at 1920 × 1080, other tabs closed, notifications off (Focus mode).
-6. Open `OnlyPanels-pitch.pdf` in a second window for the three slide shots (slides 1, 4 and 6).
+6. Open `OnlyPanels-pitch.pdf` in a second window for the three slide shots (slides 2, 5 and 8).
 
 ## Recording
 
