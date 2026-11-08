@@ -29,21 +29,35 @@
 .payback .zero { stroke: var(--hud-ink-3); stroke-width: 1; }
 .payback .neg { fill: var(--hud-ink-3); } .payback .pos { fill: var(--hud-route); }
 .payback .axis { fill: var(--hud-ink-3); font: 11px var(--font-ui); }
-/* The price book: groups on the left, parts as rows with their price in place. In the desk's column the groups go on top. */
+/* The price book: the list takes the same column as Requests. The groups sit in a row above it, or, when the page is wide
+   enough, beside the column in the empty left margin. In the desk's column the rows stack. */
 .pb-wrap { container-type: inline-size; }
-.pb { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 32px; align-items: start; }
-.pb-nav { position: sticky; top: 96px; display: flex; flex-direction: column; gap: 12px; }
-.pb-nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pb { display: flex; flex-direction: column; gap: 22px; }
+.pb-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pb-nav > .control { width: 220px; }
+.pb-nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .pb-nav li { margin: 0; max-width: none; }
-.pb-nav li button { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px 0 6px; border-radius: 12px; color: var(--hud-ink-2); font: 500 14px var(--font-ui); cursor: pointer; transition: background-color 0.15s, color 0.15s; }
-.pb-nav li button:hover:not(:disabled), .pb-nav li button.on { background: var(--hud-fill); color: var(--hud-ink); }
+.pb-nav li button { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px 0 5px; border-radius: 999px; background: var(--hud-fill); color: var(--hud-ink-2); font: 500 13px var(--font-ui); cursor: pointer; transition: background-color 0.15s, color 0.15s; }
+.pb-nav li button .pb-ico { width: 26px; height: 26px; border-radius: 50%; }
+.pb-nav li button:hover:not(:disabled), .pb-nav li button.on { background: var(--hud-fill-2); color: var(--hud-ink); }
 .pb-nav li button:disabled { opacity: 0.35; cursor: default; }
 .pb-nav li button:focus-visible { outline: 2px solid var(--hud-route); }
-.pb-nav li button > span:nth-child(2) { flex: 1; }
 .pb-nav em { font: 500 12px var(--font-ui); font-style: normal; color: var(--hud-ink-3); }
+.pb-nav > .btn-solid { margin-left: auto; }
 .pb-mine { width: 6px; height: 6px; border-radius: 50%; background: var(--hud-route); }
-.pb-legend { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--hud-line); border-radius: 14px; color: var(--hud-ink-2); }
+.pb-legend { display: none; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--hud-line); border-radius: 14px; color: var(--hud-ink-2); }
 .pb-legend p { margin: 0; max-width: none; line-height: 1.4; } .pb-legend b { color: var(--hud-ink); font-weight: 600; } .pb-legend b.yours { color: var(--hud-route); }
+@media (min-width: 1480px) {
+  .pb:not(.in-desk) .pb-nav { position: fixed; z-index: 3; top: 104px; left: calc(50vw - 520px - 20px - 184px); width: 184px; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 12px; }
+  .pb:not(.in-desk) .pb-nav > .control { width: 100%; }
+  .pb:not(.in-desk) .pb-nav ul { flex-direction: column; flex-wrap: nowrap; gap: 2px; }
+  .pb:not(.in-desk) .pb-nav li button { width: 100%; height: 40px; padding: 0 10px 0 6px; border-radius: 12px; background: none; font-size: 14px; }
+  .pb:not(.in-desk) .pb-nav li button .pb-ico { width: 28px; height: 28px; border-radius: 9px; }
+  .pb:not(.in-desk) .pb-nav li button:hover:not(:disabled), .pb:not(.in-desk) .pb-nav li button.on { background: var(--hud-fill); }
+  .pb:not(.in-desk) .pb-nav li button > span:nth-child(2) { flex: 1; }
+  .pb:not(.in-desk) .pb-nav > .btn-solid { margin-left: 0; }
+  .pb:not(.in-desk) .pb-legend { display: flex; }
+}
 .pb-ico { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 9px; background: color-mix(in srgb, var(--tc) 16%, transparent); color: var(--tc); }
 .t-solar { --tc: var(--hud-sun); } .t-battery { --tc: var(--hud-live); } .t-wallbox { --tc: var(--hud-route); } .t-heatpump { --tc: var(--hud-bad); } .t-rates { --tc: var(--hud-ink-2); }
 
@@ -85,12 +99,8 @@
 .pb-add-note { margin: 0 0 14px; max-width: none; }
 
 @container (max-width: 720px) {
-  .pb { grid-template-columns: 1fr; gap: 18px; }
-  .pb-nav { position: static; }
-  .pb-nav ul { flex-direction: row; flex-wrap: wrap; gap: 6px; }
-  .pb-nav li button { width: auto; height: 36px; padding: 0 12px 0 4px; background: var(--hud-fill); border-radius: 999px; font-size: 13px; }
-  .pb-nav li button .pb-ico { width: 26px; height: 26px; border-radius: 50%; }
-  .pb-legend { display: none; }
+  .pb-nav > .control { width: 100%; }
+  .pb-nav > .btn-solid { margin-left: 0; }
   .pb-row { grid-template-columns: minmax(0, 1fr) 36px; }
   .pb-price { grid-column: 1; grid-row: 2; justify-content: flex-start; }
   .pb-row > .btn-icon { grid-column: 2; grid-row: 1; }
