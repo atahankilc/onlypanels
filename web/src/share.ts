@@ -52,16 +52,3 @@ export function forInstaller(h: Handoff, shared: Shared): Handoff {
     roof: !home && shared.roof ? h.roof ?? null : null,
   };
 }
-
-/** The request as the homeowner may read it: long lists cut short, the photo named, questions left open left out. */
-export function readable(value: unknown, depth = 0): unknown {
-  if (value && typeof value === "object" && !Array.isArray(value))
-    return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined && v !== null && !(Array.isArray(v) && v.length > 0 && v.every((x) => x === null))).map(([k, v]) => [k, readable(v, depth + 1)]));
-  if (typeof value === "string" && value.startsWith("data:image")) return `[photo, ${Math.round((value.length * 0.75) / 1024)} KB]`;
-  if (Array.isArray(value)) {
-    const keep = depth > 2 ? 2 : 6;
-    const shown = value.slice(0, keep).map((v) => readable(v, depth + 1));
-    return value.length > keep ? [...shown, `… ${value.length - keep} more`] : shown;
-  }
-  return value;
-}

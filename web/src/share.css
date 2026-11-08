@@ -10,10 +10,3 @@
 .sv-list dd { margin: 0; color: var(--hud-ink); font-size: 13px; overflow-wrap: anywhere; }
 .sv-kept dt, .sv-kept dd { color: var(--hud-ink-3); }
 .sv-kept dd { text-decoration: line-through; text-decoration-color: var(--hud-ink-3); }
-.sv-object { margin: 0; padding: 12px 14px; max-height: 340px; overflow: auto; background: rgba(0, 0, 0, 0.3); font: 11.5px/1.55 var(--font-mono); color: var(--hud-ink-3); white-space: pre; }
-.sv-k { color: var(--hud-ink-2); }
-.sv-s { color: var(--hud-live); }
-.sv-n { color: var(--hud-sun); }
-.sv-b { color: var(--hud-route); }
-.sv-foot { margin: 0; padding: 8px 14px 10px; border-top: 1px solid var(--hud-line); font-size: 12px; color: var(--hud-ink-3); max-width: none; }
-.sv-foot .textlink { padding: 0 2px; font-size: 12px; }
