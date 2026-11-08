@@ -33,7 +33,7 @@ Speak in English. Roughly 130 words a minute. Bold lines are the ones to land.
 
 Switch to the browser, planner view, request list.
 
-1. **The inbox** (15 s). *"This is the installer's planner. Three requests came in. Before anyone opened them, a full draft is already there. Under each one, the steps and what they found. On this one: five buildings, trees take 16% of the sun, 478 panels fit, sized, rules checked, priced."* Point at Sondermeierstraße 86.*
+1. **The inbox** (15 s). *"This is the installer's planner. Three requests came in. Before anyone opened them, a full draft is already there. Under each one, the steps and what they found. On this one: five buildings, trees take 16% of the sun, 478 panels fit, sized, rules checked, priced."* Point at Sondermeierstraße 86.
 2. **Open Sondermeierstraße 74** (30 s). *"Gas heating, wants a heat pump, has an electric car. Here's the system: solar, battery, wallbox, heat pump. The modules sit on the real roof, and the roof windows the AI found on the aerial photo are kept free."* Click **Yearly sun**: *"Sun per roof side."*
 3. **Cost** (25 s). *"The price comes from the installer's own price book, with KfW and Munich grants and this year's rules counted. Payback, and twenty years. The homeowner sees the same number."*
 4. **Facts and confirm** (20 s). Open **Am Blütenring 42**. *"This owner knew little. Every fact is marked: customer, measured, or assumed. Assumed facts block Send until the planner confirms them. Nothing goes out on a guess."*
