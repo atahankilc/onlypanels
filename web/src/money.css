@@ -82,8 +82,7 @@
 .pb-rate b { font-weight: 550; font-size: 13.5px; color: var(--hud-ink); }
 .pb-rate small { font-size: 11.5px; line-height: 1.35; color: var(--hud-ink-3); }
 .pb-rate.mine b { color: var(--hud-route); }
-.pb-add { gap: 10px; }
-.pb-add h3 { font-size: 15px; color: var(--hud-ink); }
+.pb-add-note { margin: 0 0 14px; max-width: none; }
 
 @container (max-width: 720px) {
   .pb { grid-template-columns: 1fr; gap: 18px; }

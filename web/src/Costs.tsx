@@ -2,7 +2,7 @@
 // when it pays back and how. Every number is the API's (costs.py); the planner edits prices and ticks extras here.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Book, Costs, Money, PriceItem, addItem, eur, getBook, standing, resetItem, resetRates, setItem, setRates, years } from "./money";
-import { Amount, Button, Check, Field, IconButton, Input, Select } from "./ui";
+import { Amount, Button, Check, Field, IconButton, Input, Modal, Select } from "./ui";
 import { Back, Info, Plus } from "./icons";
 import { RatesIcon, TECH_ICON } from "./techIcons";
 import "./money.css";
@@ -169,11 +169,11 @@ export function PriceBook({ installer, close }: { installer?: string; close?: ()
         <p><b>0% VAT</b> solar and battery up to 30 kWp (UStG §12(3)). <b>19%</b> wallbox and heat pump.</p>
         <p>{yours ? <><b className="yours">{yours} {yours === 1 ? "price is" : "prices are"} yours.</b> Every offer uses them at once.</> : "Change a price and every offer uses it at once."}</p>
       </div>
-      <Button variant={adding ? "plain" : "solid"} onClick={() => setAdding(!adding)}>{adding ? "Close" : <><Plus /> Add a part</>}</Button>
+      <Button variant="solid" onClick={() => setAdding(true)}><Plus /> Add a part</Button>
     </nav>
+    <AddPart book={book} open={adding} close={() => setAdding(false)} add={(f) => { run(addItem(f)).then(() => jump(String(f.tech))); setAdding(false); }} />
     <div className="pb-main">
       {error && <p className="flag">{error}</p>}
-      {adding && <AddPart book={book} add={(f) => { run(addItem(f)); setAdding(false); setAt(String(f.tech)); }} />}
       {Object.entries(book.techs).map(([t, label]) => {
         const mine = items.filter((i) => i.tech === t);
         if (!mine.length) return null;
@@ -250,24 +250,24 @@ function RateRow({ k, r, save }: { k: string; r: Book["rates"][string]; save: (v
   </div>;
 }
 
-function AddPart({ book, add }: { book: Book; add: (f: Partial<PriceItem>) => void }) {
+function AddPart({ book, open, close, add }: { book: Book; open: boolean; close: () => void; add: (f: Partial<PriceItem>) => void }) {
   const blank = { name: "", tech: "solar", kind: "product", unit: "job", when: "always", fixed: "", per_unit: "" };
   const [f, setF] = useState(blank);
+  useEffect(() => { if (open) setF(blank); }, [open]);
   const set = (k: keyof typeof blank, v: string) => setF((x) => ({ ...x, [k]: v }));
   const opts = (m: Record<string, string>) => Object.entries(m).map(([k, l]) => <option key={k} value={k}>{l}</option>);
   const when = useMemo(() => Object.fromEntries(Object.entries(book.when).filter(([k]) => ["always", "extra"].includes(k) || (f.tech === "solar" && ["pitched", "flat"].includes(k)) || (f.tech === "battery" && k === "backup") || (f.tech === "heatpump" && ["replace", "oil"].includes(k)))), [book, f.tech]);
-  return <section className="pb-card pb-add">
-    <h3>Add a part</h3>
-    <p className="small muted">It joins every offer with its technology, or shows as an extra to tick. A negative price works for a discount or a local grant.</p>
-    <form className="facts" onSubmit={(e) => { e.preventDefault(); if (!f.name.trim()) return; add({ name: f.name.trim(), tech: f.tech, kind: f.kind, unit: f.unit, when: f.when, fixed: Number(f.fixed || 0), per_unit: Number(f.per_unit || 0) }); setF(blank); }}>
-      <Field label="Name"><Input value={f.name} placeholder="e.g. Bird protection" onChange={(e) => set("name", e.target.value)} autoFocus /></Field>
+  return <Modal open={open} title="Add a part" onClose={close}
+    actions={<><Button variant="plain" onClick={close}>Cancel</Button><Button type="submit" form="add-part" variant="solid" disabled={!f.name.trim()}>Add part</Button></>}>
+    <p className="small muted pb-add-note">It joins every offer with its technology, or shows as an extra to tick. A negative price works for a discount or a local grant.</p>
+    <form id="add-part" className="facts" onSubmit={(e) => { e.preventDefault(); if (!f.name.trim()) return; add({ name: f.name.trim(), tech: f.tech, kind: f.kind, unit: f.unit, when: f.when, fixed: Number(f.fixed || 0), per_unit: Number(f.per_unit || 0) }); }}>
+      <div className="span"><Field label="Name"><Input value={f.name} placeholder="e.g. Bird protection" onChange={(e) => set("name", e.target.value)} autoFocus /></Field></div>
       <Field label="Goes with"><Select value={f.tech} onChange={(e) => set("tech", e.target.value)}>{opts(book.techs)}</Select></Field>
       <Field label="Kind"><Select value={f.kind} onChange={(e) => set("kind", e.target.value)}>{opts(book.kinds)}</Select></Field>
-      <Field label="Counted"><Select value={f.unit} onChange={(e) => set("unit", e.target.value)}>{opts(book.units)}</Select></Field>
       <Field label="In the offer"><Select value={f.when} onChange={(e) => set("when", e.target.value)}>{opts(when)}</Select></Field>
+      <Field label="Counted"><Select value={f.unit} onChange={(e) => set("unit", e.target.value)}>{opts(book.units)}</Select></Field>
       <Field label="Fixed price, net (€)"><Input type="number" step="any" value={f.fixed} onChange={(e) => set("fixed", e.target.value)} /></Field>
       {f.unit !== "job" && <Field label={`Price ${book.units[f.unit]}, net (€)`}><Input type="number" step="any" value={f.per_unit} onChange={(e) => set("per_unit", e.target.value)} /></Field>}
-      <div className="span money-actions"><Button type="submit" variant="solid" disabled={!f.name.trim()}>Add part</Button></div>
     </form>
-  </section>;
+  </Modal>;
 }

@@ -1,7 +1,8 @@
 // The only place controls are defined. Screens compose these and never style a button or field themselves.
 // Two sizes: lg (44) floats on the map or is the main action, md (36) sits in a panel.
 // Three surfaces: solid (the one main action), fill (in a panel), glass (on the map). Plain is for inside a stack.
-import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, useEffect, useId, useRef } from "react";
+import { Close } from "./icons";
 import "./ui.css";
 
 type Size = "md" | "lg";
@@ -56,4 +57,18 @@ export function Amount({ prefix, suffix, className, value, ...rest }: Omit<Input
   return <span className={cx("control", "amount", className)} style={{ "--w": w } as React.CSSProperties}>
     {prefix && <i>{prefix}</i>}<input type="number" step="any" value={value} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} {...rest} />{suffix && <i>{suffix}</i>}
   </span>;
+}
+
+/** A modal over the page: title and close at the top, the content, the actions at the bottom. Esc or a click outside closes it. */
+export function Modal({ open, title, onClose, children, actions }: { open: boolean; title: ReactNode; onClose: () => void; children: ReactNode; actions?: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const id = useId();
+  useEffect(() => { const d = ref.current; if (!d) return; if (open && !d.open) d.showModal(); if (!open && d.open) d.close(); }, [open]);
+  return <dialog ref={ref} className="modal" aria-labelledby={id} onClose={onClose} onClick={(e) => { if (e.target === ref.current) onClose(); }}>
+    {open && <div className="modal-box">
+      <header><h2 id={id}>{title}</h2><IconButton variant="plain" label="Close" onClick={onClose}><Close /></IconButton></header>
+      <div className="modal-body">{children}</div>
+      {actions && <footer>{actions}</footer>}
+    </div>}
+  </dialog>;
 }

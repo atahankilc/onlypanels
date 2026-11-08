@@ -68,3 +68,12 @@
 .amount input { all: unset; width: calc(var(--w, 4) * 1ch); min-width: 3ch; font: 500 14px var(--font-ui); font-variant-numeric: tabular-nums; color: var(--hud-ink); text-align: right; }
 .amount input::-webkit-inner-spin-button, .amount input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .amount i { font: 400 12.5px var(--font-ui); font-style: normal; color: var(--hud-ink-3); white-space: nowrap; }
+
+.modal { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid var(--hud-line); border-radius: 24px; background: var(--hud-base); color: var(--hud-ink); box-shadow: var(--hud-shadow); }
+.modal[open] { animation: rise 0.2s var(--ease); }
+.modal::backdrop { background: rgba(8, 9, 12, 0.6); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.modal-box { display: flex; flex-direction: column; max-height: calc(100dvh - 50px); }
+.modal-box > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 16px 8px 22px; }
+.modal-box > header h2 { margin: 0; font: 650 18px/1.25 var(--font-ui); letter-spacing: -0.01em; text-transform: none; color: var(--hud-ink); }
+.modal-body { overflow-y: auto; padding: 4px 22px 8px; }
+.modal-box > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px 20px; border-top: 1px solid var(--hud-line); }
