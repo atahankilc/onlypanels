@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import FindHome from "./FindHome";
 import { Mark } from "./icons";
-import { Handoff } from "./plan";
+import { Handoff, Mine, Progress } from "./plan";
 import Planner from "./Planner";
 import { Button, Segmented } from "./ui";
 
 export default function App() {
   const [view, setView] = useState<"homeowner" | "planner">("homeowner");
   const [handoff, setHandoff] = useState<Handoff | null>(null);
+  // The homeowner's requests and how far each is. The planner reports progress; a remounted planner never takes it back.
+  const [mine, setMine] = useState<Mine[]>([]);
+  const sent = (h: Handoff) => { setHandoff(h); if (h.ref) setMine((l) => [{ ref: h.ref!, label: h.buildings[0]?.label ?? "Home", sentAt: Date.now(), opened: false, offer: null }, ...l.filter((x) => x.ref !== h.ref)]); };
+  const progress = (ref: string, p: Progress) => setMine((l) => l.map((x) => (x.ref === ref ? { ...x, opened: x.opened || p.opened, offer: p.offer ?? x.offer } : x)));
   const [dark, setDark] = useState(localStorage.getItem("theme") !== "light");
   useEffect(() => { document.documentElement.dataset.theme = dark ? "dark" : "light"; localStorage.setItem("theme", dark ? "dark" : "light"); }, [dark]);
   // The demo tools fold into one small button; a click elsewhere or Escape folds them again.
@@ -32,8 +36,8 @@ export default function App() {
           </div>}
         </div>
       </header>
-      <FindHome dark={dark} onSend={setHandoff} />
-      {view === "planner" && <Planner dark={dark} handoff={handoff} />}
+      <FindHome dark={dark} onSend={sent} requests={mine} />
+      {view === "planner" && <Planner dark={dark} handoff={handoff} onProgress={progress} />}
     </div>
   );
 }

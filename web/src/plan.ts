@@ -23,7 +23,15 @@ export type Request = {
   ref?: string; // the reference the homeowner was shown after sending, so a call can find the request
   id: string; label: string; from: string; buildings: Selected[]; inputs: Inputs; sources: Record<string, Source>; overrides: Overrides;
   off: string[]; installed: string[]; walls: string[]; existing: Existing; status: "draft" | "sent";
+  opened?: boolean; offer?: Offer; // opened by a planner, and what the sent offer holds: both go back to the homeowner
 };
+/** What the homeowner sees once the planner sends the offer: the system and the engine's estimate, nothing else. */
+export type Offer = { kwp: number; modules: number; battery_kwh: number; wallbox: boolean; heatpump_kw: number; production_mwh: number; self_sufficiency_pct: number; saving_eur: number };
+export const offerOf = (d: Design): Offer => ({ kwp: d.pv.kwp, modules: d.pv.modules, battery_kwh: d.battery.kwh, wallbox: d.wallbox.included, heatpump_kw: d.heatpump.included ? d.heatpump.kw : 0,
+  production_mwh: d.energy.production_mwh, self_sufficiency_pct: d.energy.self_sufficiency_pct, saving_eur: d.energy.saving_eur });
+/** The homeowner's side of one request: what they sent, and how far the planner is. */
+export type Progress = { opened: boolean; offer: Offer | null };
+export type Mine = { ref: string; label: string; sentAt: number } & Progress;
 /** Solar already on the building: size and year as the customer gave them, else the area they marked and the sun it gets. */
 export type Existing = { kwp: number | null; year: number | null; battery_kwh: number | null; m2?: number | null; kwh_per_kwp?: number | null };
 export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string };
@@ -51,7 +59,7 @@ export function fromHomeowner(h: Handoff): Request {
   const { buildings, answers: a, choice } = h;
   const car = !!(a.ev || a.ev_planned);
   return {
-    id: "homeowner", ref: h.ref, label: buildings[0]?.label ?? "Home", from: "Homeowner", buildings, status: "draft",
+    id: h.ref ? `homeowner-${h.ref}` : "homeowner", ref: h.ref, label: buildings[0]?.label ?? "Home", from: "Homeowner", buildings, status: "draft",
     inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating, heat_kwh: a.heat_kwh, hp_kwh: a.heating === "Heatpump" ? a.hp_kwh : null, has_solar: !!a.has_solar, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM * (a.ev_count ?? 1),
       ev_kwh_month: a.ev && !a.ev_planned ? a.ev_kwh_month : null, ev_charge_home: car ? a.ev_charge_home : null, ev_day: car ? a.ev_day : null, has_wallbox: car ? a.has_wallbox : null,
       demand_source: a.use_source === "exact" ? "bill" : a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source, monthly_eur: a.use_source === "payment" ? a.monthly_eur : null,

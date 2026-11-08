@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Answers, NO_ANSWERS, Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, chosenKeys, homeParts, homesIn, NO_CHOICE, Choice, sunOf, areaAt, markedOf, markedM2, paintChoice, panelsOf, panelsM2 } from "./api";
 import { P2, P3, toLocal } from "./geometry";
-import { Handoff } from "./plan";
+import { Handoff, Mine } from "./plan";
+import Requests from "./Requests";
 import HomeMap, { Face, Picked, Step, Tool, letter } from "./HomeMap";
 import { Close, Photo, Search, Undo } from "./icons";
 import Review, { Stage } from "./Review";
@@ -17,7 +18,9 @@ function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real 
   return { roofs: polys(answer.roofs), walls: polys(answer.walls) };
 }
 
-export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: Handoff) => void }) {
+const newRef = () => `R-${Math.random().toString(36).slice(2, 7).toUpperCase()}`; // a reference the homeowner can quote
+
+export default function FindHome({ dark, onSend, requests }: { dark: boolean; onSend: (h: Handoff) => void; requests: Mine[] }) {
   const [q, setQ] = useState("");
   const [places, setPlaces] = useState<Place[] | null>(null);
   const [active, setActive] = useState(0);
@@ -35,7 +38,8 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
   const [look, setLook] = useState<{ id: string } | null>(null);
   const [stage, setStage] = useState<Stage>("roof");
   const [view, setView] = useState<View>(PHOTO); // what the roof page paints on the surfaces: photo or sunlight
-  useEffect(() => { if (stage === "sent") onSend({ buildings, answers, choice }); }, [stage]); // what the homeowner produced goes to the planner
+  const [ref, setRef] = useState(newRef);
+  useEffect(() => { if (stage === "sent") onSend({ buildings, answers, choice, ref }); }, [stage]); // what the homeowner produced goes to the planner
   const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
   const [choice, setChoice] = useState<Choice>(NO_CHOICE);
   const [tool, setTool] = useState<Tool | null>(null); // no tool: the mouse moves the map
@@ -115,6 +119,12 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
   }, [waiting, measuring]);
   const goTo = (id: string) => { setOpen(id); setLook({ id }); };
 
+  /** After sending: back to the map, ready for another home. The request stays in the list with its progress. */
+  const newRequest = () => {
+    setFace(null); setStep("pick"); setMove("out"); setStage("roof"); setTool(null); setUndo([]);
+    setBuildings([]); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef());
+  };
+
   return (
     <main className={`stage ${step}`}>
       <HomeMap dark={dark} buildings={buildings} step={step} focus={focus} aerial={aerial} onPick={step === "pick" ? toggle : undefined}
@@ -127,6 +137,7 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
       </div>}
       {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
       {step === "pick" && <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</Button>}
+      {step === "pick" && !buildings.length && requests.length > 0 && !move && <Requests list={requests} />}
       {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
       {(step === "pick" || move === "in") && <Curtain move={move} done={() => setMove(null)}>
@@ -157,7 +168,7 @@ export default function FindHome({ dark, onSend }: { dark: boolean; onSend: (h: 
       </aside>}
       </Curtain>}
 
-      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && setMove(null)}><Review stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={() => { setFace(null); setStep("pick"); setMove("out"); }} /></div>}
+      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && setMove(null)}><Review refId={ref} done={newRequest} stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={() => { setFace(null); setStep("pick"); setMove("out"); }} /></div>}
     </main>
   );
 }

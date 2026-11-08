@@ -200,6 +200,27 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .stick { flex: none; display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; }
 .quiz .source { padding: 10px 0 0; }
 .panel h3 { margin-bottom: 8px; font: 600 14px var(--font-ui); letter-spacing: 0; text-transform: none; color: var(--hud-ink); }
+/* The homeowner's requests on the start page: one row each, a status, and the offer once it is there. */
+.requests ul { list-style: none; margin: 0; padding: 0 10px 12px; }
+.requests > ul > li { border-top: 1px solid var(--hud-line); }
+.requests > ul > li:first-child { border-top: 0; }
+.requests .req { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 10px; width: 100%; padding: 12px 8px; border: 0; background: none; color: var(--hud-ink); text-align: left; cursor: pointer; }
+.requests .req .name { font: 600 14px var(--font-ui); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.requests .req small { grid-column: 1 / -1; color: var(--hud-ink-2); font-size: 12px; }
+.requests .state { padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--hud-glass-2); color: var(--hud-ink-2); }
+.requests .state.s1 { color: var(--hud-warn); }
+.requests .state.s2 { background: var(--hud-live); color: var(--hud-base); }
+.requests .detail { padding: 0 8px 14px; }
+.requests .track { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 2px 0 12px; padding: 0; list-style: none; }
+.requests .track li { padding-top: 8px; border-top: 3px solid var(--hud-line); font-size: 12px; color: var(--hud-ink-3); }
+.requests .track li.past, .requests .track li.now { border-color: var(--hud-live); color: var(--hud-ink); }
+.requests .track li.now { font-weight: 600; }
+.requests .offer h3 { margin: 4px 0 8px; font: 600 15px var(--font-ui); color: var(--hud-ink); }
+.requests .offer dl { display: grid; gap: 6px; margin: 0 0 10px; }
+.requests .offer dl div { display: grid; grid-template-columns: 7em 1fr; gap: 12px; font-size: 14px; }
+.requests .offer dt { color: var(--hud-ink-2); }
+.requests .offer dd { margin: 0; color: var(--hud-ink); }
+.requests p { margin: 0; }
 .picked { list-style: none; margin: 0; padding: 0 10px 0 18px; max-height: 50dvh; overflow-y: auto; }
 .picked li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; margin: 0; max-width: none; border-top: 1px solid var(--hud-line); }
 .picked li:first-child { border-top: 0; }

@@ -2,7 +2,7 @@ import { isValidElement, useEffect, useRef, useState } from "react";
 import { View, surfaceKey } from "./api";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
-import { Design, Handoff, Inputs, Overrides, Request, Source, Spot, design, facing, fromHomeowner, loadHome, refine, roofOf, turnTo } from "./plan";
+import { Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, loadHome, offerOf, refine, roofOf, turnTo } from "./plan";
 import { Change, ChangeCard, Trace, touched } from "./Trace";
 import "./planner.css";
 import ProofPage from "./Proof";
@@ -51,7 +51,7 @@ const useDesign = (r: Request, roof: Spot[]) => {
 // A public sample home, so the desk is not empty before a homeowner has sent anything.
 const SAMPLE = { square: "682_5336", home: "DEBY_LOD2_4545924" };
 
-export default function Planner({ dark, handoff }: { dark: boolean; handoff?: Handoff | null }) {
+export default function Planner({ dark, handoff, onProgress }: { dark: boolean; handoff?: Handoff | null; onProgress?: (ref: string, p: Progress) => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [page, setPage] = useState<"requests" | "proof">("requests");
   const [requests, setRequests] = useState<Request[]>([]);
@@ -65,7 +65,10 @@ export default function Planner({ dark, handoff }: { dark: boolean; handoff?: Ha
       sources: { demand_kwh: "customer", price_ct_kwh: "assumed", heating: "customer", heat_kwh: "assumed", ev: "customer", ev_km: "assumed", has_solar: "customer", has_storage: "customer" },
     }])).catch(() => undefined);
   }, []);
-  useEffect(() => { if (handoff?.buildings.length) setRequests((l) => [fromHomeowner(handoff), ...l.filter((r) => r.id !== "homeowner")]); }, [handoff]);
+  useEffect(() => { if (handoff?.buildings.length) { const r = fromHomeowner(handoff); setRequests((l) => [r, ...l.filter((x) => x.id !== r.id)]); } }, [handoff]);
+  // The homeowner follows their request: opened by a planner, then the offer once it is sent.
+  useEffect(() => { requests.forEach((r) => r.ref && onProgress?.(r.ref, { opened: !!r.opened, offer: r.status === "sent" ? r.offer ?? null : null })); }, [requests]);
+  useEffect(() => { if (openId) update(openId, { opened: true }); }, [openId]);
   const open = requests.find((r) => r.id === openId);
   if (open) return <Workspace key={open.id} dark={dark} r={open} update={update} back={() => setOpenId(null)} scores={scores} />;
   return <main className="inbox-page">
@@ -163,7 +166,7 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
   const warns = d ? d.review.filter((n) => n.level === "warn") : [];
   const left = confirm.length + checks.filter((c) => !done.includes(c.id)).length;
   const allowed = (r as Req).allowed ?? ["no_battery", "battery_size"];
-  const send = () => { update(r.id, { status: "sent" }); back(); };
+  const send = () => { update(r.id, { status: "sent", ...(d ? { offer: offerOf(d) } : {}) }); back(); };
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
     <HomeMap dark={dark} buildings={r.buildings} installed={r.installed} step={step} focus={null} aerial={false} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
