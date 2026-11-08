@@ -738,7 +738,6 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     m.on("rotate", () => { if (needle.current) needle.current.style.rotate = `${-m.getBearing()}deg`; setBearing(m.getBearing()); });
 
     m.once("load", () => { if (!live.current.onReady) locateMe(); });
-    m.once("idle", () => live.current.onReady?.());
     let renderer: THREE.WebGLRenderer;
     const camera = new THREE.Camera();
     const shaper = new Worker(new URL("./solids.worker.ts", import.meta.url), { type: "module" });
@@ -1013,6 +1012,9 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       ready.current = true;
       syncHomes.current();
       refresh();
+      // The planner's desk flies to its home as soon as the map can draw it: waiting for "idle" waited for every tile of the
+      // whole city view first, which on the first open took several seconds.
+      live.current.onReady?.();
     });
 
     // The surface under a point. Surfaces are projected forward, as they are drawn, and tested on screen: the map's
