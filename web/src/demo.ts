@@ -24,12 +24,14 @@ const side = (s: SunSurface, share: number, keep: "near" | "far") => {
 const facing = (s: SunSurface, from: number, to: number) => s.azimuth >= from && s.azimuth < to;
 const south = (s: SunSurface) => facing(s, 135, 225), north = (s: SunSurface) => s.azimuth >= 315 || s.azimuth < 45;
 
-// Three bigger homes around Sondermeierstraße 86 in Munich (square 694_5340), all just sent by their homeowners: nobody has opened them.
+// Three requests in square 694_5340 in Munich, all just sent by their homeowners: nobody has opened them. Sondermeierstraße 86 is one
+// complex of five touching or near parts (two long hip-roofed blocks, a flat-roofed wing, the corridor between the blocks and a small
+// annex), sent together as one request, as a homeowner picks a house with its garage.
 const SEEDS: Seed[] = [
   {
     // A family on gas who want a heat pump and already drive electric. They know their bill and their car's charging from its app.
     // North roof out. Independence first.
-    ref: "R-7MQ2A", hoursAgo: 5, state: "sent", homes: [["694_5340", "DEBY_LOD2_5148545"]],
+    ref: "R-7MQ2A", hoursAgo: 5, state: "sent", homes: [["694_5340", "DEBY_LOD2_107805333"]], // Sondermeierstraße 74
     answers: {
       use_source: "exact", demand_kwh: 5200, price_ct_kwh: 34, price_known: true, has_solar: false, has_storage: false,
       built: "1991to2000", living_m2: 160, heating: "Gas", heat_kwh: 20000, wants_hp: true,
@@ -40,7 +42,8 @@ const SEEDS: Seed[] = [
   {
     // A large household on oil that knows its use only as a range, with a sauna and an electric water heater. No heat pump wanted,
     // no car. Did not give the build year or living area: the census and the 3D model stand in. Cost first.
-    ref: "R-3KD8W", hoursAgo: 2, state: "sent", homes: [["694_5340", "DEBY_LOD2_5148057"]],
+    ref: "R-3KD8W", hoursAgo: 2, state: "sent", // Sondermeierstraße 86, every part of the complex
+    homes: [["694_5340", "DEBY_LOD2_5148543"], ["694_5340", "DEBY_LOD2_5148545"], ["694_5340", "DEBY_LOD2_5148544"], ["694_5340", "DEBY_LOD2_5148057"], ["694_5340", "DEBY_LOD2_5148542"]],
     answers: {
       use_source: "band", demand_kwh: 7000, has_solar: false, has_storage: false, big_users: ["sauna", "water"],
       heating: "Oil", oil_l: 3000, heat_kwh: 30000, wants_hp: false, ev: false, ev_planned: false, goal: "cost",
@@ -50,7 +53,7 @@ const SEEDS: Seed[] = [
   {
     // An owner who knew little: no idea of the use, so the household size (four); heating not sure; a car within a year; no priority.
     // Most facts reach the planner as assumptions.
-    ref: "R-9PX4N", hoursAgo: 0.5, state: "sent", homes: [["694_5340", "DEBY_LOD2_5148543"]],
+    ref: "R-9PX4N", hoursAgo: 0.5, state: "sent", homes: [["694_5340", "DEBY_LOD2_5148019"]], // Am Blütenring 42
     answers: {
       use_source: "people", demand_kwh: 4500, has_solar: false, has_storage: false, living_m2: 180,
       heating: "unknown", ev: false, ev_planned: true, ev_when: "soon", ev_count: 1,
