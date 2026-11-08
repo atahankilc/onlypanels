@@ -39,7 +39,6 @@ Living document. Update it whenever the phase, blockers or next steps change.
 ## Not done
 
 - Pitch deck, demo recording, final test-set run: not started
-- Finer sun table (5° tilt, 10° azimuth) is being built by `scripts/build_sun_table.py` (resumable). The committed table has 10° and 20° steps: within 1 to 3% of exact PVGIS on roofs, up to 5% on some walls. When it is done, measure again against PVGIS and commit `web/public/sun-table.json`
 - Questions-only path (D104) still shows an empty map frame and asks no address or roof by hand
 - Team decisions in `docs/decisions.md` marked Proposed are not yet agreed
 - Every assumed value and default, with its source, is in `docs/assumptions.md`. Keep it current when a constant changes
