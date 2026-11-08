@@ -11,6 +11,7 @@ import "./planner.css";
 import ProofPage from "./Proof";
 import Offer from "./Offer";
 import Obstacles from "./Obstacles";
+import Validate from "./Validate";
 import { KIND, blockedOf, mergeCells } from "./roofObstacles";
 import { Options } from "./Options";
 import { Advisor } from "./Advisor";
@@ -406,6 +407,7 @@ function DesignTab({ d, first, r, setO, apply, lit, scores }: { d: Design; first
     {changed && <p className="delta"><span>AI draft</span> {summary(first)}<br /><span>Now</span> {summary(d)}</p>}
     {d.review.filter((n) => n.level === "warn").map((n) => <p key={n.code} className="flag">{n.text}</p>)}
     <Options d={d} pick={(a) => setO(a.overrides, `Option: ${a.title.toLowerCase()}`)} />
+    <Validate r={r} d={d} />
     {!r.inputs.has_storage && <BatteryCurve d={d} pick={(kwh) => setO({ battery_kwh: kwh })} />}
     <table className="grid"><thead><tr><th /><th>Proposal</th><th>Similar homes</th><th>Your decision</th></tr></thead><tbody>
       <tr><th scope="row">Solar</th><td>{d.pv.modules} modules<small>{kwp.toFixed(1)} kWp{d.pv.capped ? " · roof limit" : ""}</small></td><td>{s.kwp_low}–{s.kwp_high} kWp<small>{s.n} homes</small></td>

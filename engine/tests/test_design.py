@@ -190,3 +190,12 @@ def test_electric_heating_is_offered_a_heat_pump_and_district_heating_is_not(eng
     d = engine.design(district)
     assert "heatpump" not in {a["id"] for a in engine.alternatives(district, {}, d)}
     assert "district_heat" in {n["code"] for n in d["review"]}
+
+
+def test_standing_ranks_a_planners_design_among_similar_homes(engine):
+    small, big = (engine.design(HOME, {"modules": m, "battery_kwh": 15})["standing"] for m in (6, 40))
+    assert small["pv"]["below"] < big["pv"]["below"] and big["pv"]["below"] >= 90
+    assert small["pv"]["low"] <= small["pv"]["mid"] <= small["pv"]["high"]
+    assert big["battery"]["value"] == 15 and big["battery"]["below"] is not None
+    hp = engine.design({**HOME, "heating": "Gas", "heat_kwh": 18000}, {"heatpump": True})["standing"]["heatpump"]
+    assert hp["heat_known"] and hp["need_kw"] > 0

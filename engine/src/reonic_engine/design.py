@@ -357,6 +357,7 @@ class Engine:
 
         near = self.near(i["installer"], like, car=bool(ev_mwh))
         review = _review(near, similar, kwp_final, battery_kwh, total, has_storage, unsure, p_battery[0])
+        standing = _standing(near, kwp_final, battery_kwh, heat_mwh, hp_wanted or heat_type == "Heatpump")
         if ex:
             review.extend(_existing_notes(ex))
         if i.get("trees"):
@@ -392,13 +393,31 @@ class Engine:
             "energy": {"base_mwh": round(base, 2), "ev_mwh": round(ev_mwh, 2), "hp_mwh": round(hp_mwh, 2),
                        "total_mwh": round(total, 2), "production_mwh": round(production, 1), "own_hp_mwh": round(own_hp, 2),
                        "existing_mwh": round(old_mwh, 1), "existing_kwp": round(old_kwp, 1) if known else None, **estimate},
-            "similar": similar, "reasons": reasons, "warnings": warnings, "trace": trace, "review": review,
+            "similar": similar, "reasons": reasons, "warnings": warnings, "trace": trace, "review": review, "standing": standing,
         }
 
 
 def _num(v, digits=1):
     v = v + 1e-9 if v >= 0 else v - 1e-9  # round halves up, as the screen does: 11.25 shows as 11.3 in both
     return f"{v:,.{digits}f}".rstrip("0").rstrip(".") if digits else f"{v:,.0f}"
+
+
+def _standing(near, kwp, battery_kwh, heat_mwh, heat):
+    """Where this design's sizes sit among what experts at this installer sold in similar homes: the share of those homes
+    with a smaller system, and the middle 80%. For a planner checking their own design. The heat pump has too few sales
+    to rank, so its size is set against the rule the engine sizes by."""
+    pv = near.kwp
+    sold = near[near.has_battery].battery_kwh
+    q = lambda s, x: round(float(s.quantile(x)), 1) if len(s) else None
+    out = {
+        "pv": {"value": round(kwp, 2), "below": round(float((pv < kwp - 1e-6).mean()) * 100), "n": int(len(pv)), "low": q(pv, 0.1), "mid": q(pv, 0.5), "high": q(pv, 0.9)},
+        "battery": {"value": battery_kwh, "rate": round(float(near.has_battery.mean()) * 100), "n": int(len(sold)),
+                    "below": round(float((sold < battery_kwh - 1e-6).mean()) * 100) if len(sold) and battery_kwh else None,
+                    "low": q(sold, 0.1), "mid": q(sold, 0.5), "high": q(sold, 0.9)},
+    }
+    if heat:
+        out["heatpump"] = {"need_kw": round((heat_mwh or 15.0) * 1000 / HP_KWH_PER_KW, 1), "heat_known": bool(heat_mwh), "kwh_per_kw": HP_KWH_PER_KW}
+    return out
 
 
 def _review(near, similar, kwp, battery_kwh, total_mwh, has_storage, unsure, p_battery):

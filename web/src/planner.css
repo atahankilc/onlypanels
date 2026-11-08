@@ -247,3 +247,18 @@
 .nohome-stage { position: fixed; top: 8px; right: 8px; bottom: 8px; left: var(--left, 424px); display: grid; place-items: center; border-radius: 24px; background: var(--hud-bg-2, #1d1f24); border: 1px dashed var(--hud-line); }
 .nohome-stage > div { max-width: 380px; text-align: center; } .nohome-stage b { font-size: 16px; } .nohome-stage p { margin: 8px 0 0; color: var(--hud-ink-2); font-size: 13.5px; line-height: 1.5; }
 .nohome-roof { display: flex; gap: 24px; margin: 0; } .nohome-roof dt { color: var(--hud-ink-2); font-size: 12px; } .nohome-roof dd { margin: 2px 0 0; font: 600 15px var(--font-mono); }
+
+/* The planner's own design, checked: a few fields, then each part against similar homes and the engine. */
+.validate { display: flex; flex-direction: column; gap: 10px; padding: 14px 0; border-block: 1px solid var(--hud-line); }
+.validate-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; } .validate-head b { font: 600 16px/1.3 var(--font-ui); }
+.validate .textlink { padding: 4px 0; }
+.validate > p { margin: 0; }
+.validate-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.validate-form .field { margin: 0; }
+.validate-wb > span { display: block; margin-bottom: 6px; font-size: 13px; color: var(--hud-ink-2); }
+.validate > .btn { align-self: flex-start; }
+.validate-out { display: flex; flex-direction: column; gap: 10px; animation: rise 0.25s var(--ease); }
+.validate-out td:last-child { width: auto; }
+.verdict { margin-top: 2px; font-size: 12px; color: var(--hud-ink-2); }
+.verdict.warn { color: var(--hud-warn); } .verdict.ok { color: var(--hud-live); }
+.validate-out .rows dd small { margin-left: 6px; color: var(--hud-ink-3); font-weight: 400; }
