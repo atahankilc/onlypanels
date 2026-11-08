@@ -3,6 +3,14 @@
 
 /* ---------- Requests: one column on the base, a row per home ---------- */
 .inbox-page { position: fixed; inset: 0; z-index: 4; overflow: auto; background: var(--hud-base); animation: rise 0.35s var(--ease) backwards; }
+/* Opening and closing a request (D131): the list fades off the loaded city map, and fades back in while the map slides over the desk. */
+.inbox-page.leave { animation: list-off 0.3s var(--ease) forwards; pointer-events: none; }
+.inbox-page.back { animation: list-on 0.35s var(--ease) 0.3s backwards; pointer-events: none; }
+.inbox-page.still { animation: none; }
+@keyframes list-off { to { opacity: 0; } }
+@keyframes list-on { from { opacity: 0; } }
+.stage.plan.leaving .panel.desk, .stage.plan.review.leaving:has(.map3d) .panel.desk { animation: desk-cover 0.6s var(--glide) forwards; }
+@keyframes desk-cover { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 100% 0 0); } }
 .inbox-col { width: min(1040px, calc(100vw - 64px)); margin: 0 auto; padding: 104px 0 56px; }
 .inbox-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 20px; }
 .inbox-head h1 { font-size: 32px; letter-spacing: -0.02em; }

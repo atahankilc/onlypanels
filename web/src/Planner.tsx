@@ -122,16 +122,24 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
   useEffect(() => { requests.forEach((r) => r.ref && onProgress?.(r.ref, { opened: !!r.opened, offer: r.status === "sent" ? r.offer ?? null : null })); }, [requests]);
   useEffect(() => { if (openId) update(openId, { opened: true }); }, [openId]);
   const open = requests.find((r) => r.id === openId);
+  // Opening and closing a request (D131). covering: the list stays over the request while its map loads unseen, so no empty
+  // frame and no half-drawn map show; revealing: the list fades off the city map, then the camera flies and the desk is
+  // uncovered as before; returning: the map slides back over the desk while the list fades in, and only then is the request let go.
+  const [phase, setPhase] = useState<"none" | "covering" | "revealing" | "returning">("none");
+  const [quiet, setQuiet] = useState(false); // the list came back from a request: it does not rise again
+  const openReq = (id: string) => { setOpenId(id); setPhase("covering"); };
+  const closeReq = () => setPhase("returning");
+  useEffect(() => { if (phase !== "covering") return; const t = window.setTimeout(() => setPhase((p) => (p === "covering" ? "revealing" : p)), 6000); return () => clearTimeout(t); }, [phase]); // a map that never loads does not keep the list up
   // The voice sees the list as the planner does, and opens, closes and switches pages as a click would.
   useEffect(() => { setDeskContext({ page, requests: requests.map((r) => ({ id: r.id, ref: r.ref, title: r.label, status: r.status })) }); }, [requests, page]);
   useVoiceActions((a) => {
-    if (a.type === "open" && requests.some((r) => r.id === a.id)) { setPage("requests"); setOpenId(a.id); }
-    if (a.type === "back") setOpenId(null);
+    if (a.type === "open" && requests.some((r) => r.id === a.id)) { setPage("requests"); openReq(a.id); }
+    if (a.type === "back") closeReq();
     if (a.type === "page" && a.page !== "proof") setPage(a.page);
   });
-  if (open) return <><Workspace key={open.id} r={open} update={update} back={() => setOpenId(null)} scores={scores} /><VoiceDock /></>;
   const waiting = requests.filter((r) => r.status !== "sent").length;
-  return <><main className="inbox-page">
+  const list = <main className={`inbox-page${phase === "revealing" ? " leave" : phase === "returning" ? " back" : quiet ? " still" : ""}`} inert={phase === "revealing" || phase === "returning"}
+    onAnimationEnd={(e) => { if (e.target !== e.currentTarget) return; if (phase === "revealing") setPhase("none"); if (phase === "returning") { setOpenId(null); setPhase("none"); setQuiet(true); } }}>
     <div className="inbox-col">
       <header className="inbox-head">
         <div>
@@ -142,15 +150,19 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
         </div>
       </header>
       {/* The planner's pages, in the top bar as the app's menu. In the body so the top bar's fade does not cover it. */}
-      {createPortal(<nav className="pagenav" aria-label="Planner pages"><Segmented variant="glass" label="Page" value={page} onChange={setPage} options={[{ value: "requests", label: "Requests" }, { value: "prices", label: "Prices" }]} /></nav>, document.body)}
+      {(phase === "none" || phase === "covering") && createPortal(<nav className="pagenav" aria-label="Planner pages"><Segmented variant="glass" label="Page" value={page} onChange={setPage} options={[{ value: "requests", label: "Requests" }, { value: "prices", label: "Prices" }]} /></nav>, document.body)}
       {page === "prices" ? <PriceBook /> : <>
-        <ul className="reqlist">{byTurn(requests).map((r) => <Line key={r.id} r={r} open={() => setOpenId(r.id)} />)}
+        <ul className="reqlist">{byTurn(requests).map((r) => <Line key={r.id} r={r} open={() => openReq(r.id)} />)}
           {Array.from({ length: loading }, (_, i) => <li key={`loading${i}`} className="loading" aria-hidden="true"><span /><span /></li>)}
         </ul>
         {loading > 0 && <p className="small muted loadnote" role="status"><span className="spinner" aria-hidden="true" />{requests.length ? `Loading ${loading} more ${loading === 1 ? "request" : "requests"}…` : "Loading requests…"}</p>}
       </>}
     </div>
-  </main><VoiceDock /></>;
+  </main>;
+  // An opened request sits under the list until its map can draw; then the list fades and the map flies in (D131).
+  // Fixed slots, so the list stays the same element while a request opens under it and does not rise again.
+  return <>{open && <Workspace key={open.id} r={open} update={update} back={closeReq} scores={scores} veiled={phase !== "none"} leaving={phase === "returning"}
+    onShown={() => setPhase((p) => (p === "covering" ? "revealing" : p))} />}{(!open || phase !== "none") && list}<VoiceDock /></>;
 }
 
 /** The planner's queue: requests waiting for an offer first, the longest waiting on top; sent offers below, the latest first. */
@@ -250,10 +262,14 @@ export const withPhotoSolar = (r: Request, obstacles: Obstacle[]): Partial<Reque
     sources: { ...r.sources, has_solar: was.source ?? "assumed" } };
 };
 
-function Workspace({ r, update, back, scores }: { r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null }) {
+function Workspace({ r, update, back, scores, veiled = false, leaving = false, onShown }: { r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null; veiled?: boolean; leaving?: boolean; onShown?: () => void }) {
   const [tab, setTab] = useState<Tab>("design");
   const home = r.buildings.length > 0;
-  const [step, setStep] = useState<"pick" | "review">(home ? "pick" : "review");
+  const [mapStep, setStep] = useState<"pick" | "review">(home ? "pick" : "review");
+  // Under the list the map stays on its city view: the flight and the desk's uncovering wait until the list has gone (D131).
+  // Leaving, the map stays where it is: flying back out to the city outran its tiles and showed a dark map.
+  const step = home && veiled && !leaving ? "pick" : mapStep;
+  useEffect(() => { if (mapStep === "review") onShown?.(); }, [mapStep]);
   const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, r.taken, r.obstacles), [r.shaded, r.buildings, r.installed, r.priority, r.taken, r.obstacles]); // trees reach the sun after arrival; no module touches a kept obstacle
   const [view, setView] = useState<View>({ layer: "photo", moment: null });
   const [face, setFace] = useState<Face | null>(null);
@@ -364,7 +380,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   });
   const tryAsk = (x: Ask) => { setO(x.change as Overrides, `Tried the customer's question: ${describeChange(x.change)}`); if (r.status === "sent") update(r.id, { status: "draft" }); setTab("design"); };
 
-  return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
+  return <main className={`stage ${step} plan${leaving ? " leaving" : ""}`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
     {home ? <HomeMap buildings={view.layer === "sun" && !showTrees ? r.buildings : r.shaded ?? r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} obstacles={r.obstacles} hotObstacle={hotObs} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"} trees={trees} showTrees={showTrees}
       panels={out?.panels} panelW={LEFT} turn={turnTo(roof, out?.panels)} onReady={() => setStep("review")} />
       : <NoHomeStage r={r} />}
