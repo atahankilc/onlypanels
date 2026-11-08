@@ -201,12 +201,22 @@
 .offer-sheet ul { margin: 0; padding-left: 18px; } .offer-sheet li { max-width: none; }
 .offer-sheet .check { min-height: 30px; }
 .print-only { display: none; }
+/* Printing the offer: only the sheet, on paper. Everything else is left out of the layout (hidden it still took pages), the boxes
+   around the sheet (a fixed stage, a scrolling panel) become plain flow so the sheet runs over as many pages as it needs, and the
+   dark theme's light text turns black. Before, the sheet printed half way down one page, cut off, on black. */
 @media print {
-  body * { visibility: hidden; }
-  .offer-sheet, .offer-sheet * { visibility: visible; }
-  .offer-sheet { position: absolute; inset: 0 auto auto 0; width: 100%; padding: 24px; background: #fff; color: #000; border: 0; border-radius: 0; }
-  .offer-sheet th, .offer-sheet td, .offer-sheet .fine, .offer-sheet h4, .offer-sheet header small { color: #000; border-color: #ccc; }
-  .no-print { display: none; } .print-only { display: block; }
+  @page { size: A4; margin: 14mm; }
+  :root { color-scheme: light !important; } /* the dark scheme painted the page margins black */
+  html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+  body *:not(:has(.offer-sheet)):not(.offer-sheet):not(.offer-sheet *) { display: none !important; }
+  *:has(> .offer-sheet), *:has(.offer-sheet) { position: static !important; inset: auto !important; width: auto !important; height: auto !important; max-height: none !important;
+    overflow: visible !important; clip-path: none !important; transform: none !important; animation: none !important; margin: 0 !important; padding: 0 !important;
+    border: 0 !important; border-radius: 0 !important; background: none !important; box-shadow: none !important; display: block !important; }
+  .offer-sheet { position: static; width: auto; padding: 0; background: #fff; border: 0; border-radius: 0; box-shadow: none; }
+  .offer-sheet, .offer-sheet * { color: #000 !important; border-color: #ccc !important; }
+  .offer-sheet tr, .offer-sheet li, .offer-sheet section > h4 { break-inside: avoid; }
+  .offer-sheet h4 { break-after: avoid; }
+  .no-print { display: none !important; } .print-only { display: block; }
 }
 
 /* ---------- Proof: past projects against the experts ---------- */
