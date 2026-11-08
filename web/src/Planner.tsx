@@ -255,7 +255,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         {d && tab === "offer" && <Offer r={r} d={d} first={first.current} roof={roof} panels={out?.panels ?? {}} toConfirm={confirm.length} allowed={allowed} setAllowed={(a) => update(r.id, { allowed: a } as Partial<Request>)} send={send}
           conditions={checks.filter((c) => !done.includes(c.id)).map((c) => c.title)}
           facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]),
-            ...EXTRA.filter((k) => !r.sources[k] && sourceOf(r, k) && (r.inputs.ev || !k.startsWith("ev_") && k !== "has_wallbox")).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[sourceOf(r, k)!]] as [string, string, string]), home ? ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"] : ["Roof", r.roofNumbers ? roofWords(r.roofNumbers) : "not shared", r.roofNumbers ? "from the customer, rounded" : "to be confirmed"]]} />}
+            ...EXTRA.filter((k) => !r.sources[k] && sourceOf(r, k) && (r.inputs.ev || !k.startsWith("ev_") && k !== "has_wallbox")).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[sourceOf(r, k)!]] as [string, string, string]), home ? ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"] : ["Roof", r.roofNumbers ? roofWords(r.roofNumbers) : "not shared", r.roofNumbers ? (r.roofNumbers.told ? "from the customer's description" : "from the customer, rounded") : "to be confirmed"]]} />}
       </div>
       {/* As on the homeowner's pages: the way back and the one main action, always in reach. */}
       <div className="stick">
@@ -301,16 +301,20 @@ function Brief({ r, d, assumed, points, site, open }: { r: Request; d: Design; a
   </section>;
 }
 
-const roofWords = (n: RoofNumbers) => `about ${n.m2} m² of roof, ${n.facing === "flat" ? "flat" : `facing ${n.facing}, ${n.tilt}° steep`}`;
+const roofWords = (n: RoofNumbers) => `about ${n.m2} m² of roof, ${n.facing === "flat" ? "flat" : n.facing === "unknown" ? `direction not known, ${n.tilt}° steep` : `facing ${n.facing}, ${n.tilt}° steep`}`;
+/** How the roof numbers came: the customer's own words, or rounded from the 3D home they kept. */
+const roofOrigin = (n: RoofNumbers) => (n.told ? "as the customer described it" : "rounded so it points to no address");
+const addressOf = (r: Request) => (r.buildings.length ? null : r.label !== "Home not shared" ? r.label : null);
 
 /** Where the 3D home would stand: the homeowner kept it, so the desk says so and shows what came instead. */
 function NoHomeStage({ r }: { r: Request }) {
-  return <div className="nohome-stage"><div><b>Home not shared</b><p>{r.roofNumbers ? `The customer sent ${roofWords(r.roofNumbers)}, rounded so it points to no address.` : "The customer kept the address, the building and the roof to themselves."} The design runs from their answers.</p></div></div>;
+  const address = addressOf(r);
+  return <div className="nohome-stage"><div><b>{address ? "No 3D home" : "Home not shared"}</b><p>{address ? `The customer gave the address ${address} but no building on the map. ` : ""}{r.roofNumbers ? `The roof: ${roofWords(r.roofNumbers)}, ${roofOrigin(r.roofNumbers)}.` : address ? "No roof was described." : "The customer kept the address, the building and the roof to themselves."} The design runs from their answers.</p></div></div>;
 }
 function NoHomeRoof({ r }: { r: Request }) {
   return r.roofNumbers
     ? <><dl className="nohome-roof"><div><dt>Area</dt><dd>~{r.roofNumbers.m2} m²</dd></div><div><dt>Facing</dt><dd>{r.roofNumbers.facing}</dd></div><div><dt>Tilt</dt><dd>{r.roofNumbers.facing === "flat" ? "flat" : `~${r.roofNumbers.tilt}°`}</dd></div></dl>
-      <p className="small muted">Rounded by the customer's page. The area limits the solar size. The yield is PVGIS's for this direction and slope in Munich, without shade, until the roof is confirmed.</p></>
+      <p className="small muted">{r.roofNumbers.told ? "As the customer described it." : "Rounded by the customer's page."} The area limits the solar size. {r.roofNumbers.facing === "unknown" ? "The direction is not known, so the yield is a typical German 950 kWh per kWp" : "The yield is PVGIS's for this direction and slope in Munich, without shade,"} until the roof is confirmed.</p></>
     : <p className="small muted">The customer shared no roof. The solar size follows the household's needs alone, with no roof limit and a typical yield.</p>;
 }
 
@@ -323,8 +327,8 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
     : dist === "both" ? "The customer has underfloor heating and radiators. The radiators set the flow temperature: check them."
     : "The customer did not say how the rooms are heated. Usually needs a site visit." });
   const home = r.buildings.length > 0;
-  if (!home) list.unshift({ id: "noroof", title: r.roofNumbers ? "Roof not shared: confirm size and direction" : "Home not shared: ask for the roof", why: r.roofNumbers
-    ? `The customer kept the home and sent only rounded roof numbers: ${roofWords(r.roofNumbers)}. The design takes the area as its limit and PVGIS's yield for that direction and slope, without shade. Confirm size, direction and shade with them, or ask for the address.`
+  if (!home) list.unshift({ id: "noroof", title: r.roofNumbers ? (r.roofNumbers.told ? "Roof only described: confirm size and direction" : "Roof not shared: confirm size and direction") : "Home not shared: ask for the roof", why: r.roofNumbers
+    ? `${r.roofNumbers.told ? "The customer described the roof" : "The customer kept the home and sent only rounded roof numbers"}: ${roofWords(r.roofNumbers)}. The design takes the area as its limit and ${r.roofNumbers.facing === "unknown" ? "a typical yield, as the direction is not known" : "PVGIS's yield for that direction and slope, without shade"}. Confirm size, direction and shade with them${addressOf(r) ? "" : ", or ask for the address"}.`
     : "The customer kept the home and the roof to themselves. The design has no roof limit and a typical yield. Ask for the roof's size and direction, or the address." });
   const blind = roofOf(r.buildings, r.installed).filter((x) => x.s.kwh_per_kwp == null).length;
   if (blind) list.unshift({ id: "sun", title: `Sun data is missing for ${blind} ${blind === 1 ? "surface" : "surfaces"}`, why: "PVGIS did not answer. A typical yield stands in, so production is less certain. Reopen the request to try again." });
@@ -344,7 +348,7 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
   if (home) {
     list.push(monumentCheck(monument));
     if (r.inputs.heating !== "Heatpump") list.push(heatPlanCheck(heatPlan, r.inputs.heating, d.heatpump.included));
-  } else list.push({ id: "place", title: "Trees, monument and heat plan need the address", why: "Shade from trees, monument protection and Munich's heat plan are looked up from the home. Check them once the customer shares the address." });
+  } else list.push({ id: "place", title: "Trees, monument and heat plan need the address", why: addressOf(r) ? `Shade from trees, monument protection and Munich's heat plan are looked up from the 3D home, which was not picked. Check them for ${addressOf(r)}.` : "Shade from trees, monument protection and Munich's heat plan are looked up from the home. Check them once the customer shares the address." });
   list.push({ id: "grid", title: "Check the grid connection and meter cabinet", why: r.meterPhoto ? "The customer sent a photo of the meter cabinet, below. The grid connection is not in our data." : "Not in our data. No photo of the meter cabinet was sent." });
   // KfW 458 speed bonus (secondary sources, November 2026): oil, coal and electric storage heating at any age, gas once 20 years
   // in use, for owners living in the home. Its rate falls every half year from July 2026, so no figure is shown.

@@ -85,7 +85,7 @@ export function fromHomeowner(h: Handoff): Request {
   const thermal = !!a.has_solar && a.solar_kind === "thermal";
   return {
     meterPhoto: a.meter_photo ?? undefined,
-    id: h.ref ? `homeowner-${h.ref}` : "homeowner", ref: h.ref, label: buildings[0]?.label ?? (buildings.length ? "Home" : "Home not shared"),
+    id: h.ref ? `homeowner-${h.ref}` : "homeowner", ref: h.ref, label: buildings[0]?.label ?? (buildings.length ? "Home" : a.address?.trim() || "Home not shared"),
     roofNumbers: buildings.length ? null : h.roof ?? null, from: "Homeowner", buildings, status: h.seed?.offer ? "sent" : "draft", opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? undefined,
     inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating, heat_kwh: a.heat_kwh, hp_kwh: a.heating === "Heatpump" ? a.hp_kwh : null, has_solar: !!a.has_solar && !thermal, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM * (a.ev_count ?? 1),
       ev_kwh_month: a.ev && !a.ev_planned ? a.ev_kwh_month : null, ev_charge_home: car ? a.ev_charge_home : null, ev_day: car ? a.ev_day : null, has_wallbox: car ? a.has_wallbox : null,
@@ -93,7 +93,8 @@ export function fromHomeowner(h: Handoff): Request {
       big_users: a.big_users, living_m2: a.living_m2 ?? modelM2(buildings), living_from_model: !a.living_m2 && !!modelM2(buildings), cert_kwh_m2: a.cert_kwh_m2, built: a.built, area_built: a.area?.built ?? null, area_built_share: a.area?.built_share ?? null, goal: a.goal,
       solar_thermal: !!a.has_solar && (a.solar_kind === "thermal" || a.solar_kind === "both"), owner: a.owner ?? null, backup: a.backup ?? null, home_day: a.home_day ?? null, heat_dist: a.heat_dist ?? null, boiler_age: FOSSIL_HEAT.includes(a.heating ?? "") ? a.boiler_age ?? null : null, gas_eur: a.heating === "Gas" ? a.gas_eur ?? null : null,
       area_m2: !buildings.length && h.roof ? h.roof.m2 : null,
-      ...(!buildings.length && h.roof ? { roof_tilt: h.roof.facing === "flat" ? 0 : h.roof.tilt, roof_azimuth: COMPASS_DEG[h.roof.facing] ?? 180 } : {}) },
+      // A direction the customer was not sure of gives no direction: the engine keeps the typical yield rather than guess south.
+      ...(!buildings.length && h.roof && (h.roof.facing === "flat" || h.roof.facing in COMPASS_DEG) ? { roof_tilt: h.roof.facing === "flat" ? 0 : h.roof.tilt, roof_azimuth: COMPASS_DEG[h.roof.facing] ?? 180 } : {}) },
     // Without a car the driving is a stand-in: hidden until a car is added, then the planner confirms it before an offer leaves.
     sources: { demand_kwh: a.use_source === "exact" ? "customer" : "assumed", price_ct_kwh: a.price_known ? "customer" : "assumed", heating: source(a.heating), heat_kwh: a.heating === "Gas" && a.gas_eur ? "assumed" : source(a.heat_kwh), ev: source(a.ev), ev_km: car ? source(a.ev_km) : "assumed", has_solar: source(a.has_solar), has_storage: source(a.has_storage), ...(!buildings.length && h.roof ? { area_m2: "customer" as Source } : {}) },
     overrides: a.wants_hp === false ? { heatpump: false } : a.wants_hp ? { heatpump: true } : {},
