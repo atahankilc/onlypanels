@@ -22,38 +22,13 @@ export function CostTab({ c, failed, money, setMoney, use, prices, sent }: TabPr
   const groups = Object.keys(TECH).filter((t) => c.lines.some((l) => l.tech === t));
   const fuelName = c.fuel?.kind === "oil" ? "Heating oil" : "Gas";
   return <>
-    <dl className="money-head">
-      <div className="lead"><dt>The homeowner pays</dt><dd>{eur(c.pays_eur)}</dd><small>{c.grant ? `${eur(c.gross_eur)} less ${eur(c.grant.eur)} ${c.grant.path === "fkg" ? "KfW and city" : "KfW"} grant` : c.vat_eur ? `${eur(c.net_eur)} + ${eur(c.vat_eur)} VAT` : "No VAT on solar and battery"}</small></div>
-      <div><dt>Pays back in</dt><dd>{c.payback_years != null ? <>{c.payback_years.toLocaleString("en", { maximumFractionDigits: 1 })}<small> years</small></> : "–"}</dd><small>{c.payback_years == null ? `not within ${n} years` : c.draft_2027 ? `${c.draft_2027.payback_years != null ? `${c.draft_2027.payback_years} years` : "not"} if switched on in 2027 (draft law)` : "prices rising, panels ageing"}</small></div>
-      <div><dt>{c.gain_eur >= 0 ? "Gain" : "Loss"} over {n} years</dt><dd>{eur(Math.abs(c.gain_eur))}</dd><small>{c.irr_pct != null ? `${c.irr_pct}% a year return` : c.gain_eur >= 0 ? "after paying it off" : "the system costs more than it saves"}</small></div>
-    </dl>
+    {/* Price, payback and the 20 years are in the desk's money row above every tab; here only what that row does not say. */}
+    {(c.draft_2027 || c.irr_pct != null || c.payback_years == null) && <p className="money-lede">{[
+      c.payback_years == null ? `Does not pay back within ${n} years` : c.draft_2027 && `Pays back in ${c.draft_2027.payback_years != null ? `${c.draft_2027.payback_years} years` : `more than ${n} years`} if switched on in 2027 (draft law)`,
+      c.irr_pct != null && `${c.irr_pct}% a year return`].filter(Boolean).join(" · ")}</p>}
     {c.notes.map((x) => <div key={x.code} className={x.level === "warn" ? "money-note warn" : "money-note"}><p>{x.text}</p>{x.change && !sent && <Button onClick={() => use(x.change!, x.code === "money_battery" ? "Battery left out for the money" : "Battery size by money")}>Use</Button>}</div>)}
 
-    <h3>How the homeowner gains</h3>
-    <p className="small muted">The first year, before and after. Electricity at {c.price_ct_kwh} ct per kWh, feed-in at {y.feed_full_ct} ct but none in negative-price hours ({y.unpaid_pct}% of the year's output in 2025){c.fuel ? `, ${fuelName.toLowerCase()} at ${c.fuel.ct} ct` : ""}.</p>
-    <table className="grid money-bill"><thead><tr><th /><th>Today</th><th>With the system</th></tr></thead><tbody>
-      <tr><th scope="row">Electricity from the grid<small>{b.before.grid_kwh.toLocaleString("en")} → {b.after.grid_kwh.toLocaleString("en")} kWh</small></th><td>{eur(b.before.grid_eur)}</td><td>{eur(b.after.grid_eur)}</td></tr>
-      <tr><th scope="row">Sold to the grid</th><td>{b.before.feed_eur ? `−${eur(b.before.feed_eur)}` : "–"}</td><td>−{eur(b.after.feed_eur)}</td></tr>
-      {(b.before.fuel_eur > 0 || b.after.fuel_eur > 0) && <tr><th scope="row">{fuelName}<small>{c.fuel?.kwh.toLocaleString("en")} kWh a year</small></th><td>{eur(b.before.fuel_eur)}</td><td>{eur(b.after.fuel_eur)}</td></tr>}
-      <tr><th scope="row">Upkeep<small>{[b.before.upkeep_eur && "boiler service, chimney sweep", "solar insurance and checks", c.lines.some((l) => l.tech === "heatpump") && "heat pump service"].filter(Boolean).join("; ")}</small></th><td>{b.before.upkeep_eur ? eur(b.before.upkeep_eur) : "–"}</td><td>{eur(b.after.upkeep_eur)}</td></tr>
-      {b.after.meter_eur > 0 && <tr><th scope="row">Smart meter and control box<small>required above 7 kWp</small></th><td>–</td><td>{eur(b.after.meter_eur)}</td></tr>}
-      {b.after.rebate_eur > 0 && <tr><th scope="row">Grid fee rebate<small>§14a, heat pump or wallbox controllable</small></th><td>–</td><td>−{eur(b.after.rebate_eur)}</td></tr>}
-      <tr className="total"><th scope="row">A year</th><td>{eur(b.before.total_eur)}</td><td>{eur(b.after.total_eur)}</td></tr>
-    </tbody></table>
-    <ul className="money-why">
-      <li><b>{signed(y.own_eur)}</b> own solar power used instead of bought</li>
-      <li><b>{signed(y.feed_eur)}</b> for power sold to the grid</li>
-      {y.fuel_eur > 0 && <li><b>{signed(y.fuel_eur)}</b> {fuelName.toLowerCase()} no longer bought</li>}
-      {y.extra_power_eur !== 0 && <li><b>{signed(-y.extra_power_eur)}</b> {y.extra_power_eur > 0 ? "more electricity used (heat pump, car)" : "less electricity used"}</li>}
-      {y.upkeep_eur !== 0 && <li><b>{signed(y.upkeep_eur)}</b> upkeep</li>}
-      {y.meter_eur > 0 && <li><b>{signed(-y.meter_eur)}</b> smart meter and control box</li>}
-      {y.rebate_eur > 0 && <li><b>{signed(y.rebate_eur)}</b> lower grid fee (§14a)</li>}
-      <li className="sum"><b>{signed(y.total_eur)}</b> in the first year{c.battery_eur ? `, of which the battery ${eur(c.battery_eur)}` : ""}</li>
-    </ul>
-    {c.solar_ct_kwh != null && <p className="small muted">Each kWh from the panels costs about {c.solar_ct_kwh} ct over {n} years, against {c.price_ct_kwh} ct from the grid.</p>}
-    <Payback c={c} />
-
-    <Fold title="What it costs" summary={`${eur(c.gross_eur)} for ${c.lines.length} parts: ${groups.map((t) => `${TECH[t].toLowerCase()} ${eur(c.by_tech[t] ?? 0)}`).join(", ")}${c.grant ? `, less ${eur(c.grant.eur)} grant` : ""}`}>
+    <Fold open title="What it costs" summary={`${eur(c.gross_eur)} for ${c.lines.length} parts: ${groups.map((t) => `${TECH[t].toLowerCase()} ${eur(c.by_tech[t] ?? 0)}`).join(", ")}${c.grant ? `, less ${eur(c.grant.eur)} grant` : ""}`}>
     <table className="grid money-lines"><thead><tr><th>Part</th><th>Qty</th><th>Price</th></tr></thead><tbody>
       {groups.map((t) => [
         <tr key={`g-${t}`} className="group"><th colSpan={2} scope="rowgroup">{TECH[t]}</th><td>{eur(c.by_tech[t] ?? 0)}</td></tr>,
@@ -70,6 +45,20 @@ export function CostTab({ c, failed, money, setMoney, use, prices, sent }: TabPr
       <p className="small muted">Site work added when the home needs it. Ticked by default when we add it to at least half of our offers.</p>
       <ul className="tasks">{c.extras.map((x) => <li key={x.id}><Check checked={x.on} onChange={(v) => setMoney({ ...money, extras: { ...(money.extras ?? {}), [x.id]: v } })}>
         <b>{x.name} · {eur(x.net)}</b><small>{TECH[x.tech]}{x.share != null ? ` · in ${Math.round(x.share * 100)}% of past offers` : ""}{x.unit !== "job" ? ` · ${qtyText(x)}` : ""}</small></Check></li>)}</ul></Fold>}
+
+    <h3>The first year, before and after</h3>
+    <p className="small muted">Electricity at {c.price_ct_kwh} ct per kWh, feed-in at {y.feed_full_ct} ct but none in negative-price hours ({y.unpaid_pct}% of the year's output in 2025){c.fuel ? `, ${fuelName.toLowerCase()} at ${c.fuel.ct} ct` : ""}.</p>
+    <table className="grid money-bill"><thead><tr><th /><th>Today</th><th>With the system</th></tr></thead><tbody>
+      <tr><th scope="row">Electricity from the grid<small>{b.before.grid_kwh.toLocaleString("en")} → {b.after.grid_kwh.toLocaleString("en")} kWh</small></th><td>{eur(b.before.grid_eur)}</td><td>{eur(b.after.grid_eur)}</td></tr>
+      <tr><th scope="row">Sold to the grid</th><td>{b.before.feed_eur ? `−${eur(b.before.feed_eur)}` : "–"}</td><td>−{eur(b.after.feed_eur)}</td></tr>
+      {(b.before.fuel_eur > 0 || b.after.fuel_eur > 0) && <tr><th scope="row">{fuelName}<small>{c.fuel?.kwh.toLocaleString("en")} kWh a year</small></th><td>{eur(b.before.fuel_eur)}</td><td>{eur(b.after.fuel_eur)}</td></tr>}
+      <tr><th scope="row">Upkeep<small>{[b.before.upkeep_eur && "boiler service, chimney sweep", "solar insurance and checks", c.lines.some((l) => l.tech === "heatpump") && "heat pump service"].filter(Boolean).join("; ")}</small></th><td>{b.before.upkeep_eur ? eur(b.before.upkeep_eur) : "–"}</td><td>{eur(b.after.upkeep_eur)}</td></tr>
+      {b.after.meter_eur > 0 && <tr><th scope="row">Smart meter and control box<small>required above 7 kWp</small></th><td>–</td><td>{eur(b.after.meter_eur)}</td></tr>}
+      {b.after.rebate_eur > 0 && <tr><th scope="row">Grid fee rebate<small>§14a, heat pump or wallbox controllable</small></th><td>–</td><td>−{eur(b.after.rebate_eur)}</td></tr>}
+      <tr className="total"><th scope="row">A year</th><td>{eur(b.before.total_eur)}</td><td>{eur(b.after.total_eur)}</td></tr>
+    </tbody></table>
+    <p className="money-sum"><b>{signed(y.total_eur)}</b> in the first year{c.battery_eur ? `, of which the battery ${eur(c.battery_eur)}` : ""}; later years follow prices, which rise, and the panels, which age.</p>
+    {c.solar_ct_kwh != null && <p className="small muted">Each kWh from the panels costs about {c.solar_ct_kwh} ct over {n} years, against {c.price_ct_kwh} ct from the grid.</p>}
 
     <Rules rules={c.rules} />
 
@@ -106,30 +95,6 @@ function Rules({ rules }: { rules: Costs["rules"] }) {
       </button>
       {open === r.id && <div><p>{r.text}</p>{r.action && <p><b>To do:</b> {r.action}</p>}<small>{r.source}</small></div>}
     </li>)}</ul></Fold>;
-}
-
-/** Money over the years, one bar a year: below the line while the system is being paid off, above once it has paid back. */
-function Payback({ c }: { c: Costs }) {
-  const [hot, setHot] = useState<number | null>(null);
-  const rows = c.rows, W = 480, H = 150, pad = 18;
-  const lo = Math.min(-c.pays_eur, ...rows.map((r) => r.total)), hi = Math.max(0, ...rows.map((r) => r.total));
-  const y = (v: number) => pad + ((hi - v) / Math.max(hi - lo, 1)) * (H - pad * 2);
-  const bw = W / rows.length;
-  const shown = hot != null ? rows[hot] : null;
-  return <figure className="payback">
-    <figcaption><b>Money over {rows.length} years</b><small>{shown ? `Year ${shown.year}: ${shown.total < 0 ? `${eur(-shown.total)} still to pay back` : `${eur(shown.total)} ahead`}, ${eur(shown.eur)} that year` : "After paying for the system, what the homeowner is ahead or behind at the end of each year."}</small></figcaption>
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Pays back after ${years(c.payback_years)}; ${standing(c.gain_eur)} after ${rows.length} years`} onMouseLeave={() => setHot(null)}>
-      <line x1={0} x2={W} y1={y(0)} y2={y(0)} className="zero" />
-      {rows.map((r, k) => {
-        const top = Math.min(y(0), y(r.total)), h = Math.max(1, Math.abs(y(r.total) - y(0)));
-        return <g key={r.year} onMouseEnter={() => setHot(k)}>
-          <rect x={k * bw} y={0} width={bw} height={H} fill="transparent" />
-          <rect x={k * bw + 1} y={top} width={bw - 2} height={h} rx={3} className={r.total < 0 ? "neg" : "pos"} opacity={hot == null || hot === k ? 1 : 0.55} />
-        </g>;
-      })}
-      <text x={2} y={H - 2} className="axis">year 1</text><text x={W - 2} y={H - 2} className="axis" textAnchor="end">year {rows.length}</text>
-    </svg>
-  </figure>;
 }
 
 /** The price book: every part an offer can hold, by technology, with its default, its source and the planner's own price. */

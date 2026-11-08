@@ -448,3 +448,7 @@
 .obs-more > summary::-webkit-details-marker { display: none; }
 .obs-more > summary span { margin-left: auto; color: var(--hud-route); white-space: nowrap; }
 .obs-more[open] > summary span { visibility: hidden; }
+
+/* Cost tab (Costs.tsx): what the desk's money row does not say, on one line; the first year's sum under its table. */
+.money-lede { margin: 0; font-size: 13px; color: var(--hud-ink-2); }
+.money-sum { margin: 0; font-size: 13px; color: var(--hud-ink-2); } .money-sum b { color: var(--hud-live); font-weight: 650; }
