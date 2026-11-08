@@ -1,6 +1,8 @@
 // The planner's side: one request, each fact with where it came from, and the calls to the engine.
 import { Answers, Choice, Place, Selected, SunSurface, cellsOf, chosenKeys, homeParts, installedKeys, modelM2, measured, meanSun, placeAt, polyOf, sunOf, surfaceKey } from "./api";
+import type { Shade } from "./treeShade";
 import { P2, P3, toLocal } from "./geometry";
+import type { RoofNumbers, Shared } from "./share";
 import { ordered } from "./panels";
 
 export type Inputs = { installer: string; demand_kwh: number | null; price_ct_kwh: number; heating: string | null; heat_kwh: number | null; hp_kwh?: number | null; has_solar: boolean; has_storage: boolean; ev: boolean; ev_km: number; ev_kwh_month?: number | null; ev_charge_home?: string | null; ev_day?: boolean | null; has_wallbox?: boolean | null;
@@ -21,6 +23,8 @@ export type Design = {
 };
 export type Source = "customer" | "assumed" | "planner";
 export type Request = {
+  shade?: Shade; // what trees take from the home's sun, worked out once the request reached the planner
+  shaded?: Selected[]; // the buildings with trees on their sun: what the yield and so the design use. The map keeps `buildings`
   meterPhoto?: string; // the homeowner's photo of the meter cabinet, kept in the page and never sent to the engine
   checked?: string[]; // site checks the planner has ticked
   ref?: string; // the reference the homeowner was shown after sending, so a call can find the request
@@ -47,7 +51,8 @@ export type Progress = { opened: boolean; offer: Offer | null };
 export type Mine = { ref: string; label: string; sentAt: number; handoff: Handoff } & Progress;
 /** Solar already on the building: size and year as the customer gave them, else the area they marked and the sun it gets. */
 export type Existing = { kwp: number | null; year: number | null; battery_kwh: number | null; m2?: number | null; kwh_per_kwp?: number | null };
-export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string; seed?: { opened?: boolean; offer?: Offer | null } }; // seed: demo requests that arrive already opened or offered
+export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string; seed?: { opened?: boolean; offer?: Offer | null };
+  shared?: Shared; roof?: RoofNumbers | null }; // shared: what the homeowner chose to send (share.ts); roof: a few roof numbers instead of the home // seed: demo requests that arrive already opened or offered
 
 const TYPICAL_KM = 11300;
 const FOSSIL_HEAT = ["Gas", "Oil", "OtherNonRenewable"]; // heating with a boiler whose age the customer may give

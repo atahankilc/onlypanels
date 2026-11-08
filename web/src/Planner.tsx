@@ -1,8 +1,8 @@
-import { isValidElement, useEffect, useRef, useState } from "react";
+import { isValidElement, useEffect, useMemo, useRef, useState } from "react";
 import { GAS_CT, View, surfaceKey } from "./api";
 import { Monument, monumentOf } from "./monument";
 import { HeatPlan, heatPlanOf } from "./heatPlan";
-import { Shade, treeShadeOf } from "./treeShade";
+import { Shade, withTrees } from "./treeShade";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
 import { advise, Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
@@ -71,6 +71,14 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
   useEffect(() => { fetch("/api/scores").then((r) => r.json()).then(setScores).catch(() => undefined); }, []);
   // Every homeowner request reaches the desk once, newest on top. One already on the desk keeps the planner's work.
   useEffect(() => { setRequests((l) => handoffs.filter((h) => h.buildings.length).map(fromHomeowner).reduce((acc, r) => (acc.some((x) => x.id === r.id) ? acc : [r, ...acc]), l)); }, [handoffs]);
+  // Once a request is on the desk, trees from Bavaria's tree map go onto its sun, once: the yield, the design and the checks then carry them.
+  const shading = useRef(new Set<string>());
+  useEffect(() => {
+    for (const r of requests) if (!r.shade && !shading.current.has(r.id)) {
+      shading.current.add(r.id);
+      withTrees(r.buildings).then(({ buildings, shade }) => update(r.id, { shaded: buildings, shade }));
+    }
+  }, [requests]);
   // The homeowner follows their request: opened by a planner, then the offer once it is sent.
   useEffect(() => { requests.forEach((r) => r.ref && onProgress?.(r.ref, { opened: !!r.opened, offer: r.status === "sent" ? r.offer ?? null : null })); }, [requests]);
   useEffect(() => { if (openId) update(openId, { opened: true }); }, [openId]);
@@ -99,7 +107,7 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
 }
 
 function Line({ r, open }: { r: Request; open: () => void }) {
-  const [roof] = useState(() => roofOf(r.buildings, r.installed, r.priority, r.taken));
+  const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, r.taken), [r.shaded, r.buildings, r.installed, r.priority, r.taken]); // trees reach the sun after arrival
   const out = useDesign(r, roof);
   // The same count Checks shows: only facts this design uses.
   const assumed = out ? toConfirm(r, out.d).length : Object.values(r.sources).filter((s) => s === "assumed").length;
@@ -155,7 +163,7 @@ const SOURCE_LONG: Record<Source, string> = { customer: "from the customer", ass
 function Workspace({ r, update, back, scores }: { r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null }) {
   const [tab, setTab] = useState<Tab>("design");
   const [step, setStep] = useState<"pick" | "review">("pick");
-  const [roof] = useState(() => roofOf(r.buildings, r.installed, r.priority, r.taken));
+  const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, r.taken), [r.shaded, r.buildings, r.installed, r.priority, r.taken]); // trees reach the sun after arrival
   const [view, setView] = useState<View>({ layer: "photo", moment: null });
   const [face, setFace] = useState<Face | null>(null);
   const done = r.checked ?? [], setDone = (checked: string[]) => update(r.id, { checked });
@@ -166,9 +174,6 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   // Munich's heat plan at the home, asked the same way: by the page, from the city's map server.
   const [heatPlan, setHeatPlan] = useState<HeatPlan | null>(null);
   useEffect(() => { let live = true; setHeatPlan(null); heatPlanOf(r.buildings).then((p) => live && setHeatPlan(p)); return () => { live = false; }; }, [r.id]);
-  // Trees that may shade the roof, from Bavaria's tree map, fetched by whole 2 km squares once the request is here.
-  const [shade, setShade] = useState<Shade | null>(null);
-  useEffect(() => { let live = true; setShade(null); treeShadeOf(r.buildings).then((t) => live && setShade(t)); return () => { live = false; }; }, [r.id]);
   const first = useRef<Design | null>(null);
   if (out && !first.current) first.current = out.d;
   const d = out?.d;
@@ -196,7 +201,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const toggle = (key: string) => { if (roof.some((x) => x.key === key)) mark(r.off.includes(key) ? "Roof surface added" : "Roof surface taken out"); if (roof.some((x) => x.key === key)) update(r.id, { off: r.off.includes(key) ? r.off.filter((k) => k !== key) : [...r.off, key] }); };
   const walls = r.buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => s.kind === "wall").map((s) => surfaceKey(b, s)));
   const chosen = [...walls, ...roof.filter((x) => !r.off.includes(x.key)).map((x) => x.key)];
-  const checks = d ? checkList(r, d, monument, heatPlan, shade) : [];
+  const checks = d ? checkList(r, d, monument, heatPlan, r.shade ?? null) : [];
   const confirm = d ? toConfirm(r, d) : [];
   const warns = d ? d.review.filter((n) => n.level === "warn") : [];
   const left = confirm.length + checks.filter((c) => !done.includes(c.id)).length;
@@ -318,17 +323,17 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
   return list;
 }
 
-/** Trees from Bavaria's tree map that rise above the roof towards the sun, worded as a check. The sun figures leave trees out. */
+/** Trees from Bavaria's tree map on the roof's sun, worded as a check. Their loss is already in the yield, the design and the energy check. */
 function shadeCheck(t: Shade | null): { id: string; title: string; why: string } {
-  if (!t) return { id: "trees", title: "Check trees that shade the roof", why: "Loading Bavaria's tree map…" };
+  if (!t) return { id: "trees", title: "Check trees that shade the roof", why: "Putting trees from Bavaria's tree map on the roof's sun…" };
   const m = (v: number | null) => (v == null ? "" : `${Math.round(v)} m`);
-  const which = t.surfaces.map((s) => s.name.toLowerCase()).join(", ");
+  const which = t.surfaces.map((s) => `${s.name.toLowerCase()} loses ${Math.round(s.lost * 100)}%`).join(", ");
   const trees = `${t.trees} ${t.trees === 1 ? "tree" : "trees"} up to ${m(t.tallest)} tall, the closest ${m(t.nearest)} away`;
-  const after = "The roof's sun figures leave trees out, so yield there will be lower than shown. Look at the photo and ask whether they stay.";
-  if (t.status === "much") return { id: "trees", title: "Trees shade the roof", why: `Bavaria's tree map has ${trees}, rising well above the roof towards the sun for much of the year. Affected: ${which}. ${after}` };
-  if (t.status === "some") return { id: "trees", title: "Trees may shade the roof in winter", why: `Bavaria's tree map has ${trees}, high enough to block the low winter sun. Affected: ${which}. ${after}` };
-  if (t.status === "none") return { id: "trees", title: "Check trees that shade the roof", why: "No tree on Bavaria's tree map (2024) stands high enough towards the sun to shade the roof. Trees under 5.5 m and newer ones are not on it." };
-  return { id: "trees", title: "Check trees that shade the roof", why: "Bavaria's tree map could not be loaded. Look for trees on the photo." };
+  const after = "This is already in the yield, the design and the energy estimate. Look at the photo and ask whether the trees stay; without them the roof gets more.";
+  if (t.status === "much") return { id: "trees", title: "Trees shade the roof", why: `Of the yearly sun, ${which}: ${trees}, on Bavaria's tree map. ${after}` };
+  if (t.status === "some") return { id: "trees", title: "Trees take some of the roof's sun", why: `Of the yearly sun, ${which}: ${trees}, on Bavaria's tree map. ${after}` };
+  if (t.status === "none") return { id: "trees", title: "Check trees that shade the roof", why: "No tree on Bavaria's tree map (2024) takes more than a trace of the roof's sun. Trees under 5.5 m and newer ones are not on it." };
+  return { id: "trees", title: "Check trees that shade the roof", why: "Bavaria's tree map could not be loaded, so the roof's sun leaves trees out. Look for trees on the photo." };
 }
 
 /** What Munich's heat plan says at the home, worded as a check. Where a heat network is coming, a heat pump may be the wrong offer. */
