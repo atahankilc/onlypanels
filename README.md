@@ -2,7 +2,7 @@
 
 OnlyPanels is our thinc! München 2026 hackathon entry for Reonic. A homeowner describes their home, and a planner gets a solar, battery, wallbox and heat pump design the way an expert would propose it, with every fact and number traceable.
 
-**Pitch slides:** [`OnlyPanels-pitch.pdf`](OnlyPanels-pitch.pdf)
+**Pitch slides:** [`OnlyPanels-pitch.pdf`](OnlyPanels-pitch.pdf) · [`OnlyPanels-pitch.pptx`](OnlyPanels-pitch.pptx)
 
 > **AI is smart enough. What it lacks is context.** OnlyPanels gathers every fact about a home it can find, with or without the owner's address, so the first design is one an expert would sign.
 
@@ -94,7 +94,7 @@ Without keys, everything runs on rules. `ANTHROPIC_API_KEY` adds:
 
 Tests: `uv run pytest`.
 
-Pitch slides: `docs/pitch/deck.html` is the source; `OnlyPanels-pitch.pdf` is printed from it in headless Chrome at 1920 × 1080 (screenshots in `docs/pitch/img/` are of the seeded demo requests). Eight slides: intro, the same-request finding, the fused draft, the home staying in the browser, every data source we use, AI next to the deterministic engine, team, close.
+Pitch slides: `docs/pitch/deck.html` is the source; `OnlyPanels-pitch.pdf` is printed from it in headless Chrome at 1920 × 1080 (screenshots in `docs/pitch/img/` are of the seeded demo requests). Eight slides: intro, team, the same-request finding, the fused draft, the home staying in the browser, every data source we use, AI next to the deterministic engine, close. `OnlyPanels-pitch.pptx` holds the same slides as images, for presenting from PowerPoint, Keynote or Google Slides.
 
 ## Known limitations
 
