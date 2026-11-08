@@ -30,7 +30,7 @@ export default function Offer({ r, d, costs, first, roof, panels, facts, conditi
   return <>
     <div className={`offer-status ${sent ? "is-sent" : toConfirm ? "is-todo" : "is-ready"}`}>
       <div><b>{sent ? "Sent to the homeowner" : toConfirm ? `${toConfirm} assumed ${toConfirm === 1 ? "fact" : "facts"} to confirm first` : "Ready to send"}</b>
-        <small>{sent ? "Change anything and it reopens as a draft." : toConfirm ? "Confirm them in Checks; the offer below updates as you go." : "This is the page the homeowner gets. Open site checks print as conditions."}</small></div>
+        <small>{sent ? "Change anything and it reopens as a draft." : toConfirm ? "Confirm them at the top of Design; the offer below updates as you go." : "This is the page the homeowner gets. Open site checks print as conditions."}</small></div>
       <Button onClick={() => window.print()}>Print or PDF</Button>
       {!sent && <Button variant="solid" disabled={toConfirm > 0} onClick={send}>Approve and send</Button>}
     </div>
@@ -52,7 +52,7 @@ export default function Offer({ r, d, costs, first, roof, panels, facts, conditi
           {money ? <tr><th scope="row">Saving in the first year</th><td>about {eur(money.year1.total_eur)}, after upkeep{money.year1.meter_eur ? ", the smart meter" : ""} and unpaid negative-price hours{money.fuel ? `, with the ${money.fuel.kind} no longer bought` : ""}</td></tr>
             : <tr><th scope="row">Electricity saving</th><td>about €{e.saving_eur.toLocaleString("en")} at {r.inputs.price_ct_kwh} ct per kWh</td></tr>}
         </tbody></table>
-        <p className="fine">Estimates, not promises: {r.buildings.length ? "measured sun and shade for this roof" : r.inputs.roof_azimuth != null ? "PVGIS sun for a roof of this direction and slope, without shade, since the home was not shared" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}, assumed hourly use, {FEED} ct for electricity sold to the grid, none in hours when the exchange price is negative; the rate for systems switched on from 2027 is not settled yet. The home stays connected to the grid. {d.pv.kwp > 7 ? "A smart meter and control box are required; until they are fitted, the grid feed is limited to 60% of the system's power." : "Without a smart meter, the grid feed is limited to 60% of the system's power."}{d.heatpump.included && !money ? " The saving counts electricity only, not the gas or oil no longer bought." : ""}</p>
+        <p className="fine">Estimates, not promises: {r.buildings.length ? "measured sun and shade for this roof" : r.inputs.roof_azimuth != null ? "PVGIS sun for a roof of this direction and slope, without shade, since the home was not shared" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}, assumed hourly use, {money ? money.year1.feed_full_ct : FEED} ct for electricity sold to the grid, none in hours when the exchange price is negative; the rate for systems switched on from 2027 is not settled yet. The home stays connected to the grid. {d.pv.kwp > 7 ? "A smart meter and control box are required; until they are fitted, the grid feed is limited to 60% of the system's power." : "Without a smart meter, the grid feed is limited to 60% of the system's power."}{d.heatpump.included && !money ? " The saving counts electricity only, not the gas or oil no longer bought." : ""}</p>
       </section>
 
       {money && <section><h4>Price and payback</h4>

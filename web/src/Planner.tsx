@@ -208,7 +208,9 @@ const fmt = (r: Request, k: string, d: Design): string => {
   const i = r.inputs as unknown as Record<string, unknown>, v = i[k];
   if (k === "demand_kwh") {
     const from = i.demand_source === "payment" ? "from the monthly payment" : i.demand_source === "range" ? "from a range the customer picked" : i.demand_source === "people" ? "from the household size" : "stand-in";
-    return v == null ? `${(d.energy.base_mwh * 1000).toLocaleString("en")} kWh (${from})` : `${Number(v).toLocaleString("en")} kWh${i.demand_source && i.demand_source !== "bill" ? ` (${from})` : ""}`;
+    const counted = Math.round(d.energy.base_mwh * 10) * 100, more = v != null && counted > Number(v) + 50 && (i.big_users as string[] | undefined)?.length
+      ? `; with ${(i.big_users as string[]).map((x) => BIG[x] ?? x).join(" and ")} the design counts ${counted.toLocaleString("en")} kWh` : "";
+    return v == null ? `${(d.energy.base_mwh * 1000).toLocaleString("en")} kWh (${from})` : `${Number(v).toLocaleString("en")} kWh${i.demand_source && i.demand_source !== "bill" ? ` (${from})` : ""}${more}`;
   }
   if (k === "heat_kwh") return v != null ? `${Number(v).toLocaleString("en")} kWh` : `${(Math.round((d.energy.heat_mwh ?? 15) * 10) * 100).toLocaleString("en")} kWh (${i.living_m2 && (i.built || i.area_built || i.cert_kwh_m2) && !d.review.some((n) => n.code === "model_area_large") ? "estimated from the house" : "stand-in"})`;
   if (k === "installer") return INSTALLERS.find(([x]) => x === v)?.[1] ?? String(v);
@@ -235,7 +237,7 @@ const fmt = (r: Request, k: string, d: Design): string => {
   return v ? "yes" : "no";
 };
 /** Facts that matter for this design and were not given by anyone: they must be confirmed before the offer leaves. */
-const relevant = (r: Request, d: Design) => Object.keys(r.sources).filter((k) => (k !== "heat_kwh" || d.heatpump.included) && (k !== "ev_km" || r.inputs.ev));
+const relevant = (r: Request, d: Design) => Object.keys(r.sources).filter((k) => (!["heat_kwh", "living_m2", "built"].includes(k) || d.heatpump.included) && (k !== "ev_km" || r.inputs.ev));
 const EXTRA = ["owner", "backup", "wants_hp", "electric_heat_meter", "ev_when", "home_day", "ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "hp_kwh", "heat_dist", "boiler_age", "big_users", "living_m2", "cert_kwh_m2", "built", "goal"];
 /** What the planner must confirm before the offer leaves: assumed facts this design uses, and a living area guessed
  * from the 3D model when a heat pump is sized from it. The request list counts the same. */
@@ -417,7 +419,7 @@ function Workspace({ r, update, back, scores, veiled = false, leaving = false, o
         {d && tab === "offer" && <Offer r={r} d={d} costs={costs} first={first.current} roof={roof} panels={out?.panels ?? {}} toConfirm={confirm.length} allowed={allowed} setAllowed={(a) => update(r.id, { allowed: a } as Partial<Request>)} send={send}
           conditions={tasks.filter((c) => !done.includes(c.id)).map((c) => c.title)}
           facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]),
-            ...EXTRA.filter((k) => !r.sources[k] && sourceOf(r, k) && (r.inputs.ev || !k.startsWith("ev_") && k !== "has_wallbox")).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[sourceOf(r, k)!]] as [string, string, string]), home ? ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"] : ["Roof", r.roofNumbers ? roofWords(r.roofNumbers) : "not shared", r.roofNumbers ? (r.roofNumbers.told ? "from the customer's description" : "from the customer, rounded") : "to be confirmed"]]} />}
+            ...EXTRA.filter((k) => !r.sources[k] && sourceOf(r, k) && (r.inputs.ev || !k.startsWith("ev_") && k !== "has_wallbox") && (d.heatpump.included || !["living_m2", "built"].includes(k))).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[sourceOf(r, k)!]] as [string, string, string]), home ? ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"] : ["Roof", r.roofNumbers ? roofWords(r.roofNumbers) : "not shared", r.roofNumbers ? (r.roofNumbers.told ? "from the customer's description" : "from the customer, rounded") : "to be confirmed"]]} />}
       </div>
       {/* The one main action, always in reach. The way back is the arrow at the top left only: a second "Requests" button here read as a new request. */}
       <div className="stick">
