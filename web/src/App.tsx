@@ -1,16 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import FindHome from "./FindHome";
 import { Mark } from "./icons";
+import { loadDemo } from "./demo";
 import { Handoff, Mine, Progress } from "./plan";
 import Planner from "./Planner";
 import { Button, Segmented } from "./ui";
 
 export default function App() {
   const [view, setView] = useState<"homeowner" | "planner">("homeowner");
-  const [handoff, setHandoff] = useState<Handoff | null>(null);
+  const [handoffs, setHandoffs] = useState<Handoff[]>([]);
   // The homeowner's requests and how far each is. The planner reports progress; a remounted planner never takes it back.
   const [mine, setMine] = useState<Mine[]>([]);
-  const sent = (h: Handoff) => { setHandoff(h); if (h.ref) setMine((l) => [{ ref: h.ref!, label: h.buildings[0]?.label ?? "Home", sentAt: Date.now(), opened: false, offer: null }, ...l.filter((x) => x.ref !== h.ref)]); };
+  const sent = (h: Handoff, sentAt = Date.now()) => {
+    setHandoffs((l) => [...l.filter((x) => x.ref !== h.ref), h]);
+    if (h.ref) setMine((l) => [{ ref: h.ref!, label: h.buildings[0]?.label ?? "Home", sentAt, opened: false, offer: null }, ...l.filter((x) => x.ref !== h.ref)].sort((a, b) => b.sentAt - a.sentAt));
+  };
+  // The demo starts with three requests on real homes, oldest first, as if their homeowners had sent them.
+  useEffect(() => { loadDemo().then((list) => [...list].sort((a, b) => a.sentAt - b.sentAt).forEach((h) => sent(h, h.sentAt))).catch(() => undefined); }, []);
   const progress = (ref: string, p: Progress) => setMine((l) => l.map((x) => (x.ref === ref ? { ...x, opened: x.opened || p.opened, offer: p.offer ?? x.offer } : x)));
   const [dark, setDark] = useState(localStorage.getItem("theme") !== "light");
   useEffect(() => { document.documentElement.dataset.theme = dark ? "dark" : "light"; localStorage.setItem("theme", dark ? "dark" : "light"); }, [dark]);
@@ -37,7 +43,7 @@ export default function App() {
         </div>
       </header>
       <FindHome dark={dark} onSend={sent} requests={mine} />
-      {view === "planner" && <Planner dark={dark} handoff={handoff} onProgress={progress} />}
+      {view === "planner" && <Planner dark={dark} handoffs={handoffs} onProgress={progress} />}
     </div>
   );
 }
