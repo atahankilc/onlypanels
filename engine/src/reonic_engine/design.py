@@ -7,6 +7,7 @@ import datetime
 
 import numpy as np
 import pandas as pd
+from threadpoolctl import threadpool_limits
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 
 from .data import ASSUMED_KWP_PER_MODULE, battery_catalog
@@ -154,22 +155,40 @@ class Engine:
         tiers = snap(b.battery_kwh.values, b.installer.values, self.catalog)
         return {i: float(pd.Series(t).mode().iloc[0]) for i, t in pd.Series(tiers).groupby(b.installer.values)}
 
+    def _ask(self, model, how, x):
+        """A model's answer for one home, remembered: the review and the money choice run the same home through the
+        models dozens of times with only the planner's choices changed. Same rows, same answer; many rows go straight through."""
+        if len(x) > 64:
+            return getattr(model, how)(x)
+        # A few rows on one thread: sklearn's threads cost about 27 ms a call for one row, against 0.5 ms on one thread.
+        if len(x) != 1:
+            with threadpool_limits(1):
+                return getattr(model, how)(x)
+        memo = self.__dict__.setdefault("_memo", {})
+        key = (id(model), how, tuple(x.iloc[0].tolist()))
+        if key not in memo:
+            if len(memo) > 20000:
+                memo.clear()
+            with threadpool_limits(1):
+                memo[key] = getattr(model, how)(x)
+        return memo[key].copy()
+
     def predict(self, d, added_mwh=0.0, max_modules=None, kwp_lock=None, extra_kwp=0.0):
         """Vectorised core. Returns kWp, battery kWh and battery probability. extra_kwp: solar already there, which the battery also stores."""
         demand = d.demand_mwh + added_mwh
-        kwp = self.kwp.predict(_x(d, demand))
+        kwp = self._ask(self.kwp, "predict", _x(d, demand))
         if max_modules is not None:
             kwp = np.minimum(kwp, max_modules * ASSUMED_KWP_PER_MODULE)
         if kwp_lock is not None:
             kwp = np.full(len(d), float(kwp_lock))
         xb = _x(d, demand).assign(kwp=kwp + extra_kwp)
-        battery = snap(self.battery.predict(xb), d.installer.values, self.catalog)
+        battery = snap(self._ask(self.battery, "predict", xb), d.installer.values, self.catalog)
         if kwp_lock is None:
             # Experts mostly sell their usual size: dev cross-validation, exact size 20% to 38% at both installers,
             # and a smaller gap. Not when the planner fixed solar: then the size learned from solar is closer.
             habit = np.array([self.habit.get(i, np.nan) for i in d.installer.values])
             battery = np.where((battery > 0) & (np.abs(battery - habit) <= HABIT_KWH), habit, battery)
-        return kwp, battery, self.has_battery.predict_proba(xb)[:, 1]
+        return kwp, battery, self._ask(self.has_battery, "predict_proba", xb)[:, 1]
 
     def near(self, installer, demand_mwh, car=False):
         """Past expert designs at this installer for homes with about this yearly use. With a car, homes that bought a wallbox,
