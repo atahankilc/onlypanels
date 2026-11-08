@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Answers, GAS_CT, PRICE_CT, Selected, modelM2 } from "./api";
+import { Answers, GAS_CT, PRICE_CT, Selected, modelM2, shrinkPhoto } from "./api";
 import { Face } from "./HomeMap";
 import { Mine } from "./plan";
 import { Status, day, stepOf } from "./Requests";
@@ -63,6 +63,9 @@ export default function Review({ refId, progress, done, stage, setStage, answers
   const answer = (change: Partial<Answers>, _done = true) => setAnswers({ ...a, ...change });
 
   const panel = useRef<HTMLElement>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const takePhoto = (file: File | undefined) => file && shrinkPhoto(file).then((meter_photo) => { setPhotoFailed(false); setAnswers({ ...a, meter_photo }); }).catch(() => setPhotoFailed(true));
   useEffect(() => {
     panel.current?.scrollTo(0, 0);
     if (matchMedia("(pointer: fine)").matches) panel.current?.querySelector<HTMLInputElement>(".answers input")?.focus();
@@ -129,6 +132,7 @@ export default function Review({ refId, progress, done, stage, setStage, answers
         ["Home in the day", yes(a.ev_day, "Often", "Rarely")], ["Wallbox", yes(a.has_wallbox, "Already there", "Not yet")]]] as [string, Stage, [string, string][]]] : []),
       ["What matters most", "goal", [["Priority", GOALS.find((x) => x[0] === a.goal)?.[1] ?? no], ["Power in an outage", yes(a.backup, "Wanted", "Not needed")]]],
     ];
+    if (!editable) groups.push(["Meter cabinet", "send", [["Photo", a.meter_photo ? "Added" : no]]]);
     return { missing: groups.flatMap(([, , rows]) => rows).filter(([, v]) => v === no).length, view: <div className="overview">
       {groups.map(([title, to, rows]) => <section key={to}>
         <header><h2>{title}</h2>{editable && <button type="button" className="textlink" onClick={() => { setFromOverview(true); go(to); }}>Change</button>}</header>
@@ -143,6 +147,17 @@ export default function Review({ refId, progress, done, stage, setStage, answers
       <h1>Is everything right?</h1>
       <p className="muted">An installer plans your system from this and sends you an offer. "Not given" is fine: they will ask you.</p>
       {summary(true).view}
+      <section className="photo-ask">
+        <h2>A photo of your meter cabinet<span className="opt">Optional</span></h2>
+        <p className="small muted">Open the cabinet door and take one photo of the whole cabinet. It shows the installer whether the cabinet needs work, often without a visit.</p>
+        {a.meter_photo && <img className="photo-preview" src={a.meter_photo} alt="Your meter cabinet" />}
+        <input ref={photoInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { takePhoto(e.target.files?.[0]); e.target.value = ""; }} />
+        <div className="pair">
+          <Button size="lg" wide onClick={() => photoInput.current?.click()}>{a.meter_photo ? "Take another" : "Add a photo"}</Button>
+          {a.meter_photo && <Button size="lg" wide onClick={() => setAnswers({ ...a, meter_photo: null })}>Remove</Button>}
+        </div>
+        {photoFailed && <p className="error small">That file could not be read as a photo.</p>}
+      </section>
       <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={() => go("sent")}>Send to an installer</Button></div>
     </aside>
   );

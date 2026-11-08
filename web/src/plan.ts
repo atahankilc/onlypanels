@@ -21,6 +21,7 @@ export type Design = {
 };
 export type Source = "customer" | "assumed" | "planner";
 export type Request = {
+  meterPhoto?: string; // the homeowner's photo of the meter cabinet, kept in the page and never sent to the engine
   checked?: string[]; // site checks the planner has ticked
   ref?: string; // the reference the homeowner was shown after sending, so a call can find the request
   id: string; label: string; from: string; buildings: Selected[]; inputs: Inputs; sources: Record<string, Source>; overrides: Overrides;
@@ -64,6 +65,7 @@ export function fromHomeowner(h: Handoff): Request {
   // Collectors for hot water take roof area but make no electricity: their area stays taken, but they are not an existing solar system.
   const thermal = !!a.has_solar && a.solar_kind === "thermal";
   return {
+    meterPhoto: a.meter_photo ?? undefined,
     id: h.ref ? `homeowner-${h.ref}` : "homeowner", ref: h.ref, label: buildings[0]?.label ?? "Home", from: "Homeowner", buildings, status: h.seed?.offer ? "sent" : "draft", opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? undefined,
     inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating, heat_kwh: a.heat_kwh, hp_kwh: a.heating === "Heatpump" ? a.hp_kwh : null, has_solar: !!a.has_solar && !thermal, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM * (a.ev_count ?? 1),
       ev_kwh_month: a.ev && !a.ev_planned ? a.ev_kwh_month : null, ev_charge_home: car ? a.ev_charge_home : null, ev_day: car ? a.ev_day : null, has_wallbox: car ? a.has_wallbox : null,

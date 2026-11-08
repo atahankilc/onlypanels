@@ -219,6 +219,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
           <h3>To check before installation</h3>
           <p className="small muted">Open items print on the offer as conditions. Tick what you have checked.</p>
           <ul className="tasks">{checks.map((c) => <li key={c.id}><Check checked={done.includes(c.id)} onChange={(v) => setDone(v ? [...done, c.id] : done.filter((x) => x !== c.id))}><b>{c.title}</b><small>{c.why}</small></Check></li>)}</ul>
+          {r.meterPhoto && <figure className="cabinet"><img src={r.meterPhoto} alt="The customer's meter cabinet" /><figcaption className="small muted">Meter cabinet, photo from the customer.</figcaption></figure>}
         </>}
         {d && tab === "offer" && <Offer r={r} d={d} first={first.current} roof={roof} panels={out?.panels ?? {}} toConfirm={confirm.length} allowed={allowed} setAllowed={(a) => update(r.id, { allowed: a } as Partial<Request>)} send={send}
           conditions={checks.filter((c) => !done.includes(c.id)).map((c) => c.title)}
@@ -272,7 +273,7 @@ function checkList(r: Request, d: Design) {
   if (i.solar_thermal) list.push({ id: "thermal", title: "Hot water collectors on the roof", why: "The customer has solar collectors for hot water. Their area is left out; check where they sit and whether they stay." + (i.has_solar ? " The marked area also holds solar panels, so a size from the area is too high." : "") });
   if (i.backup) list.push({ id: "backup", title: "Backup power wanted", why: "Pick an inverter and battery that can run the home in an outage, with a backup box. About 1 in 7 past projects had one." });
   list.push({ id: "monument", title: "Check monument status", why: "Not in our data." });
-  list.push({ id: "grid", title: "Check the grid connection and meter cabinet", why: "Not in our data." });
+  list.push({ id: "grid", title: "Check the grid connection and meter cabinet", why: r.meterPhoto ? "The customer sent a photo of the meter cabinet, below. The grid connection is not in our data." : "Not in our data. No photo of the meter cabinet was sent." });
   // KfW 458 speed bonus (secondary sources, November 2026): oil, coal and electric storage heating at any age, gas once 20 years
   // in use, for owners living in the home. Its rate falls every half year from July 2026, so no figure is shown.
   const age = r.inputs.boiler_age, heat = r.inputs.heating;
