@@ -28,11 +28,12 @@ export default function Offer({ r, d, costs, first, roof, panels, facts, conditi
   const e = d.energy, sent = r.status === "sent";
   const money = costs && costs.design.modules === d.pv.modules && costs.design.battery_kwh === d.battery.kwh ? costs : null; // only while it prices this design
   return <>
-    <div className="offer-actions">
-      <Button onClick={() => window.print()}>Print or save as PDF</Button>
-      <Button variant="solid" disabled={toConfirm > 0 || sent} onClick={send}>{sent ? "Sent" : "Approve and send"}</Button>
+    <div className={`offer-status ${sent ? "is-sent" : toConfirm ? "is-todo" : "is-ready"}`}>
+      <div><b>{sent ? "Sent to the homeowner" : toConfirm ? `${toConfirm} assumed ${toConfirm === 1 ? "fact" : "facts"} to confirm first` : "Ready to send"}</b>
+        <small>{sent ? "Change anything and it reopens as a draft." : toConfirm ? "Confirm them in Checks; the offer below updates as you go." : "This is the page the homeowner gets. Open site checks print as conditions."}</small></div>
+      <Button onClick={() => window.print()}>Print or PDF</Button>
+      {!sent && <Button variant="solid" disabled={toConfirm > 0} onClick={send}>Approve and send</Button>}
     </div>
-    {toConfirm > 0 && <p className="flag">{toConfirm} assumed {toConfirm === 1 ? "fact needs" : "facts need"} your confirmation before this can be sent. See Checks.</p>}
 
     <article className="offer-sheet">
       <header><small>{sent ? "Offer" : "Offer draft"}{r.ref ? ` · ${r.ref}` : ""} · {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</small><h2>{r.label}</h2></header>

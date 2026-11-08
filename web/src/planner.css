@@ -325,3 +325,37 @@
 .fold .agent > .agent-head { display: none; }
 .fold-body > h3 { margin-top: 4px; padding-top: 14px; }
 .fold-body > h3:first-child { padding-top: 0; border-top: 0; }
+
+/* Home: where the facts come from, at a glance; an assumed fact is marked on its field too. */
+.facttally { display: flex; flex-wrap: wrap; gap: 6px; }
+.facttally span { display: inline-flex; align-items: baseline; gap: 5px; padding: 5px 11px; border-radius: 999px; background: var(--hud-fill); font-size: 12.5px; color: var(--hud-ink-2); }
+.facttally b { font-weight: 650; color: var(--hud-ink); }
+.facttally .is-assumed { background: color-mix(in srgb, var(--hud-warn) 14%, transparent); color: var(--hud-warn); } .facttally .is-assumed b { color: var(--hud-warn); }
+.facttally .is-planner { background: color-mix(in srgb, var(--hud-route) 14%, transparent); }
+.fact.is-assumed .control, .fact.is-assumed .seg { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hud-warn) 55%, transparent); }
+.facts > h3.span:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.fold .facts { margin: 0; }
+
+/* Checks: how far along, the facts to confirm in one card, the site checks by topic. */
+.progress { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.progress > div { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--hud-fill); }
+.progress span { font-size: 12px; color: var(--hud-ink-2); }
+.progress b { font: 600 14.5px/1.25 var(--font-ui); color: var(--hud-ink); }
+.progress .todo b { color: var(--hud-warn); } .progress .ok b { color: var(--hud-live); }
+.progress i { height: 5px; margin-top: 4px; border-radius: 999px; background: var(--hud-fill-2); overflow: hidden; }
+.progress i em { display: block; height: 100%; border-radius: inherit; background: var(--hud-live); transition: width 0.3s var(--ease); }
+.confirmcard { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px 6px; border: 1px solid color-mix(in srgb, var(--hud-warn) 40%, transparent); border-radius: 16px; background: color-mix(in srgb, var(--hud-warn) 6%, transparent); }
+.confirmcard > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.deskbody .confirmcard h3 { margin: 0; padding: 0; border: 0; font-size: 15px; }
+.checkgroup h4 { display: flex; align-items: baseline; justify-content: space-between; margin: 6px 0 2px; font: 600 13px var(--font-ui); color: var(--hud-ink-2); }
+.checkgroup h4 small { font-weight: 500; color: var(--hud-ink-3); }
+.tasks li.done b { color: var(--hud-ink-2); text-decoration: line-through; text-decoration-color: var(--hud-ink-3); }
+
+/* Offer: one status card with the actions. */
+.offer-status { display: flex; align-items: center; gap: 8px; padding: 12px 12px 12px 16px; border-radius: 16px; background: var(--hud-fill); }
+.offer-status > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.offer-status b { font: 600 14.5px/1.25 var(--font-ui); }
+.offer-status small { font-size: 12px; line-height: 1.35; color: var(--hud-ink-2); }
+.offer-status.is-todo { background: color-mix(in srgb, var(--hud-warn) 10%, transparent); } .offer-status.is-todo b { color: var(--hud-warn); }
+.offer-status.is-ready b, .offer-status.is-sent b { color: var(--hud-live); }
+@media print { .offer-status { display: none; } }

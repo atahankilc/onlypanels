@@ -343,21 +343,12 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
         {d && tab === "design" && <><Brief d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
             energy={<Fold title="Energy in a year" summary={`Makes ${d.energy.production_mwh.toFixed(1)} MWh against ${d.energy.total_mwh.toFixed(1)} MWh needed; ${d.energy.self_sufficiency_pct}% from own power`}><Energy d={d} inputs={r.inputs} measured={home} /></Fold>} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /></>}
-        {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, withPhotoSolar(r, obstacles)); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
+        {tab === "home" && <><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, withPhotoSolar(r, obstacles)); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "cost" && (pricing ? <PriceBook installer={r.inputs.installer} close={() => setPricing(false)} />
           : <CostTab c={costs} failed={costsFailed} money={moneyOf(r)} setMoney={(money: Money) => update(r.id, { money } as Partial<Request>)} sent={r.status === "sent"}
             use={(change: Record<string, unknown>, label: string) => setO(change as Overrides, label)} prices={() => setPricing(true)} />)}
-        {d && tab === "checks" && <>
-          <h3>Confirm before sending</h3>
-          {confirm.length ? <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm"><div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>{k === "demand_kwh" && r.inputs.demand_source && r.inputs.demand_source !== "bill" && r.inputs.demand_source !== "unknown" ? "Not from a bill. " : k === "heat_kwh" && r.inputs.gas_eur ? `Worked out from €${Math.round(r.inputs.gas_eur).toLocaleString("en")} of gas a year at ${GAS_CT} ct per kWh all in. ` : "Assumed: nobody gave this. "}{k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : k === "living_m2" ? "Estimated from the 3D model; the heat estimate, and so the heat pump, follows it." : k === "built" ? "The customer did not say; the census's most common period nearby stands in for the heat estimate." : "It changes the design."}</small></div>
-            <Button onClick={() => update(r.id, { sources: { ...r.sources, [k]: "planner" } })}>Confirm</Button><Button variant="plain" onClick={() => setTab("home")}>Change</Button></li>)}</ul>
-            : <p className="small muted">Every fact the design uses is from the customer or confirmed by you.</p>}
-          {warns.length > 0 && <><h3>Points from the review</h3>{warns.map((n) => <p key={n.code} className="flag">{n.text}</p>)}</>}
-          <h3>To check before installation</h3>
-          <p className="small muted">Open items print on the offer as conditions. Tick what you have checked.</p>
-          <ul className="tasks">{checks.map((c) => <li key={c.id}><Check checked={done.includes(c.id)} onChange={(v) => setDone(v ? [...done, c.id] : done.filter((x) => x !== c.id))}><b>{c.title}</b><small>{c.why}</small></Check></li>)}</ul>
-          {r.meterPhoto && <figure className="cabinet"><img src={r.meterPhoto} alt="The customer's meter cabinet" /><figcaption className="small muted">Meter cabinet, photo from the customer.</figcaption></figure>}
-        </>}
+        {d && tab === "checks" && <Checks r={r} d={d} confirm={confirm} checks={checks} done={done} setDone={setDone} warns={warns.map((n) => ({ code: n.code, text: n.text }))}
+          confirmFacts={(keys) => update(r.id, { sources: { ...r.sources, ...Object.fromEntries(keys.map((k) => [k, "planner" as Source])) } })} change={() => setTab("home")} />}
         {d && tab === "offer" && <Offer r={r} d={d} costs={costs} first={first.current} roof={roof} panels={out?.panels ?? {}} toConfirm={confirm.length} allowed={allowed} setAllowed={(a) => update(r.id, { allowed: a } as Partial<Request>)} send={send}
           conditions={checks.filter((c) => !done.includes(c.id)).map((c) => c.title)}
           facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]),
@@ -597,9 +588,47 @@ function RoofTab({ r, roof, d, off, panels, toggle, face, setFace, view, setView
 
 /** A fact with its source. A button group gets no <label> around it: a label would name every button after the
  * whole question, and a click on the question would press the first button. The group carries its own name. */
+// Site checks by what they are about, in the order a planner works through them.
+const CHECK_GROUPS: [string, string[]][] = [
+  ["Roof and site", ["trees", "place", "sun", "roof", "state", "noroof", "monument", "thermal"]],
+  ["Grid and electrics", ["grid", "meter", "backup"]],
+  ["Heating", ["flow", "heatplan"]],
+  ["Customer and paperwork", ["who", "grants"]],
+];
+type SiteCheck = { id: string; title: string; why: string };
+
+/** Before sending, the facts to confirm; before installing, the site checks by topic; both with how far along they are. */
+function Checks({ r, d, confirm, checks, done, setDone, warns, confirmFacts, change }: { r: Request; d: Design; confirm: string[]; checks: SiteCheck[]; done: string[]; setDone: (x: string[]) => void;
+  warns: { code: string; text: string }[]; confirmFacts: (keys: string[]) => void; change: () => void }) {
+  const ticked = checks.filter((c) => done.includes(c.id)).length;
+  const known = new Set(CHECK_GROUPS.flatMap(([, ids]) => ids));
+  const groups: [string, SiteCheck[]][] = [...CHECK_GROUPS.map(([t, ids]) => [t, checks.filter((c) => ids.includes(c.id))] as [string, SiteCheck[]]), ["Other", checks.filter((c) => !known.has(c.id))] as [string, SiteCheck[]]].filter(([, l]) => l.length);
+  const why = (k: string) => k === "demand_kwh" && r.inputs.demand_source && r.inputs.demand_source !== "bill" && r.inputs.demand_source !== "unknown" ? "Not from a bill. " : k === "heat_kwh" && r.inputs.gas_eur ? `Worked out from €${Math.round(r.inputs.gas_eur).toLocaleString("en")} of gas a year at ${GAS_CT} ct per kWh all in. ` : "Assumed: nobody gave this. ";
+  const what = (k: string) => k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : k === "living_m2" ? "Estimated from the 3D model; the heat estimate, and so the heat pump, follows it." : k === "built" ? "The customer did not say; the census's most common period nearby stands in for the heat estimate." : "It changes the design.";
+  return <>
+    <div className="progress">
+      <div className={confirm.length ? "todo" : "ok"}><span>Before sending</span><b>{confirm.length ? `${confirm.length} ${confirm.length === 1 ? "fact" : "facts"} to confirm` : "Every fact confirmed"}</b></div>
+      <div className={ticked === checks.length ? "ok" : ""}><span>Before installing</span><b>{ticked} of {checks.length} site checks done</b><i><em style={{ width: `${checks.length ? (ticked / checks.length) * 100 : 100}%` }} /></i></div>
+    </div>
+    {confirm.length > 0 && <section className="confirmcard">
+      <header><h3>Confirm before sending</h3>{confirm.length > 1 && <Button variant="solid" onClick={() => confirmFacts(confirm)}>Confirm all {confirm.length}</Button>}</header>
+      <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm"><div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>{why(k)}{what(k)}</small></div>
+        <Button onClick={() => confirmFacts([k])}>Confirm</Button><Button variant="plain" onClick={change}>Change</Button></li>)}</ul>
+    </section>}
+    {warns.length > 0 && <><h3>Points from the review</h3>{warns.map((n) => <p key={n.code} className="flag">{n.text}</p>)}</>}
+    <h3>To check before installation</h3>
+    <p className="small muted">Open items print on the offer as conditions. Tick what you have checked.</p>
+    {groups.map(([title, list]) => <section key={title} className="checkgroup">
+      <h4>{title}<small>{list.filter((c) => done.includes(c.id)).length} of {list.length}</small></h4>
+      <ul className="tasks">{list.map((c) => <li key={c.id} className={done.includes(c.id) ? "done" : undefined}><Check checked={done.includes(c.id)} onChange={(v) => setDone(v ? [...done, c.id] : done.filter((x) => x !== c.id))}><b>{c.title}</b><small>{c.why}</small></Check></li>)}</ul>
+    </section>)}
+    {r.meterPhoto && <figure className="cabinet"><img src={r.meterPhoto} alt="The customer's meter cabinet" /><figcaption className="small muted">Meter cabinet, photo from the customer.</figcaption></figure>}
+  </>;
+}
+
 function Tagged({ label, source, children }: { label: string; source?: Source; children: React.ReactNode }) {
   const group = isValidElement(children) && children.type === Segmented;
-  return <div className="fact">{group ? <div><span>{label}</span>{children}</div> : <label><span>{label}</span>{children}</label>}<em className={source}>{source ? SOURCE[source] : ""}</em></div>;
+  return <div className={`fact${source ? ` is-${source}` : ""}`}>{group ? <div><span>{label}</span>{children}</div> : <label><span>{label}</span>{children}</label>}<em className={source}>{source ? SOURCE[source] : ""}</em></div>;
 }
 /** Where an answer came from: the request's own record, else the homeowner when they gave it. */
 const sourceOf = (r: Request, k: string): Source | undefined => {
@@ -616,11 +645,20 @@ function Facts({ r, d, setI }: { r: Request; d?: Design; setI: (c: Partial<Input
   const num = (k: keyof Inputs, step: number) => <Input type="number" step={step} value={(i[k] as number | null | undefined) ?? ""} onChange={(e) => setI({ [k]: e.target.value ? Number(e.target.value) : null } as Partial<Inputs>)} />;
   const pick = (k: keyof Inputs, list: [string, string][]) => <Select value={(i[k] as string | null | undefined) ?? ""} onChange={(e) => setI({ [k]: e.target.value || null } as Partial<Inputs>)}>{list.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select>;
   const stand = d ? `${(d.energy.base_mwh * 1000).toLocaleString("en")} stands in` : "4,000 stands in";
-  return <div className="facts">
+  const more = ["home_day", "ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "boiler_age", "heat_dist", "hp_kwh", "living_m2", "cert_kwh_m2", "built", "goal", "monthly_eur"];
+  const given = more.filter((k) => sourceOf(r, k) && sourceOf(r, k) !== "assumed").length, guessed = more.filter((k) => sourceOf(r, k) === "assumed").length;
+  const all = Object.values(s), count = (x: Source) => all.filter((v) => v === x).length;
+  return <>
+  <div className="facttally" aria-label="Where the facts come from">
+    <span className="is-assumed"><b>{count("assumed")}</b> assumed</span><span className="is-customer"><b>{count("customer")}</b> from the customer</span><span className="is-planner"><b>{count("planner")}</b> confirmed by you</span>
+  </div>
+  <div className="facts">
+    <h3 className="span">Energy</h3>
     <Tagged label="Yearly electricity (kWh)" source={s.demand_kwh}><Input type="number" step={100} placeholder={stand} value={i.demand_kwh ?? ""} onChange={(e) => setI({ demand_kwh: e.target.value ? Number(e.target.value) : null, demand_source: e.target.value ? "bill" : i.demand_source })} /></Tagged>
     <Tagged label="Price (ct per kWh)" source={s.price_ct_kwh}><Input type="number" step={0.5} value={i.price_ct_kwh} onChange={(e) => setI({ price_ct_kwh: Number(e.target.value) })} /></Tagged>
     <Tagged label="Heating" source={s.heating}><Select value={i.heating ?? ""} onChange={(e) => setI({ heating: e.target.value || null })}>{HEATS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Tagged>
     <Tagged label="Yearly heat (kWh)" source={s.heat_kwh}><Input type="number" step={500} value={i.heat_kwh ?? ""} onChange={(e) => setI({ heat_kwh: e.target.value ? Number(e.target.value) : null })} /></Tagged>
+    <h3 className="span">Car and what is already there</h3>
     <Tagged label="Electric car" source={s.ev}><Segmented wide label="Electric car" value={i.ev ? "yes" : "no"} onChange={(v) => setI({ ev: v === "yes" })} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></Tagged>
     <Tagged label="Driving (km a year)" source={s.ev_km}><Input type="number" step={1000} value={i.ev_km} onChange={(e) => setI({ ev_km: Number(e.target.value) })} /></Tagged>
     <Tagged label="Existing solar" source={s.has_solar}><Segmented wide label="Existing solar" value={i.has_solar ? "yes" : "no"} onChange={(v) => setI({ has_solar: v === "yes" })} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></Tagged>
@@ -628,7 +666,9 @@ function Facts({ r, d, setI }: { r: Request; d?: Design; setI: (c: Partial<Input
     {(i.has_solar || i.has_storage) && (r.existing.kwp || r.existing.m2 || r.existing.year || r.existing.battery_kwh) && <p className="small muted span">On the building: {[r.existing.kwp ? `${r.existing.kwp} kWp` : r.existing.m2 && `${r.existing.m2} m² of panels ${r.existing.photo ? "seen on the aerial photo" : "marked"}, size estimated from it`, r.existing.year && `from ${r.existing.year}`, r.existing.battery_kwh && `${r.existing.battery_kwh} kWh battery`].filter(Boolean).join(", ")}. The engine sizes the new system for the need the old one leaves.</p>}
     <Tagged label="Catalog"><Select value={i.installer} onChange={(e) => setI({ installer: e.target.value })}>{INSTALLERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Tagged>
     {((i.demand_source && i.demand_source !== "bill") || !!i.big_users?.length) && <p className="small muted span">Yearly use {i.demand_source ? USE_FROM[i.demand_source] ?? i.demand_source : "not given"}{i.monthly_eur ? ` (€${i.monthly_eur} a month)` : ""}.{i.big_users?.length ? ` Big users: ${fmt(r, "big_users", d as Design)}${i.demand_source === "bill" ? ", already in the bill." : ", added on top by the engine."}` : ""}{i.demand_source !== "bill" ? " A bill would be better." : ""}</p>}
-    <h3 className="span">More from the homeowner</h3>
+  </div>
+  <Fold title="More from the homeowner" summary={`${given} given${guessed ? `, ${guessed} assumed` : ""}: the day at home, heating details, the home's age and the customer's priority`}>
+  <div className="facts">
     <Tagged label="Someone home in the day" source={sourceOf(r, "home_day")}>{pick("home_day", HOME_DAY)}</Tagged>
     {i.ev && <>
       <Tagged label="Car charged at home (kWh a month)" source={sourceOf(r, "ev_kwh_month")}>{num("ev_kwh_month", 10)}</Tagged>
@@ -645,7 +685,9 @@ function Facts({ r, d, setI }: { r: Request; d?: Design; setI: (c: Partial<Input
     {!i.built && i.area_built && <p className="small muted span">Most common nearby, 2022 census: {label(BUILT, i.area_built)}, {Math.round(Number(i.area_built_share ?? 0) * 100)}% of homes. The engine uses it for the heat estimate until the customer says.</p>}
     <Tagged label="Customer's priority" source={sourceOf(r, "goal")}>{pick("goal", GOAL)}</Tagged>
     {i.demand_source === "payment" && <Tagged label="Monthly payment (€)" source={sourceOf(r, "monthly_eur")}>{num("monthly_eur", 5)}</Tagged>}
-  </div>;
+  </div>
+  </Fold>
+  </>;
 }
 
 function Energy({ d, inputs, measured }: { d: Design; inputs: Inputs; measured: boolean }) {
