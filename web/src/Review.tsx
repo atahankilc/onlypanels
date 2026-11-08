@@ -11,16 +11,16 @@ const BY_PEOPLE = [["1", 2000], ["2", 2700], ["3", 3500], ["4", 3800], ["5+", 45
 const HEATING = [["Heatpump", "Heat pump"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherRenewable", "Wood or pellets"], ["unknown", "Something else or not sure"]] as const;
 const BIG_USERS = [["pool", "Pool"], ["sauna", "Sauna"], ["ac", "Air conditioning"], ["water", "Electric water heater"]] as const;
 const BUILT = [["before1979", "Before 1979"], ["1979to1990", "1979 – 1990"], ["1991to2000", "1991 – 2000"], ["2001to2010", "2001 – 2010"], ["since2011", "2011 or later"]] as const;
-const GOALS = [["cost", "Low cost", "A system that pays back fast"], ["independence", "Independence", "As much of my own power as I can"], ["environment", "The environment", "As much clean power as the roof gives"]] as const;
+const GOALS = [["cost", "Low cost", "A smaller system, a lower price"], ["independence", "Independence", "As much of my own power as I can"], ["environment", "The environment", "As much clean power as the roof gives"]] as const;
 const KWH_PER_LITRE_OIL = 10; // heating oil, about 10 kWh of heat per litre
 const FOSSIL = ["Gas", "Oil", "OtherNonRenewable"];
 const number = (v: string) => (v === "" ? null : Number(v));
 
-export type Stage = "roof" | "roofinfo" | "solar" | "battery" | "use" | "big" | "house" | "heat" | "car" | "charge" | "goal" | "send" | "sent";
+export type Stage = "roof" | "solar" | "battery" | "use" | "big" | "house" | "heat" | "car" | "charge" | "goal" | "send" | "sent";
 /** One topic a page. A follow-up opens on the same page, under the answer that needs it, so the count never changes. */
 // Every household sees the same pages, so the count never moves. A battery without solar is rare, but one tap answers it.
 // Charging habits only follow a car, now or soon.
-const PAGES: Stage[] = ["roof", "roofinfo", "solar", "battery", "use", "big", "house", "heat", "car", "charge", "goal", "send"];
+const PAGES: Stage[] = ["roof", "solar", "battery", "use", "big", "house", "heat", "car", "charge", "goal", "send"];
 const flowFor = (a: Answers): Stage[] => PAGES.filter((p) => p !== "charge" || a.ev);
 
 type Props = {
@@ -104,7 +104,6 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
     const car = a.ev === false ? "No" : a.ev ? (a.ev_planned ? `Coming ${a.ev_when === "soon" ? "within a year" : a.ev_when === "later" ? "later" : "soon"}` : "Yes") : no;
     const groups: [string, Stage, [string, string][]][] = [
       ["Your roof", "roof", [["Priority area", `${Math.round(m2)} m²`]]],
-      ["Roof renewal", "roofinfo", [["Renewed soon", a.roof_renovation === "unsure" ? "Not sure" : yes(a.roof_renovation === "yes" ? true : a.roof_renovation === "no" ? false : null)]]],
       ["Solar already there", "solar", a.has_solar ? [["Solar", "Yes"], ["Marked area", `${Math.round(panelM2)} m²`], ["Size", n(a.solar_kwp, "kWp")], ["Year", a.solar_year ? String(a.solar_year) : no]] : [["Solar", yes(a.has_solar)]]],
       ["Home battery", "battery", [["Battery", yes(a.has_storage)], ...(a.has_storage ? [["Size", n(a.battery_kwh, "kWh")] as [string, string]] : [])]],
       ["Electricity", "use", [["Yearly use", use], ["Price", a.price_known ? `${a.price_ct_kwh} ct per kWh` : no]]],
@@ -144,10 +143,6 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
   const fossil = FOSSIL.includes(a.heating ?? "");
   return (
     <aside className="panel tall quiz" key={stage} ref={panel} onKeyDown={enter}>
-      {stage === "roofinfo" && page("Will the roof be renewed in the next few years?", "Panels go on after a new roof, not before.", <div className="answers grid3">
-        {([["yes", "Yes"], ["no", "No"], ["unsure", "Not sure"]] as const).map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.roof_renovation === v} onClick={() => setAnswers({ ...a, roof_renovation: v })}>{label}</Button>)}
-      </div>)}
-
       {stage === "solar" && page("Is there solar here already?", null, yesNo("has_solar", { solar_kwp: null, solar_year: null }), a.has_solar && <>
         <h2>Where are the panels?<span className="opt">Optional</span></h2>
         <p className="small muted">Mark them on the map with <b>Whole surface</b> or <b>Draw</b>. We leave that area out of your new system.</p>
