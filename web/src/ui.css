@@ -92,3 +92,9 @@
 .tiles.yn .tile i { margin: 0; }
 .tile:focus-visible { outline: 2px solid var(--hud-route); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .tile, .tile i { transition: none; } }
+
+/* Select: the page's own chevron, inset like the other fields, instead of the browser's arrow on the edge. */
+select.control { -webkit-appearance: none; appearance: none; padding-right: 38px; text-overflow: ellipsis; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23A2A6AE' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; background-size: 14px; }
+select.control option { background: var(--hud-base); color: var(--hud-ink); }
