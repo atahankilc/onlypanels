@@ -1,4 +1,5 @@
 import { isValidElement, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { GAS_CT, View, surfaceKey } from "./api";
 import { Monument, around as monumentAt, monumentOf } from "./monument";
 import { HeatPlan, at as heatPlanAt, heatPlanOf } from "./heatPlan";
@@ -9,7 +10,6 @@ import { Back } from "./icons";
 import { Design, Handoff, Inputs, Overrides, existingArea, Progress, Request, Source, Spot, design, designBody, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
 import { Change, ChangeCard, Trace, touched } from "./Trace";
 import "./planner.css";
-import ProofPage from "./Proof";
 import Offer from "./Offer";
 import Obstacles from "./Obstacles";
 import Validate from "./Validate";
@@ -81,7 +81,7 @@ let kept: Request[] = [];
 
 export default function Planner({ handoffs, onProgress, loading = 0 }: { handoffs: Handoff[]; onProgress?: (ref: string, p: Progress) => void; loading?: number }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const [page, setPage] = useState<"requests" | "proof" | "prices">("requests");
+  const [page, setPage] = useState<"requests" | "prices">("requests");
   const [requests, setRequests] = useState<Request[]>(() => kept);
   useEffect(() => { kept = requests; }, [requests]);
   const [scores, setScores] = useState<Scores | null>(null);
@@ -109,7 +109,7 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
   useVoiceActions((a) => {
     if (a.type === "open" && requests.some((r) => r.id === a.id)) { setPage("requests"); setOpenId(a.id); }
     if (a.type === "back") setOpenId(null);
-    if (a.type === "page") setPage(a.page);
+    if (a.type === "page" && a.page !== "proof") setPage(a.page);
   });
   if (open) return <><Workspace key={open.id} r={open} update={update} back={() => setOpenId(null)} scores={scores} /><VoiceDock /></>;
   const waiting = requests.filter((r) => r.status !== "sent").length;
@@ -117,15 +117,15 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
     <div className="inbox-col">
       <header className="inbox-head">
         <div>
-          <h1>{page === "requests" ? "Requests" : page === "prices" ? "Prices" : "Proof"}</h1>
+          <h1>{page === "prices" ? "Prices" : "Requests"}</h1>
           <p className="muted">{page === "requests"
             ? (requests.length ? `${waiting ? `${waiting} waiting for an offer, ${requests.length - waiting} sent.` : "Every offer is sent."} Each comes with the engine's draft to check, change and send.` : "Requests arrive here with the engine's draft.")
-            : page === "prices" ? "What each part of an offer costs. Every offer prices its design from here, so the planner sees what the homeowner pays and when it pays back."
-            : "How the engine's first drafts compare with what experts sold, on past projects it never saw."}</p>
+            : "What each part of an offer costs. Every offer prices its design from here, so the planner sees what the homeowner pays and when it pays back."}</p>
         </div>
-        <Segmented label="Page" value={page} onChange={setPage} options={[{ value: "requests", label: "Requests" }, { value: "prices", label: "Prices" }, { value: "proof", label: "Proof" }]} />
       </header>
-      {page === "proof" ? <ProofPage /> : page === "prices" ? <PriceBook /> : <>
+      {/* The planner's pages, in the top bar as the app's menu. In the body so the top bar's fade does not cover it. */}
+      {createPortal(<nav className="pagenav" aria-label="Planner pages"><Segmented variant="glass" label="Page" value={page} onChange={setPage} options={[{ value: "requests", label: "Requests" }, { value: "prices", label: "Prices" }]} /></nav>, document.body)}
+      {page === "prices" ? <PriceBook /> : <>
         <ul className="reqlist">{requests.map((r) => <Line key={r.id} r={r} open={() => setOpenId(r.id)} />)}
           {Array.from({ length: loading }, (_, i) => <li key={`loading${i}`} className="loading" aria-hidden="true"><span /><span /></li>)}
         </ul>

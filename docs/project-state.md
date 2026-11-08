@@ -22,7 +22,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - `/api/design` for the planner, with skipped homeowner answers allowed. PVGIS answers retry and stay on disk
 - Planner desk: request list, Design, Roof with fitted modules, Facts, Energy, Checks (`web/src/Planner.tsx`)
 - Planner sees the engine's decision trace, reviewer notes against similar homes, and a change card with undo after every edit (D67)
-- Proof page in the planner: past projects predicted by an engine trained without them, next to the expert design, and results per installer against simple methods and the expert's own spread (D68). Prepare with `uv run python scripts/build_proof.py`
+- Proof page in the planner: past projects predicted by an engine trained without them, next to the expert design, and results per installer against simple methods and the expert's own spread (D68). Prepare with `uv run python scripts/build_proof.py`. On 8 November it left the planner's menu at the user's request; the file and `/api/proof` remain
 - Planner tabs Home, Design, Checks, Offer (D70). Assumed facts must be confirmed before sending. The Offer tab is a printable one-page offer: system, yearly estimates with their assumptions, facts with sources, open site checks as conditions, what the homeowner may change, and changes from the AI draft
 - Design offers up to two engine variants next to the current design, picked in one click with a change card (D76)
 - Energy estimate uses real weather years (PVGIS hourly, Munich, 2018 to 2020) per roof direction, battery losses and a factor calibrated to HTW Berlin values (`scripts/check_energy.py`). Before, it put own power about 20 points too high without a battery and could not tell battery sizes apart

@@ -308,3 +308,6 @@
 .sysum-money small { font-size: 11.5px; color: var(--hud-ink-2); }
 .sysum-money b { font: 650 16px/1.2 var(--font-ui); color: var(--hud-ink); font-variant-numeric: tabular-nums; }
 .sysum-money b.up { color: var(--hud-live); } .sysum-money b.down { color: var(--hud-bad); }
+
+/* The planner's pages as the app's menu: centred in the top bar, on the logo's line. */
+.pagenav { position: fixed; z-index: 6; top: 16px; left: 50%; translate: -50% 0; }

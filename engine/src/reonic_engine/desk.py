@@ -16,7 +16,7 @@ from mcp.server.mcpserver.exceptions import ToolError  # its message reaches the
 from .agent import Run, summary
 
 TABS = ("home", "design", "cost", "checks", "offer")
-PAGES = ("requests", "prices", "proof")
+PAGES = ("requests", "prices")
 # Facts the planner may correct by voice, as the Home tab's fields: (kind, lowest, highest) or (kind, allowed values).
 FACTS = {
     "demand_kwh": ("number", 500, 100_000), "price_ct_kwh": ("number", 5, 80), "heat_kwh": ("number", 0, 200_000),
@@ -87,7 +87,7 @@ def build(desk: Desk) -> MCPServer:
             return "The request list is already showing."
         return desk.act({"type": "back"}, "Back to the request list.")
 
-    @server.tool(description="On the request list, switch between the requests, the prices page (the price book every offer is costed from) and the proof page (the engine against past expert designs).")
+    @server.tool(description="On the request list, switch between the requests and the prices page (the price book every offer is costed from).")
     def show_page(page: str) -> str:
         if page not in PAGES:
             raise ToolError(f"page must be one of {PAGES}")
