@@ -1,7 +1,8 @@
 // The homeowner tries the offer: only what the planner allowed, each variant computed by the same engine on the same facts.
 // The numbers are the engine's; the sentence around them is a template.
 import { useEffect, useMemo, useState } from "react";
-import { Design, Mine, Overrides, design, roofOf } from "./plan";
+import { Design, Mine, Overrides, design, designBody, roofOf } from "./plan";
+import type { Costs } from "./money";
 import { Button, Input, Slider } from "./ui";
 import { ask, describeChange, useAsks } from "./asks";
 import "./asks.css";
@@ -14,14 +15,19 @@ export default function Explore({ m, onPanels }: { m: Mine; onPanels?: (p: Recor
   const roof = useMemo(() => roofOf(m.handoff.buildings, b.installed, b.priority, b.taken), [m.ref]);
   const [v, setV] = useState<Variant>({});
   const [out, setOut] = useState<{ d: Design; panels: Record<string, number> } | null>(null);
+  // The offer carries the planner's price and first year when it was priced: the change is then priced the same way.
+  const priced = o.pays_eur != null;
+  const [money, setMoney] = useState<Costs | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(""), [asking, setAsking] = useState(false);
   const asked = useAsks(m.ref);
   useEffect(() => {
     let live = true;
     setBusy(true);
-    const t = setTimeout(() => design(b.inputs, { ...b.overrides, ...v } as Overrides, roof, b.off, b.existing, b.strict)
-      .then((x) => { if (live) { setOut(x); setBusy(false); } }).catch(() => live && setBusy(false)), 150);
+    const o2 = { ...b.overrides, ...v } as Overrides;
+    const t = setTimeout(() => Promise.all([design(b.inputs, o2, roof, b.off, b.existing, b.strict),
+      priced && Object.keys(v).length ? fetch("/api/costs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(designBody(b.inputs, o2, roof, b.off, b.existing, b.strict).body) }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null)])
+      .then(([x, c]) => { if (live) { setOut(x); setMoney(c); setBusy(false); } }).catch(() => live && setBusy(false)), 150);
     return () => { live = false; clearTimeout(t); };
   }, [v]);
   useEffect(() => { onPanels?.(out?.panels ?? null); }, [out]);
@@ -44,10 +50,12 @@ export default function Explore({ m, onPanels }: { m: Mine; onPanels?: (p: Recor
   if (!canBattery && !allowed.includes("wallbox") && !allowed.includes("fewer_modules")) return null;
 
   /** One plain sentence: what the change does to own power and the saving, against the offer. */
+  // Counted as the offer counts it: the first year after upkeep when the offer was priced, else the electricity saving.
+  const saving = (x: Design) => (priced && money ? money.year1.total_eur : x.energy.saving_eur);
   const sentence = () => {
     if (!d) return "";
     const what = describeChange(v);
-    const own = d.energy.self_sufficiency_pct, save = d.energy.saving_eur;
+    const own = d.energy.self_sufficiency_pct, save = saving(d);
     return `With ${what}, about ${own}% of your use would come from your own power (offer: ${o.self_sufficiency_pct}%), and you would save about ${eur(save)} a year (offer: ${eur(o.saving_eur)}).`;
   };
 
@@ -81,10 +89,12 @@ export default function Explore({ m, onPanels }: { m: Mine; onPanels?: (p: Recor
         <tbody>
           <tr><th scope="row">Makes</th><td>{o.production_mwh.toFixed(1)} MWh</td><td>{d ? `${d.energy.production_mwh.toFixed(1)} MWh` : "…"}</td></tr>
           <tr><th scope="row">Own power</th><td>{o.self_sufficiency_pct}%</td><td>{d ? `${d.energy.self_sufficiency_pct}%` : "…"}</td></tr>
-          <tr><th scope="row">Saving a year</th><td>{eur(o.saving_eur)}</td><td>{d ? eur(d.energy.saving_eur) : "…"}</td></tr>
+          {priced && <tr><th scope="row">You pay</th><td>{eur(o.pays_eur!)}</td><td>{money ? eur(money.pays_eur) : "…"}</td></tr>}
+          <tr><th scope="row">{priced ? "Saving, first year" : "Saving a year"}</th><td>{eur(o.saving_eur)}</td><td>{d && (!priced || money) ? eur(saving(d)) : "…"}</td></tr>
+          {priced && <tr><th scope="row">Pays back</th><td>{o.payback_years != null ? `${Math.round(o.payback_years)} years` : "–"}</td><td>{money ? (money.payback_years != null ? `${Math.round(money.payback_years)} years` : "–") : "…"}</td></tr>}
         </tbody>
       </table>
-      {d && <p>{sentence()}</p>}
+      {d && (!priced || money) && <p>{sentence()}</p>}
       <p className="small muted">An estimate to compare, within what your installer allows. The offer stays as sent until you agree a change with them.</p>
       {d && !asking && <div className="ask-row">
         <Button onClick={() => setAsking(true)}>Ask my installer about this</Button>
@@ -93,7 +103,7 @@ export default function Explore({ m, onPanels }: { m: Mine; onPanels?: (p: Recor
       {d && asking && <div className="ask-form">
         <Input value={note} maxLength={240} placeholder="Anything to add? (optional)" aria-label="A line for your installer" onChange={(e) => setNote(e.target.value)} />
         <div className="ask-row">
-          <Button variant="solid" onClick={() => { ask({ ref: m.ref, change: v, own: d.energy.self_sufficiency_pct, saving: d.energy.saving_eur, offerOwn: o.self_sufficiency_pct, offerSaving: o.saving_eur, note: note.trim() }); setAsking(false); setNote(""); setV({}); }}>Send the question</Button>
+          <Button variant="solid" onClick={() => { ask({ ref: m.ref, change: v, own: d.energy.self_sufficiency_pct, saving: saving(d), offerOwn: o.self_sufficiency_pct, offerSaving: o.saving_eur, note: note.trim() }); setAsking(false); setNote(""); setV({}); }}>Send the question</Button>
           <button type="button" className="textlink" onClick={() => setAsking(false)}>Cancel</button>
         </div>
       </div>}

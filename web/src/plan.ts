@@ -46,6 +46,7 @@ export type Request = {
  *  it, so every variant the homeowner tries is the same engine on the same facts, with one choice changed. */
 export type OfferBasis = { inputs: Inputs; overrides: Overrides; off: string[]; installed: string[]; existing: Existing; priority?: Record<string, number[]>; taken?: Record<string, number[]>; strict?: boolean };
 export type Offer = { kwp: number; modules: number; battery_kwh: number; wallbox: boolean; heatpump_kw: number; production_mwh: number; self_sufficiency_pct: number; saving_eur: number;
+  pays_eur?: number; payback_years?: number | null; // from the planner's Cost tab when it priced the sent design; saving_eur is then its first year
   allowed?: string[]; choices?: number[]; max_modules?: number | null; basis?: OfferBasis };
 export const DEFAULT_ALLOWED = ["no_battery", "battery_size"];
 export const offerOf = (d: Design, r?: Request & { allowed?: string[] }): Offer => ({ kwp: d.pv.kwp, modules: d.pv.modules, battery_kwh: d.battery.kwh, wallbox: d.wallbox.included, heatpump_kw: d.heatpump.included ? d.heatpump.kw : 0,

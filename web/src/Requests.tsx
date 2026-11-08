@@ -72,7 +72,9 @@ export function Status({ m, onPanels }: { m: Mine; onPanels?: (p: Record<string,
         {o.heatpump_kw > 0 && <div><dt>Heat pump</dt><dd>{o.heatpump_kw} kW</dd></div>}
         <div><dt>Makes</dt><dd>{o.production_mwh.toFixed(1)} MWh a year</dd></div>
         <div><dt>Own power</dt><dd>About {o.self_sufficiency_pct}% of your use</dd></div>
-        <div><dt>Saves</dt><dd>About €{o.saving_eur.toLocaleString("en")} a year</dd></div>
+        {o.pays_eur != null && <div><dt>You pay</dt><dd>About €{o.pays_eur.toLocaleString("en")}, grants taken off</dd></div>}
+        <div><dt>Saves</dt><dd>About €{o.saving_eur.toLocaleString("en")} {o.pays_eur != null ? "in the first year, after upkeep" : "a year"}</dd></div>
+        {o.pays_eur != null && <div><dt>Pays back</dt><dd>{o.payback_years != null ? `After about ${o.payback_years.toLocaleString("en", { maximumFractionDigits: 0 })} years` : "Not within 20 years"}</dd></div>}
       </dl>
       <p className="small muted">Estimates from your planner's design. They go through it with you before anything is ordered.</p>
       {o.basis && <Explore m={m} onPanels={onPanels} />}
