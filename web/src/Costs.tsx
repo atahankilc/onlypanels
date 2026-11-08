@@ -182,7 +182,7 @@ export function PriceBook({ installer, close }: { installer?: string; close?: ()
         return <section key={t} id={`pb-${t}`} className="pb-sec">
           <header><span className={`pb-ico t-${t}`}><Icon /></span><h2>{label}</h2><small>{base.length} in every offer{extra.length ? ` · ${extra.length} extras` : ""}</small></header>
           {base.length > 0 && <ul className="pb-list">{base.map((i) => <PartRow key={i.id} i={i} book={book} save={(f) => run(setItem(i.id, f))} reset={() => run(resetItem(i.id))} />)}</ul>}
-          {extra.length > 0 && <><h3 className="pb-sub">Extras, ticked per home<small>How often each installer added it in past offers</small></h3>
+          {extra.length > 0 && <><h3 className="pb-sub">Extras, ticked per home<small>Only in the offers of homes that need them</small></h3>
             <ul className="pb-list">{extra.map((i) => <PartRow key={i.id} i={i} book={book} save={(f) => run(setItem(i.id, f))} reset={() => run(resetItem(i.id))} />)}</ul></>}
         </section>;
       })}
@@ -215,12 +215,10 @@ function PartRow({ i, book, save, reset }: { i: PriceItem; book: Book; save: (f:
   const amount = (k: "fixed" | "per_unit" | "vat", v: number, prefix: string, suffix: string, label: string) => <Amount prefix={prefix} suffix={suffix} aria-label={`${i.name}: ${label}`} defaultValue={v} key={`${i.id}${k}${v}`}
     onBlur={(e) => { const x = Number(e.target.value); if (e.target.value !== "" && x !== v) save({ [k]: x }); }} />;
   const perUnit = i.unit !== "job", showFixed = !perUnit || i.fixed !== 0;
-  const share = i.share ? Object.entries(i.share) : [];
   return <li className={`pb-row${mine ? " mine" : ""}${open ? " open" : ""}`}>
     <div className="pb-name">
       <b>{i.name}</b>
       <span className="pb-chips"><em>{book.kinds[i.kind] ?? i.kind}</em>{WHEN_CHIP[i.when] && <em className="cond">{WHEN_CHIP[i.when]}</em>}{i.vat > 0 && <em>{i.vat}% VAT</em>}{mine && <em className="yours">{i.custom ? "Your part" : "Your price"}</em>}</span>
-      {share.length > 0 && <span className="pb-share" aria-label={`Added in ${share.map(([, s]) => `${Math.round(s * 100)}%`).join(" and ")} of offers`}>{share.map(([k, s], n) => <span key={k}><small>{share.length > 1 ? `Installer ${String.fromCharCode(65 + n)}` : "Offers"}</small><i><b style={{ width: `${Math.max(2, s * 100)}%` }} /></i><small>{Math.round(s * 100)}%</small></span>)}</span>}
     </div>
     <div className="pb-price">
       {showFixed && amount("fixed", i.fixed, "€", perUnit ? "fixed" : "", "fixed price")}

@@ -66,10 +66,6 @@
 .pb-chips em { padding: 1px 8px; border-radius: 999px; background: var(--hud-fill); font: 500 11.5px/1.6 var(--font-ui); font-style: normal; color: var(--hud-ink-2); }
 .pb-chips em.cond { background: color-mix(in srgb, var(--hud-warn) 14%, transparent); color: var(--hud-warn); }
 .pb-chips em.yours, small.yours { color: var(--hud-route); } .pb-chips em.yours { background: color-mix(in srgb, var(--hud-route) 16%, transparent); }
-.pb-share { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 2px; }
-.pb-share > span { display: inline-flex; align-items: center; gap: 7px; }
-.pb-share small { font-size: 11.5px; color: var(--hud-ink-3); font-variant-numeric: tabular-nums; } .pb-share small:last-child { min-width: 3ch; color: var(--hud-ink-2); }
-.pb-share i { width: 72px; height: 5px; border-radius: 999px; background: var(--hud-fill); overflow: hidden; } .pb-share i b { display: block; height: 100%; border-radius: inherit; background: var(--hud-route); }
 .pb-price { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
 .pb-price .plus { color: var(--hud-ink-3); font-size: 13px; }
 .pb-more { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px; margin-top: 6px; padding: 12px 14px; border-radius: 12px; background: var(--hud-fill); font-size: 13px; color: var(--hud-ink-2); animation: rise 0.2s var(--ease); }
