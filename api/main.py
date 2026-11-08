@@ -10,7 +10,7 @@ from functools import lru_cache
 from threading import Thread
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Path
+from fastapi import FastAPI, File, Form, HTTPException, Path, UploadFile
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -23,6 +23,7 @@ from reonic_engine.agent import agent_events, run_agent
 from reonic_engine import casework, obstacles
 from reonic_engine import costs, pricebook
 from reonic_engine.refine import refine
+from reonic_engine import voice
 
 load_dotenv(FilePath(__file__).resolve().parent.parent / ".env")  # ANTHROPIC_API_KEY for the planner's sentences; without it, rules
 SQUARE = r"^\d{3}_\d{4}$"  # it becomes part of a download address
@@ -212,6 +213,34 @@ def agent_stream(req: AgentRequest):
     events = agent_events(run, req.inputs.model_dump(), req.overrides.model_dump(), req.message, req.history[-12:])
     body = (f"event: {kind}\ndata: {json.dumps(value, ensure_ascii=False)}\n\n" for kind, value in events)
     return StreamingResponse(body, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/voice/status")
+def voice_status():
+    """Whether the planner's voice can hear and speak (ElevenLabs) and act (Claude)."""
+    return voice.ready()
+
+
+@app.post("/api/voice/turn")
+async def voice_turn(context: str = Form("{}"), history: str = Form("[]"), text: str | None = Form(None), speak: bool = Form(True),
+                     audio: UploadFile | None = File(None)):
+    """One spoken (or typed) request from the planner's desk: heard by ElevenLabs, acted on by Claude through the desk's
+    MCP tools, answered in speech. The page carries out the returned actions. Planner only; the homeowner has no voice."""
+    run = lambda inputs, overrides: design(DesignRequest(inputs=Inputs(**inputs), overrides=Overrides(**overrides)))
+    sound = await audio.read() if audio else None
+    if sound is not None and len(sound) > 10_000_000:
+        raise HTTPException(413, "Recording too long")
+    try:
+        ctx, past = json.loads(context), json.loads(history)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "context and history must be JSON")
+    def money(inputs, overrides, options):  # the Cost tab's view of the same request, from the planner's price book
+        req = DesignRequest(inputs=Inputs(**inputs), overrides=Overrides(**overrides))
+        i, m = prepared(req)[0], Money(**options)
+        return costs.evaluate(i, design(req), pricebook.book(i.get("installer")), m.extras, m.qty, m.income, m.kids)
+
+    return await voice.turn(run, ctx, past, money=money, audio=sound or None, filename=(audio.filename if audio else None) or "speech.webm",
+                            content_type=(audio.content_type if audio else None) or "audio/webm", text=text, voice=speak)
 
 
 @app.get("/api/scores")

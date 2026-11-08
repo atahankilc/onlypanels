@@ -17,3 +17,5 @@ export const Mark = ({ size = 28 }: { size?: number }) => (
     <circle cx="16" cy="9" r="4" fill="currentColor" stroke="none" /><path d="M3 26L16 16l13 10M9 26h14" />
   </svg>
 );
+export const Mic = path("M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3");
+export const Stop = path("M7 7h10v10H7z");

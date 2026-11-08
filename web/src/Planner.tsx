@@ -6,7 +6,7 @@ import { Place, searchPlace } from "./places";
 import { Shade, withTrees } from "./treeShade";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
-import { Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
+import { Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, designBody, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
 import { Change, ChangeCard, Trace, touched } from "./Trace";
 import "./planner.css";
 import ProofPage from "./Proof";
@@ -23,6 +23,8 @@ import { BatteryCurve } from "./BatteryCurve";
 import { CostTab, PriceBook } from "./Costs";
 import { Money, moneyOf, useCosts } from "./money";
 import { Button, Check, Field, IconButton, Input, Segmented, Select, Slider } from "./ui";
+import { setDeskContext, setOpenContext, useVoiceActions } from "./voiceBus";
+import VoiceDock from "./Voice";
 
 const LEFT = 548; // the desk's column: the homeowner's, widened for tables
 /** An address as the homeowner view writes it: the street large, the town under it. */
@@ -92,9 +94,16 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
   useEffect(() => { requests.forEach((r) => r.ref && onProgress?.(r.ref, { opened: !!r.opened, offer: r.status === "sent" ? r.offer ?? null : null })); }, [requests]);
   useEffect(() => { if (openId) update(openId, { opened: true }); }, [openId]);
   const open = requests.find((r) => r.id === openId);
-  if (open) return <Workspace key={open.id} r={open} update={update} back={() => setOpenId(null)} scores={scores} />;
+  // The voice sees the list as the planner does, and opens, closes and switches pages as a click would.
+  useEffect(() => { setDeskContext({ page, requests: requests.map((r) => ({ id: r.id, ref: r.ref, title: r.label, status: r.status })) }); }, [requests, page]);
+  useVoiceActions((a) => {
+    if (a.type === "open" && requests.some((r) => r.id === a.id)) { setPage("requests"); setOpenId(a.id); }
+    if (a.type === "back") setOpenId(null);
+    if (a.type === "page") setPage(a.page);
+  });
+  if (open) return <><Workspace key={open.id} r={open} update={update} back={() => setOpenId(null)} scores={scores} /><VoiceDock /></>;
   const waiting = requests.filter((r) => r.status !== "sent").length;
-  return <main className="inbox-page">
+  return <><main className="inbox-page">
     <div className="inbox-col">
       <header className="inbox-head">
         <div>
@@ -113,7 +122,7 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
         {loading > 0 && <p className="small muted loadnote" role="status"><span className="spinner" aria-hidden="true" />{requests.length ? `Loading ${loading} more ${loading === 1 ? "request" : "requests"}…` : "Loading requests…"}</p>}
       </>}
     </div>
-  </main>;
+  </main><VoiceDock /></>;
 }
 
 function Line({ r, open }: { r: Request; open: () => void }) {
@@ -236,6 +245,20 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const allowed = (r as Req).allowed ?? DEFAULT_ALLOWED; // the same default the sent offer carries
   const send = () => { update(r.id, { status: "sent", ...(d ? { offer: offerOf(d, r) } : {}) }); answer(r.ref ?? "-"); back(); }; // a new offer answers what the customer asked
   const asks = useAsks(r.ref ?? "-").filter((x) => !x.answered);
+  // What the voice sees of this request, and the clicks it may make here: the same handlers as the buttons.
+  useEffect(() => {
+    setOpenContext({ id: r.id, ref: r.ref, title: r.label, tab, status: r.status, to_confirm: d ? confirm.map((k) => ({ key: k, label: FACT[k] ?? k, value: fmt(r, k, d) })) : [],
+      checks: checks.map((c) => ({ id: c.id, title: c.title, done: done.includes(c.id) })), money: moneyOf(r), inputs: designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).body.inputs as Inputs, overrides: r.overrides });
+  });
+  useEffect(() => () => setOpenContext(null), []);
+  useVoiceActions((a) => {
+    if (a.type === "tab") setTab(a.tab);
+    if (a.type === "set" && r.status !== "sent") { setO(a.overrides, `Voice: ${describe(a.overrides)}`); setTab("design"); }
+    if (a.type === "confirm") update(r.id, { sources: { ...r.sources, ...Object.fromEntries(a.keys.filter((k) => confirm.includes(k)).map((k) => [k, "planner" as Source])) } });
+    if (a.type === "check") setDone(a.done ? [...new Set([...done, ...a.ids])] : done.filter((x) => !a.ids.includes(x)));
+    if (a.type === "fact" && r.status !== "sent") setI(a.inputs, "planner", `Voice: ${Object.keys(a.inputs).map((k) => FACT[k] ?? k).join(", ")} changed`);
+    if (a.type === "send" && d && !confirm.length && r.status !== "sent") send();
+  });
   const tryAsk = (x: Ask) => { setO(x.change as Overrides, `Tried the customer's question: ${describeChange(x.change)}`); if (r.status === "sent") update(r.id, { status: "draft" }); setTab("design"); };
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>

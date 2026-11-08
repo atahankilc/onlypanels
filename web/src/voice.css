@@ -1,0 +1,35 @@
+/* The planner's voice, after Steward's Guide: a column at the bottom right of the map, left of the map's own buttons,
+   the bubble above the orb. On the bright aerial photo the orb sits on a glass disc so its light particles stay visible. Tokens from styles.css. */
+.voicedock { position: fixed; right: 76px; bottom: 20px; z-index: 40; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; width: 360px; pointer-events: none; }
+.voicedock > * { pointer-events: auto; }
+
+.voicebubble { width: fit-content; min-width: 240px; max-width: 100%; display: grid; gap: 6px; padding: 11px 15px 13px; border: 1px solid var(--hud-line); border-radius: 20px; background: var(--hud-glass-2); -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4); box-shadow: var(--hud-shadow); animation: rise 0.2s var(--ease); }
+.voicebubble p { margin: 0; }
+.voicebubble .who { display: flex; align-items: center; gap: 8px; color: var(--hud-ink-3); font: 500 10.5px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }
+.voicebubble .who::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.voicebubble .who.live { color: var(--hud-live); }
+.voicebubble .who.live::before { animation: voiceblink 1.2s infinite; }
+.voicebubble .who.speaking { color: var(--hud-route); }
+.thinking .voicebubble .who { color: var(--hud-warn); }
+.thinking .voicebubble .who::before { animation: voiceblink 0.9s infinite; }
+.voicehide { margin-left: auto; padding: 0 2px; border: 0; background: none; color: var(--hud-ink-3); font: 400 16px/1 var(--font-ui); cursor: pointer; }
+.voicehide:hover { color: var(--hud-ink); }
+.voicebubble .asked { font-size: 13px; line-height: 1.35; color: var(--hud-ink-2); }
+.voicebubble .said { font-size: 15px; line-height: 1.42; letter-spacing: -0.005em; color: var(--hud-ink); }
+.voicebubble .said.hint { font-size: 13px; color: var(--hud-ink-2); }
+.voiceacts { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 0; padding: 0; list-style: none; }
+.voiceacts li { padding: 3px 9px; border-radius: 999px; background: var(--hud-fill); font: 500 11px var(--font-mono); color: var(--hud-live); }
+.voiceerr { color: var(--hud-bad); font-size: 13px; }
+.voicebubble form { margin-top: 4px; }
+.voiceshow { padding: 0; border: 0; background: none; color: var(--hud-ink-3); font: 500 10.5px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; }
+
+/* The orb (Steward's chat.css) */
+.orb { position: relative; display: grid; place-items: center; flex: none; padding: 0; border: 1px solid var(--hud-line); border-radius: 50%; background: var(--hud-glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); cursor: pointer; transition: transform 0.3s var(--ease); }
+.orb canvas { position: relative; z-index: 1; display: block; }
+.orb-glow { position: absolute; inset: 8%; border-radius: 50%; background: radial-gradient(circle, var(--orb-glow, transparent) 0%, transparent 68%); filter: blur(6px); pointer-events: none; will-change: transform, opacity; }
+.orb:active { transform: scale(0.97); }
+.orb:disabled { opacity: 0.4; cursor: default; }
+.orb:focus-visible { outline: 1px solid var(--hud-line-2); outline-offset: 4px; }
+
+@keyframes voiceblink { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .voicebubble .who::before { animation: none !important; } }
