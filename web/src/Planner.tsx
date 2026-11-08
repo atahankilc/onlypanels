@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { isValidElement, useEffect, useRef, useState } from "react";
 import { View, surfaceKey } from "./api";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
@@ -17,7 +17,16 @@ const SOURCE: Record<Source, string> = { customer: "Customer", assumed: "Assumed
 const INSTALLERS: [string, string][] = [["2a8ba8e2", "Installer A"], ["23c108b7", "Installer B"]];
 const HEATS: [string, string][] = [["", "Unknown"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherNonRenewable", "Other fossil"], ["OtherRenewable", "Wood or pellets"], ["Heatpump", "Heat pump"]];
 const summary = (d: Design) => `${d.pv.kwp.toFixed(1)} kWp · ${d.battery.kwh ? `${d.battery.kwh} kWh` : "no battery"}${d.wallbox.included ? " · wallbox" : ""}${d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}`;
-const FACT: Record<string, string> = { demand_kwh: "Yearly electricity", price_ct_kwh: "Price", heating: "Heating", heat_kwh: "Yearly heat", ev: "Electric car", ev_km: "Driving", has_solar: "Existing solar", has_storage: "Existing battery", installer: "Catalog" };
+const FACT: Record<string, string> = { demand_kwh: "Yearly electricity", price_ct_kwh: "Price", heating: "Heating", heat_kwh: "Yearly heat", ev: "Electric car", ev_km: "Driving", has_solar: "Existing solar", has_storage: "Existing battery", installer: "Catalog",
+  ev_kwh_month: "Car charged at home", ev_charge_home: "Charging at home", ev_day: "Car charges in daytime", has_wallbox: "Wallbox already there", hp_kwh: "Heat pump use now", monthly_eur: "Monthly payment",
+  big_users: "Big users", living_m2: "Living area", built: "Built", trees: "Big trees near the roof", roof_renovation: "Roof renewal soon", goal: "Customer's priority" };
+const BUILT: [string, string][] = [["", "Not given"], ["before1979", "Before 1979"], ["1979to1994", "1979 – 1994"], ["1995to2009", "1995 – 2009"], ["since2010", "2010 or later"]];
+const HOME_SHARE: [string, string][] = [["", "Not given"], ["most", "Most"], ["half", "About half"], ["little", "Little"]];
+const RENEWAL: [string, string][] = [["", "Not given"], ["yes", "Yes"], ["no", "No"], ["unsure", "Not sure"]];
+const GOAL: [string, string][] = [["", "Not given"], ["cost", "Lower cost"], ["independence", "Independence"], ["environment", "Environment"]];
+const USE_FROM: Record<string, string> = { bill: "from the bill", range: "from a range the customer picked", payment: "from the monthly payment", people: "from the household size", unknown: "not known" };
+const BIG: Record<string, string> = { pool: "pool", sauna: "sauna", ac: "air conditioning", water: "electric water heater" };
+const label = (list: [string, string][], v: unknown) => list.find(([k]) => k === (v ?? ""))?.[1] ?? String(v);
 const UNDERSTOOD: Record<string, (u: Record<string, unknown>) => string> = {
   c_ev_on: () => "electric car", c_ev_off: () => "no electric car", c_ev_km: (u) => `${Number(u.km).toLocaleString("en")} km a year`, c_demand: (u) => `${Number(u.kwh).toLocaleString("en")} kWh a year`,
   c_mount: (u) => `mount on ${u.mount}`, c_area: (u) => `${u.area} m² usable`, c_max_panels: (u) => `at most ${u.panels} modules fit`, c_has_storage: () => "a battery is already there",
@@ -89,7 +98,17 @@ type Req = Request & { allowed?: string[] };
 const fmt = (r: Request, k: string, d: Design): string => {
   const i = r.inputs as unknown as Record<string, unknown>, v = i[k];
   if (k === "demand_kwh") return v == null ? `${(d.energy.base_mwh * 1000).toLocaleString("en")} kWh (stand-in)` : `${Number(v).toLocaleString("en")} kWh`;
-  if (k === "heat_kwh") return v == null ? "15,000 kWh (stand-in)" : `${Number(v).toLocaleString("en")} kWh`;
+  if (k === "heat_kwh") return v != null ? `${Number(v).toLocaleString("en")} kWh` : `${Math.round(d.energy.hp_mwh * 3.5 * 1000 / 100) * 100 ? (Math.round(d.energy.hp_mwh * 3.5 * 1000 / 100) * 100).toLocaleString("en") : "15,000"} kWh (${i.living_m2 && i.built ? "estimated from the house" : "stand-in"})`;
+  if (k === "installer") return INSTALLERS.find(([x]) => x === v)?.[1] ?? String(v);
+  if (k === "ev_kwh_month") return `${v} kWh a month`;
+  if (k === "hp_kwh") return `${Number(v).toLocaleString("en")} kWh a year`;
+  if (k === "monthly_eur") return `€${v} a month`;
+  if (k === "living_m2") return `${v} m²`;
+  if (k === "built") return label(BUILT, v);
+  if (k === "ev_charge_home") return label(HOME_SHARE, v);
+  if (k === "roof_renovation") return label(RENEWAL, v);
+  if (k === "goal") return label(GOAL, v);
+  if (k === "big_users") return (v as string[]).map((x) => BIG[x] ?? x).join(", ");
   if (k === "price_ct_kwh") return `${v} ct per kWh`;
   if (k === "ev_km") return `${Number(v).toLocaleString("en")} km a year`;
   if (k === "heating") return v == null ? "unknown" : v === "OtherNonRenewable" ? "other fossil" : v === "OtherRenewable" ? "wood or pellets" : v === "Heatpump" ? "heat pump" : String(v).toLowerCase();
@@ -97,6 +116,7 @@ const fmt = (r: Request, k: string, d: Design): string => {
 };
 /** Facts that matter for this design and were not given by anyone: they must be confirmed before the offer leaves. */
 const relevant = (r: Request, d: Design) => Object.keys(r.sources).filter((k) => (k !== "heat_kwh" || d.heatpump.included) && (k !== "ev_km" || r.inputs.ev));
+const EXTRA = ["ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "hp_kwh", "big_users", "living_m2", "built", "trees", "roof_renovation", "goal"];
 const SOURCE_LONG: Record<Source, string> = { customer: "from the customer", assumed: "assumed", planner: "confirmed by the planner" };
 
 function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null }) {
@@ -159,8 +179,8 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
       <div className="deskbody">
         {!d && <p className="muted">The engine is working…</p>}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
-        {d && tab === "design" && <><Brief d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} /></>}
-        {tab === "home" && <><h3>Facts</h3><Facts r={r} setI={setI} />{d && <><h3>Roof</h3><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
+        {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} /></>}
+        {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && <><h3>Roof</h3><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "checks" && <>
           <h3>Confirm before sending</h3>
           {confirm.length ? <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm"><div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>Assumed: nobody gave this. {k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : "It changes the design."}</small></div>
@@ -173,18 +193,20 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
         </>}
         {d && tab === "offer" && <Offer r={r} d={d} first={first.current} roof={roof} panels={out?.panels ?? {}} toConfirm={confirm.length} allowed={allowed} setAllowed={(a) => update(r.id, { allowed: a } as Partial<Request>)} send={send}
           conditions={checks.filter((c) => !done.includes(c.id)).map((c) => c.title)}
-          facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]), ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"]]} />}
+          facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]),
+            ...EXTRA.filter((k) => !r.sources[k] && sourceOf(r, k) && (r.inputs.ev || !k.startsWith("ev_") && k !== "has_wallbox")).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[sourceOf(r, k)!]] as [string, string, string]), ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"]]} />}
       </div>
     </aside>
   </main>;
 }
 
 /** The first ten seconds: what is proposed, why in three lines, and what is still open. Written from the engine's numbers by template, no language model. */
-function Brief({ d, assumed, points, site, open }: { d: Design; assumed: number; points: number; site: number; open: () => void }) {
+function Brief({ r, d, assumed, points, site, open }: { r: Request; d: Design; assumed: number; points: number; site: number; open: () => void }) {
   const s = d.similar, why: string[] = [];
   why.push(d.pv.locked ? `Solar is fixed by you at ${d.pv.modules} modules.` : d.pv.capped ? `The roof limits solar to ${d.pv.modules} modules; the engine wanted more.` : `Solar sized for ${d.energy.total_mwh.toFixed(1)} MWh a year. In ${s.n} similar homes, experts chose ${s.kwp_low}–${s.kwp_high} kWp.`);
   if (d.pv.max_modules) why.push(`${d.pv.modules} of ${d.pv.max_modules} modules that fit on the measured roof, best sun first. Makes about ${d.energy.production_mwh.toFixed(1)} MWh a year.`);
   why.push(d.battery.locked ? (d.battery.kwh ? `Battery set by you at ${d.battery.kwh} kWh.` : "No battery, your choice.") : d.battery.kwh ? `${d.battery.kwh} kWh battery: ${s.battery_rate}% of similar homes bought one${d.battery.unsure ? ", but this call is open" : ""}.` : `No battery proposed, though ${s.battery_rate}% of similar homes bought one.`);
+  if (r.inputs.goal) why.push(`The customer puts ${label(GOAL, r.inputs.goal).toLowerCase()} first; the engine leans on it.`);
   const items = [assumed && `${assumed} assumed ${assumed === 1 ? "fact" : "facts"} to confirm`, points && `${points} review ${points === 1 ? "point" : "points"}`, site && `${site} site ${site === 1 ? "check" : "checks"}`].filter(Boolean);
   return <section className="brief">
     <small>Design · summary written from the engine's numbers</small>
@@ -276,13 +298,27 @@ function RoofTab({ r, roof, d, off, panels, toggle, face, setFace, view, setView
   </>;
 }
 
+/** A fact with its source. A button group gets no <label> around it: a label would name every button after the
+ * whole question, and a click on the question would press the first button. The group carries its own name. */
 function Tagged({ label, source, children }: { label: string; source?: Source; children: React.ReactNode }) {
-  return <div className="fact"><label><span>{label}</span>{children}</label><em className={source}>{source ? SOURCE[source] : ""}</em></div>;
+  const group = isValidElement(children) && children.type === Segmented;
+  return <div className="fact">{group ? <div><span>{label}</span>{children}</div> : <label><span>{label}</span>{children}</label>}<em className={source}>{source ? SOURCE[source] : ""}</em></div>;
 }
-function Facts({ r, setI }: { r: Request; setI: (c: Partial<Inputs>) => void }) {
+/** Where an answer came from: the request's own record, else the homeowner when they gave it. */
+const sourceOf = (r: Request, k: string): Source | undefined => {
+  if (r.sources[k]) return r.sources[k];
+  const v = (r.inputs as unknown as Record<string, unknown>)[k];
+  return v == null || (Array.isArray(v) && !v.length) ? undefined : r.from === "Homeowner" ? "customer" : undefined;
+};
+
+function Facts({ r, d, setI }: { r: Request; d?: Design; setI: (c: Partial<Inputs>) => void }) {
   const i = r.inputs, s = r.sources;
+  const yn = (k: keyof Inputs, v: boolean | null | undefined) => <Segmented wide label={FACT[k]} value={v == null ? "" : v ? "yes" : "no"} onChange={(x) => setI({ [k]: x === "" ? null : x === "yes" } as Partial<Inputs>)} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "", label: "Not given" }]} />;
+  const num = (k: keyof Inputs, step: number) => <Input type="number" step={step} value={(i[k] as number | null | undefined) ?? ""} onChange={(e) => setI({ [k]: e.target.value ? Number(e.target.value) : null } as Partial<Inputs>)} />;
+  const pick = (k: keyof Inputs, list: [string, string][]) => <Select value={(i[k] as string | null | undefined) ?? ""} onChange={(e) => setI({ [k]: e.target.value || null } as Partial<Inputs>)}>{list.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select>;
+  const stand = d ? `${(d.energy.base_mwh * 1000).toLocaleString("en")} stands in` : "4,000 stands in";
   return <div className="facts">
-    <Tagged label="Yearly electricity (kWh)" source={s.demand_kwh}><Input type="number" step={100} placeholder="4,000 stands in" value={i.demand_kwh ?? ""} onChange={(e) => setI({ demand_kwh: e.target.value ? Number(e.target.value) : null })} /></Tagged>
+    <Tagged label="Yearly electricity (kWh)" source={s.demand_kwh}><Input type="number" step={100} placeholder={stand} value={i.demand_kwh ?? ""} onChange={(e) => setI({ demand_kwh: e.target.value ? Number(e.target.value) : null, demand_source: e.target.value ? "bill" : i.demand_source })} /></Tagged>
     <Tagged label="Price (ct per kWh)" source={s.price_ct_kwh}><Input type="number" step={0.5} value={i.price_ct_kwh} onChange={(e) => setI({ price_ct_kwh: Number(e.target.value) })} /></Tagged>
     <Tagged label="Heating" source={s.heating}><Select value={i.heating ?? ""} onChange={(e) => setI({ heating: e.target.value || null })}>{HEATS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Tagged>
     <Tagged label="Yearly heat (kWh)" source={s.heat_kwh}><Input type="number" step={500} value={i.heat_kwh ?? ""} onChange={(e) => setI({ heat_kwh: e.target.value ? Number(e.target.value) : null })} /></Tagged>
@@ -292,6 +328,21 @@ function Facts({ r, setI }: { r: Request; setI: (c: Partial<Inputs>) => void }) 
     <Tagged label="Existing battery" source={s.has_storage}><Segmented wide label="Existing battery" value={i.has_storage ? "yes" : "no"} onChange={(v) => setI({ has_storage: v === "yes" })} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></Tagged>
     {i.has_solar && (r.existing.kwp || r.existing.m2 || r.existing.year || r.existing.battery_kwh) && <p className="small muted span">On the building: {[r.existing.kwp ? `${r.existing.kwp} kWp` : r.existing.m2 && `${r.existing.m2} m² of panels marked, size estimated from it`, r.existing.year && `from ${r.existing.year}`, r.existing.battery_kwh && `${r.existing.battery_kwh} kWh battery`].filter(Boolean).join(", ")}. The engine sizes the new system for the need the old one leaves.</p>}
     <Tagged label="Catalog"><Select value={i.installer} onChange={(e) => setI({ installer: e.target.value })}>{INSTALLERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Tagged>
+    {((i.demand_source && i.demand_source !== "bill") || !!i.big_users?.length) && <p className="small muted span">Yearly use {i.demand_source ? USE_FROM[i.demand_source] ?? i.demand_source : "not given"}{i.monthly_eur ? ` (€${i.monthly_eur} a month)` : ""}.{i.big_users?.length ? ` Big users: ${fmt(r, "big_users", d as Design)}${i.demand_source === "bill" ? ", already in the bill." : ", added on top by the engine."}` : ""}{i.demand_source !== "bill" ? " A bill would be better." : ""}</p>}
+    <h3 className="span">More from the homeowner</h3>
+    {i.ev && <>
+      <Tagged label="Car charged at home (kWh a month)" source={sourceOf(r, "ev_kwh_month")}>{num("ev_kwh_month", 10)}</Tagged>
+      <Tagged label="Charging at home" source={sourceOf(r, "ev_charge_home")}>{pick("ev_charge_home", HOME_SHARE)}</Tagged>
+      <Tagged label="Car charges in daytime" source={sourceOf(r, "ev_day")}>{yn("ev_day", i.ev_day)}</Tagged>
+      <Tagged label="Wallbox already there" source={sourceOf(r, "has_wallbox")}>{yn("has_wallbox", i.has_wallbox)}</Tagged>
+    </>}
+    {i.heating === "Heatpump" && <Tagged label="Heat pump use now (kWh a year)" source={sourceOf(r, "hp_kwh")}>{num("hp_kwh", 500)}</Tagged>}
+    <Tagged label="Living area (m²)" source={sourceOf(r, "living_m2")}>{num("living_m2", 5)}</Tagged>
+    <Tagged label="Built" source={sourceOf(r, "built")}>{pick("built", BUILT)}</Tagged>
+    <Tagged label="Big trees near the roof" source={sourceOf(r, "trees")}>{yn("trees", i.trees)}</Tagged>
+    <Tagged label="Roof renewal soon" source={sourceOf(r, "roof_renovation")}>{pick("roof_renovation", RENEWAL)}</Tagged>
+    <Tagged label="Customer's priority" source={sourceOf(r, "goal")}>{pick("goal", GOAL)}</Tagged>
+    {i.demand_source === "payment" && <Tagged label="Monthly payment (€)" source={sourceOf(r, "monthly_eur")}>{num("monthly_eur", 5)}</Tagged>}
   </div>;
 }
 
