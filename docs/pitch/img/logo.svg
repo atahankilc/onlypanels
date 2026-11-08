@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" color="#00aff0">
+  <mask id="op-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32">
+    <rect width="32" height="32" fill="#fff"/>
+    <path d="M17.00 2.50L30.00 2.50L27.50 11.50L14.50 11.50z" fill="#000" stroke="#000" stroke-width="3.2" stroke-linejoin="round"/>
+  </mask>
+  <circle cx="12.5" cy="19" r="8.5" stroke="#00aff0" stroke-width="5.5" mask="url(#op-cut)"/>
+  <path d="M17.00 2.50L20.81 2.50L19.74 6.37L15.930 6.37zM21.85 2.50L25.15 2.50L24.07 6.37L20.78 6.37zM26.19 2.50L30.00 2.50L28.93 6.37L25.11 6.37zM15.57 7.63L19.39 7.63L18.31 11.50L14.50 11.50zM20.43 7.63L23.72 7.63L22.65 11.50L19.35 11.50zM24.76 7.63L28.57 7.63L27.50 11.50L23.69 11.50z" fill="#00aff0"/>
+</svg>

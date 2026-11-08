@@ -64,12 +64,19 @@ ol.steps li b { color: #17181b; font-weight: 600; }
 .dark p.lead { color: #c9c6be; }
 .dark .foot { color: #9b988f; } .dark .foot b { color: #f1efe9; }
 .hero { padding: 0; background: #16171a; }
-.hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .hero .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(14,15,17,.94) 0%, rgba(14,15,17,.82) 38%, rgba(14,15,17,.15) 70%, rgba(14,15,17,0) 100%); }
 .hero .text { position: absolute; left: 120px; top: 0; bottom: 0; width: 900px; display: flex; flex-direction: column; justify-content: center; color: #f4f2ed; }
 .hero h1 { font-size: 150px; }
 .hero p.lead { color: #d8d5cd; margin-top: 36px; font-size: 36px; }
 .hero .foot { color: #b7b3aa; } .hero .foot b { color: #f4f2ed; }
+.lockup { display: inline-flex; align-items: center; gap: 12px; vertical-align: middle; }
+.lockup img { width: 30px; height: 30px; }
+.lockup b { font-weight: 700; letter-spacing: -.01em; }
+.lockup b i { font-style: normal; color: #00aff0; }
+.lockup.big { gap: 34px; }
+.lockup.big img { width: 150px; height: 150px; }
+.lockup.big b { font-family: "Geist", system-ui, sans-serif; font-size: 136px; letter-spacing: -.035em; line-height: 1; }
 </style>
 </head>
 <body>
@@ -79,7 +86,7 @@ ol.steps li b { color: #17181b; font-weight: 600; }
   <img src="img/hero.jpg">
   <div class="shade"></div>
   <div class="text">
-    <h1>OnlyPanels</h1>
+    <div class="lockup big"><img src="img/logo.svg"><b>Only<i>Panels</i></b></div>
     <p class="lead">Solar, battery, wallbox and heat pump designs the way an expert planner would make them, from every fact we can find about a home.</p>
   </div>
   <div class="foot"><span><b>thinc! München 2026</b> · Reonic case</span><span></span></div>
@@ -92,7 +99,7 @@ ol.steps li b { color: #17181b; font-weight: 600; }
     <div class="m"><div class="ph"><img src="img/atahan.jpg"></div><div class="n">Atahan Kılıç</div></div>
     <div class="m"><div class="ph"><span>?</span></div><div class="n">Utku Kalkanlı</div></div>
   </div>
-  <div class="foot"><span><b>OnlyPanels</b></span><span>thinc! München 2026 · Reonic case</span></div>
+  <div class="foot"><span><span class="lockup"><img src="img/logo.svg"><b>Only<i>Panels</i></b></span></span><span>thinc! München 2026 · Reonic case</span></div>
 </section>
 
 <!-- 2 Finding -->
@@ -104,7 +111,7 @@ ol.steps li b { color: #17181b; font-weight: 600; }
     <div><div class="v">6.3<small> kWp</small></div><div class="l">apart on average: a whole roof side</div></div>
   </div>
   <p class="lead" style="margin-top:64px;max-width:1500px">The experts knew what the request never said: the roof, the shade, the street. AI is smart enough. <b style="color:#17181b">What it lacks is context.</b></p>
-  <div class="foot"><span><b>OnlyPanels</b></span><span>1,306 solar projects, 2 installers · scripts/profile_same_request.py</span></div>
+  <div class="foot"><span><span class="lockup"><img src="img/logo.svg"><b>Only<i>Panels</i></b></span></span><span>1,306 solar projects, 2 installers · scripts/profile_same_request.py</span></div>
 </section>
 
 <!-- 3 Fusion -->
@@ -118,7 +125,7 @@ ol.steps li b { color: #17181b; font-weight: 600; }
     </ol>
   </div>
   <div style="position:relative"><img class="side" src="img/desk.jpg"><span class="caption">Planner desk · yearly sun per roof side, modules placed</span></div>
-  <div class="foot"><span><b>OnlyPanels</b></span></div>
+  <div class="foot"><span><span class="lockup"><img src="img/logo.svg"><b>Only<i>Panels</i></b></span></span></div>
 </section>
 
 <!-- 4 Privacy -->
@@ -132,7 +139,7 @@ ol.steps li b { color: #17181b; font-weight: 600; }
     </ol>
   </div>
   <div style="position:relative"><img class="side" src="img/question.jpg"><span class="caption">Homeowner · question 1 of 9</span></div>
-  <div class="foot"><span><b>OnlyPanels</b></span></div>
+  <div class="foot"><span><span class="lockup"><img src="img/logo.svg"><b>Only<i>Panels</i></b></span></span></div>
 </section>
 
 <!-- 5 Data -->
@@ -193,7 +200,7 @@ ol.steps li b { color: #17181b; font-weight: 600; }
       </ul>
     </div>
   </div>
-  <div class="foot"><span><b>OnlyPanels</b></span><span>Each value with its source: docs/assumptions.md</span></div>
+  <div class="foot"><span><span class="lockup"><img src="img/logo.svg"><b>Only<i>Panels</i></b></span></span><span>Each value with its source: docs/assumptions.md</span></div>
 </section>
 
 <!-- 6 AI and engine -->
@@ -223,14 +230,14 @@ ol.steps li b { color: #17181b; font-weight: 600; }
     <img src="img/chain.jpg">
     <p>Each draft shows its steps as they run.<br><br><b>On 276 projects it never saw:</b> solar off by 2.65 kWp, against 3.06 for one design for every home and 4.02 for a rule of thumb, with none of this context.</p>
   </div>
-  <div class="foot"><span><b>OnlyPanels</b></span><span>scripts/final_test.py · per installer in docs/data/findings.md</span></div>
+  <div class="foot"><span><span class="lockup"><img src="img/logo.svg"><b>Only<i>Panels</i></b></span></span><span>scripts/final_test.py · per installer in docs/data/findings.md</span></div>
 </section>
 
 <!-- 8 Close -->
 <section class="slide dark">
   <h1 style="margin-top:170px">Better facts,<br>not a bigger model.</h1>
   <p class="lead" style="margin-top:50px">A first design and its price in minutes. The planner stays in control. The homeowner decides what is shared.</p>
-  <div class="foot"><span><b>github.com/atahankilc/onlypanels</b></span><span>Python · FastAPI · scikit-learn · React · MapLibre · three.js · Claude · ElevenLabs</span></div>
+  <div class="foot"><span><span class="lockup"><img src="img/logo.svg"><b>Only<i>Panels</i></b></span> · github.com/atahankilc/onlypanels</span><span>Python · FastAPI · scikit-learn · React · MapLibre · three.js · Claude · ElevenLabs</span></div>
 </section>
 
 </body>
