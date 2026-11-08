@@ -4,14 +4,19 @@ import { Costs, eur } from "./money";
 import { Design, Request } from "./plan";
 import { BatteryIcon, HeatIcon, SolarIcon, WallboxIcon } from "./techIcons";
 
-const one = (v: number) => v.toLocaleString("en", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+// toFixed, as every other kWp on the desk: 10.35 must read 10.3 here too, not 10.4 above a heading that says 10.3.
+const one = (v: number) => v.toFixed(1);
+
+/** A battery the home already has and the design keeps: the offer adds none, but the home is not without one. */
+export const keptBattery = (r: Request, d: Design) => (!d.battery.kwh && r.inputs.has_storage && r.existing.battery_kwh ? r.existing.battery_kwh : 0);
 
 export function DeskSummary({ r, d, costs, go }: { r: Request; d: Design; costs: Costs | null; go: (tab: "design" | "cost") => void }) {
-  const there = !d.battery.kwh && r.inputs.has_storage && r.existing.battery_kwh ? r.existing.battery_kwh : 0;
+  const there = keptBattery(r, d);
   const e = d.energy;
   const tiles = [
     { t: "solar", Icon: SolarIcon, label: "Solar", on: d.pv.modules > 0, value: one(d.pv.kwp), unit: "kWp", sub: `${d.pv.modules} modules${d.pv.capped ? ", roof full" : ""}` },
-    { t: "battery", Icon: BatteryIcon, label: "Battery", on: !!(d.battery.kwh || there), value: d.battery.kwh || there ? String(d.battery.kwh || there) : "None", unit: d.battery.kwh || there ? "kWh" : "", sub: there ? "already in the home" : d.battery.kwh ? `${e.self_use_pct}% of solar used` : "left out" },
+    // A kept battery is not part of the offer: the tile says no new one and names the one already there.
+    { t: "battery", Icon: BatteryIcon, label: "Battery", on: !!d.battery.kwh, value: d.battery.kwh ? String(d.battery.kwh) : there ? "None new" : "None", unit: d.battery.kwh ? "kWh" : "", sub: there ? `keeps its ${there} kWh` : d.battery.kwh ? `${e.self_use_pct}% of solar used` : "left out" },
     { t: "wallbox", Icon: WallboxIcon, label: "Wallbox", on: d.wallbox.included, value: d.wallbox.included ? "Yes" : "None", unit: "", sub: d.wallbox.included ? `${one(e.ev_mwh)} MWh for the car` : r.inputs.ev ? "car, no wallbox yet" : "no car" },
     { t: "heatpump", Icon: HeatIcon, label: "Heat pump", on: d.heatpump.included, value: d.heatpump.included ? String(d.heatpump.kw) : d.heatpump.blocked || r.inputs.heating === "Heatpump" ? "There" : "None", unit: d.heatpump.included ? "kW" : "", sub: d.heatpump.included ? `${one(e.hp_mwh)} MWh of power a year` : d.heatpump.blocked || r.inputs.heating === "Heatpump" ? "already heats the home" : "left out" },
   ];
@@ -37,8 +42,9 @@ export function DeskSummary({ r, d, costs, go }: { r: Request; d: Design; costs:
     <button type="button" className="sysum-money" onClick={() => go("cost")} title="Open the cost">
       {priced ? <>
         <span><small>Homeowner pays</small><b>{eur(priced.pays_eur)}</b></span>
-        <span><small>Pays back</small><b>{priced.payback_years != null ? `${priced.payback_years.toLocaleString("en", { maximumFractionDigits: 1 })} years` : "Not in time"}</b></span>
-        <span><small>First year</small><b className={priced.year1.total_eur >= 0 ? "up" : "down"}>{priced.year1.total_eur >= 0 ? "+" : "−"}{eur(Math.abs(priced.year1.total_eur))}</b></span>
+        <span><small>Pays back</small><b className={priced.payback_years == null ? "warn" : undefined}>{priced.payback_years != null ? `${priced.payback_years.toLocaleString("en", { maximumFractionDigits: 1 })} years` : `Not in ${priced.assumptions.years} years`}</b></span>
+        {/* Saving and payback answer different questions: a year's saving can be real while the price never comes back. */}
+        <span><small>{priced.year1.total_eur >= 0 ? "Saves in year 1" : "Costs in year 1"}</small><b className={priced.payback_years == null ? undefined : priced.year1.total_eur >= 0 ? "up" : "down"}>{eur(Math.abs(priced.year1.total_eur))}</b></span>
       </> : <span className="muted small">Pricing the design…</span>}
     </button>
   </div>;

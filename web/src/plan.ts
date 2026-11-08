@@ -181,5 +181,12 @@ export async function loadHome(square: string, home: string): Promise<Selected[]
 }
 const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 export const facing = (s: SunSurface) => (s.tilt < 8 ? "flat" : COMPASS[Math.round(s.azimuth / 45) % 8]);
-/** Looks at the best roof from a little to the side, so two faces show. */
-export const turnTo = (roof: Spot[]) => { const best = roof.find((r) => r.s.tilt >= 8); return best ? ((best.s.azimuth - 180 + 24 + 540) % 360) - 180 : 0; };
+/** Looks from a little to the side at the pitched roof that carries most of the design's modules, so two faces show and the
+ *  modules face the camera. Before the design is in, or with none placed on a pitched roof, the best roof stands in: on a long
+ *  hip roof that is often the small end, and looking at it hid most modules on the far side. */
+export const turnTo = (roof: Spot[], panels?: Record<string, number>) => {
+  const pitched = roof.filter((r) => r.s.tilt >= 8);
+  const most = pitched.reduce<Spot | null>((m, r) => ((panels?.[r.key] ?? 0) > (m ? panels?.[m.key] ?? 0 : 0) ? r : m), null);
+  const best = most ?? pitched[0];
+  return best ? ((best.s.azimuth - 180 + 24 + 540) % 360) - 180 : 0;
+};

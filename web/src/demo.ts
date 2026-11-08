@@ -1,7 +1,5 @@
-// Four homeowner requests on real Munich buildings, as if sent through the homeowner flow, so both sides open with real work.
-// Each is a different case and uses the homeowner screens fully: drawn priority areas with cut-outs, an added wall, existing
-// panels on part of a roof, a garage picked with the house, a flat roof, answers known exactly, as a range, as a payment or not at all.
-// They arrive at different points: one waiting, one a planner has opened, one with the offer already sent.
+// Three homeowner requests on real Munich buildings, as if sent through the homeowner flow, so both sides open with real work.
+// Each is a different case: answers known exactly, as a range or hardly at all. All arrive just sent, before any planner opened them.
 import { Answers, Choice, NO_ANSWERS, NO_CHOICE, Selected, SunSurface, areaAt, surfaceKey } from "./api";
 import { Handoff, design, fromHomeowner, loadHome, offerOf, roofOf } from "./plan";
 
@@ -26,50 +24,38 @@ const side = (s: SunSurface, share: number, keep: "near" | "far") => {
 const facing = (s: SunSurface, from: number, to: number) => s.azimuth >= from && s.azimuth < to;
 const south = (s: SunSurface) => facing(s, 135, 225), north = (s: SunSurface) => s.azimuth >= 315 || s.azimuth < 45;
 
+// Three bigger homes around Sondermeierstraße 86 in Munich (square 694_5340), all just sent by their homeowners: nobody has opened them.
 const SEEDS: Seed[] = [
   {
     // A family on gas who want a heat pump and already drive electric. They know their bill and their car's charging from its app.
-    // North roof out, a skylight cut out of the south roof. Independence first. The planner has already sent the offer.
-    ref: "R-4K7QD", hoursAgo: 75, state: "offer", homes: [["682_5336", "DEBY_LOD2_4476596"]],
+    // North roof out. Independence first.
+    ref: "R-7MQ2A", hoursAgo: 5, state: "sent", homes: [["694_5340", "DEBY_LOD2_5148545"]],
     answers: {
-      use_source: "exact", demand_kwh: 4800, price_ct_kwh: 34, price_known: true, has_solar: false, has_storage: false,
-      built: "1991to2000", living_m2: 140, heating: "Gas", heat_kwh: 18000, wants_hp: true,
+      use_source: "exact", demand_kwh: 5200, price_ct_kwh: 34, price_known: true, has_solar: false, has_storage: false,
+      built: "1991to2000", living_m2: 160, heating: "Gas", heat_kwh: 20000, wants_hp: true,
       ev: true, ev_planned: false, ev_count: 1, ev_kwh_month: 220, ev_km: 15000, ev_charge_home: "most", ev_day: false, has_wallbox: false, goal: "independence",
     },
-    marks: (_, s) => (s.kind !== "roof" ? null : north(s) ? { cells: [] } : south(s) ? { cells: withHole(s, 0) } : null),
+    marks: (_, s) => (s.kind === "roof" && north(s) ? { cells: [] } : null),
   },
   {
-    // 4.5 kWp from 2006 on the western half of the south roof, its feed-in tariff now over, and a 5 kWh battery added in 2019.
-    // Oil heating, no heat pump wanted. Knows the use only as a range; a sauna and an electric water heater. Adds the big south wall.
-    // Did not give the build year or living area: the census and the 3D model stand in. Cost first. A planner has opened it.
-    ref: "R-9TB2M", hoursAgo: 26, state: "opened", homes: [["698_5332", "DEBY_LOD2_5276159"]],
+    // A large household on oil that knows its use only as a range, with a sauna and an electric water heater. No heat pump wanted,
+    // no car. Did not give the build year or living area: the census and the 3D model stand in. Cost first.
+    ref: "R-3KD8W", hoursAgo: 2, state: "sent", homes: [["694_5340", "DEBY_LOD2_5148057"]],
     answers: {
-      use_source: "band", demand_kwh: 6000, has_solar: true, solar_kwp: 4.5, solar_year: 2006, has_storage: true, battery_kwh: 5,
-      big_users: ["sauna", "water"], heating: "Oil", oil_l: 2500, heat_kwh: 25000, wants_hp: false, ev: false, ev_planned: false, goal: "cost",
+      use_source: "band", demand_kwh: 7000, has_solar: false, has_storage: false, big_users: ["sauna", "water"],
+      heating: "Oil", oil_l: 3000, heat_kwh: 30000, wants_hp: false, ev: false, ev_planned: false, goal: "cost",
     },
-    marks: (_, s) => (s.kind === "roof" && south(s) ? { panels: side(s, 0.5, "near") } : s.kind === "wall" && s.m2 > 50 && south(s) ? { cells: all(s) } : null),
+    marks: () => null,
   },
   {
-    // A 1970s house that already heats with a heat pump, on its own meter. Two electric cars within a year, home office, so the cars
-    // stand at home in the day. Knows only the monthly payment. Energy certificate and a pool. Picked the garage with the house.
-    // North roof out. The environment first. Just sent.
-    ref: "R-2XW8P", hoursAgo: 3, state: "sent", homes: [["686_5326", "DEBY_LOD2_4769466"], ["686_5326", "DEBY_LOD2_104584034"]],
+    // An owner who knew little: no idea of the use, so the household size (four); heating not sure; a car within a year; no priority.
+    // Most facts reach the planner as assumptions.
+    ref: "R-9PX4N", hoursAgo: 0.5, state: "sent", homes: [["694_5340", "DEBY_LOD2_5148543"]],
     answers: {
-      use_source: "payment", monthly_eur: 140, has_solar: false, has_storage: false, big_users: ["pool"],
-      built: "before1979", living_m2: 180, cert_kwh_m2: 120, heating: "Heatpump", hp_kwh: 5500,
-      ev: true, ev_planned: true, ev_when: "soon", ev_count: 2, ev_km: 25000, ev_charge_home: "half", ev_day: true, has_wallbox: false, goal: "environment",
+      use_source: "people", demand_kwh: 4500, has_solar: false, has_storage: false, living_m2: 180,
+      heating: "unknown", ev: false, ev_planned: true, ev_when: "soon", ev_count: 1,
     },
-    marks: (b, s) => (b.id === "DEBY_LOD2_4769466" && s.kind === "roof" && north(s) ? { cells: [] } : null),
-  },
-  {
-    // A flat-roofed house where the owner knew little: no idea of the use, so the household size (two); heating not sure; no priority.
-    // A roof terrace drawn out of the flat roof, air conditioning ticked. Most facts reach the planner as assumptions. Just sent.
-    ref: "R-6HN3F", hoursAgo: 1, state: "sent", homes: [["698_5332", "DEBY_LOD2_66053"]],
-    answers: {
-      use_source: "people", demand_kwh: 2700, has_solar: false, has_storage: false, big_users: ["ac"], living_m2: 125,
-      heating: "unknown", ev: false, ev_planned: false,
-    },
-    marks: (_, s) => (s.kind === "roof" ? { cells: side(s, 0.25, "far") } : null),
+    marks: () => null,
   },
 ];
 

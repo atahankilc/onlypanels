@@ -33,9 +33,18 @@ const longest = (ring: P3[], up: P3): P3 => {
   return best;
 };
 
+/** The ring's own plane normal (Newell's method), turned to the side `n` points to. The surface's normal from the sun data can
+ *  differ from the drawn roof by a degree or so; across a 35 m roof that put the far modules up to 0.4 m under the roof. */
+const planeOf = (ring: P3[], n: P3): P3 => {
+  const m: P3 = [0, 0, 0];
+  ring.forEach((p, i) => { const q = ring[(i + 1) % ring.length]; m[0] += (p[1] - q[1]) * (p[2] + q[2]); m[1] += (p[2] - q[2]) * (p[0] + q[0]); m[2] += (p[0] - q[0]) * (p[1] + q[1]); });
+  if (!Math.hypot(...m)) return n;
+  return dot(m, n) < 0 ? [-m[0], -m[1], -m[2]] : m;
+};
+
 /** Every module that fits, lowest rows first, each as four corners in the model's metres. */
 export function fit(poly: Poly, n: P3): P3[][] {
-  const up = unit(n);
+  const up = unit(planeOf(poly.ring, n));
   // Rows run along the eave on a pitched roof. A flat roof has no eave, so rows follow its longest edge: lined up with the
   // building's walls, not with the map's east, which on a turned building set modules in steps against the edge.
   const u = Math.abs(up[2]) > 0.99 ? longest(poly.ring, up) : unit(cross([0, 0, 1], up));

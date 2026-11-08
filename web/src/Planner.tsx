@@ -21,7 +21,7 @@ import { AgentPanel } from "./Agent";
 import type { RoofNumbers } from "./share";
 import { BatteryCurve } from "./BatteryCurve";
 import { CostTab, PriceBook } from "./Costs";
-import { DeskSummary } from "./DeskSummary";
+import { DeskSummary, keptBattery } from "./DeskSummary";
 import { askAhead, askKey, keepAnswer, lastAnswer } from "./answers";
 import { EvidenceCard } from "./Evidence";
 import { Money, moneyAsk, moneyOf, useCosts, usePriceVersion } from "./money";
@@ -37,7 +37,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const SOURCE: Record<Source, string> = { customer: "Customer", assumed: "Assumed", planner: "You" };
 const INSTALLERS: [string, string][] = [["2a8ba8e2", "Installer A"], ["23c108b7", "Installer B"]];
 const HEATS: [string, string][] = [["", "Unknown"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherNonRenewable", "Other fossil"], ["OtherRenewable", "Wood or pellets"], ["District", "District heating"], ["Electric", "Electric heating"], ["Heatpump", "Heat pump"]];
-const summary = (d: Design) => `${d.pv.kwp.toFixed(1)} kWp · ${d.battery.kwh ? `${d.battery.kwh} kWh` : "no battery"}${d.wallbox.included ? " · wallbox" : ""}${d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}`;
+const summary = (d: Design, r?: Request) => `${d.pv.kwp.toFixed(1)} kWp · ${d.battery.kwh ? `${d.battery.kwh} kWh` : r && keptBattery(r, d) ? `keeps its ${keptBattery(r, d)} kWh battery` : "no battery"}${d.wallbox.included ? " · wallbox" : ""}${d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}`;
 const FACT: Record<string, string> = { demand_kwh: "Yearly electricity", price_ct_kwh: "Price", heating: "Heating", heat_kwh: "Yearly heat", ev: "Electric car", ev_km: "Driving", has_solar: "Existing solar", has_storage: "Existing battery", installer: "Catalog",
   ev_kwh_month: "Car charged at home", ev_charge_home: "Charging at home", ev_day: "Car charges in daytime", home_day: "Home in the day", heat_dist: "Heats through", boiler_age: "Boiler age", has_wallbox: "Wallbox already there", hp_kwh: "Heat pump use now", monthly_eur: "Monthly payment",
   big_users: "Big users", living_m2: "Living area", existing_kwp: "Existing solar size", ev_when: "Car comes", owner: "Who owns the home", backup: "Backup power", wants_hp: "Heat pump wanted", electric_heat_meter: "Electric heating meter", cert_kwh_m2: "Energy certificate", built: "Built", goal: "Customer's priority" };
@@ -157,7 +157,7 @@ function Line({ r, open }: { r: Request; open: () => void }) {
   return <li>
     <button type="button" className="reqrow" onClick={open}>
       <span className="reqrow-home"><b>{street}{asking > 0 && <span className="reqrow-ask">{asking === 1 ? "Question" : `${asking} questions`}</span>}</b><small>{[town, r.from, r.ref].filter(Boolean).join(" · ")}{r.receivedAt && <> · <time dateTime={new Date(r.receivedAt).toISOString()} title={new Date(r.receivedAt).toLocaleString("en-GB")}>{ago(r.receivedAt)}</time></>}</small></span>
-      <span className="reqrow-draft">{out ? summary(out.d) : <span className="muted">Drafting…</span>}</span>
+      <span className="reqrow-draft">{out ? summary(out.d, r) : <span className="muted">Drafting…</span>}</span>
       <span className={`reqrow-todo${!sent && assumed ? " open" : ""}`}>{sent || assumed === null ? "" : assumed ? `${assumed} to confirm` : "Ready to send"}</span>
       <span className={`reqstate ${sent ? "is-sent" : r.opened ? "is-open" : "is-new"}`}>{sent ? "Offer sent" : r.opened ? "In progress" : "New"}</span>
     </button>
@@ -327,7 +327,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
     {home ? <HomeMap buildings={r.shaded ?? r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} blocked={blockedOf(r.shaded ?? r.buildings, r.obstacles)} obstacles={r.obstacles} hotObstacle={hotObs} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
-      panels={tab === "home" && view.layer === "sun" ? {} : out?.panels} panelW={LEFT} turn={turnTo(roof)} onReady={() => setStep("review")} />
+      panels={tab === "home" && view.layer === "sun" ? {} : out?.panels} panelW={LEFT} turn={turnTo(roof, out?.panels)} onReady={() => setStep("review")} />
       : <NoHomeStage r={r} />}
     <aside className="panel tall desk">
       <header className="deskhead">
@@ -341,7 +341,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         {!d && <p className="muted">The engine is working…</p>}
         {asks.map((x) => <AskCard key={x.id} x={x} tried={() => tryAsk(x)} done={() => answer(r.ref ?? "-", x.id)} />)}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
-        {d && tab === "design" && <><Brief d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
+        {d && tab === "design" && <><Brief assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
             energy={<Fold title="Energy in a year" summary={`Makes ${d.energy.production_mwh.toFixed(1)} MWh against ${d.energy.total_mwh.toFixed(1)} MWh needed; ${d.energy.self_sufficiency_pct}% from own power`}><Energy d={d} inputs={r.inputs} measured={home} /></Fold>} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /></>}
         {tab === "home" && <><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, withPhotoSolar(r, obstacles)); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "cost" && (pricing ? <PriceBook installer={r.inputs.installer} close={() => setPricing(false)} />
@@ -392,12 +392,11 @@ function whyOf(r: Request, d: Design) {
   return why;
 }
 
-function Brief({ d, assumed, points, site, open }: { d: Design; assumed: number; points: number; site: number; open: () => void }) {
+/** What is still open. The system itself is in the tiles above, so it is not said again here. */
+function Brief({ assumed, points, site, open }: { assumed: number; points: number; site: number; open: () => void }) {
   const items = [assumed && `${assumed} assumed ${assumed === 1 ? "fact" : "facts"} to confirm`, points && `${points} review ${points === 1 ? "point" : "points"}`, site && `${site} site ${site === 1 ? "check" : "checks"}`].filter(Boolean);
-  return <section className="brief">
-    <b>{d.pv.kwp.toFixed(1)} kWp · {d.battery.kwh ? `${d.battery.kwh} kWh battery` : "no battery"}{d.wallbox.included ? " · wallbox" : ""}{d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}</b>
-    {items.length > 0 && <Button variant="plain" onClick={open}>Open: {items.join(" · ")} →</Button>}
-  </section>;
+  if (!items.length) return null;
+  return <section className="brief"><Button variant="plain" onClick={open}>Open: {items.join(" · ")} →</Button></section>;
 }
 
 const roofWords = (n: RoofNumbers) => `${n.m2 ? `about ${n.m2} m² of roof` : "roof size not known"}, ${n.facing === "flat" ? "flat" : n.facing === "unknown" ? `direction not known, ${n.tilt}° steep` : `facing ${n.facing}, ${n.tilt}° steep`}`;
@@ -517,10 +516,10 @@ function DesignTab({ d, first, r, setO, apply, lit, scores, review, energy }: { 
     setSaid(`Understood: ${heard}${x.source === "claude" ? " (read by AI)" : ""}. The numbers come from the engine.`); setText("");
   }).catch(() => setSaid("The change could not be applied."));
   const engine = scores?.scores[`engine ${r.inputs.installer}`];
-  const changed = first && summary(first) !== summary(d);
+  const changed = first && summary(first, r) !== summary(d, r);
   const why = whyOf(r, d);
   return <>
-    {changed && <p className="delta"><span>AI draft</span> {summary(first)}<br /><span>Now</span> {summary(d)}</p>}
+    {changed && <p className="delta"><span>AI draft</span> {summary(first, r)}<br /><span>Now</span> {summary(d, r)}</p>}
     {d.review.filter((n) => n.level === "warn").map((n) => <p key={n.code} className="flag">{n.text}</p>)}
     <section className="syscard" aria-label="The system">
       <header><h3>The system</h3><small>Auto follows the engine; your choice stays until you set it back.</small></header>
