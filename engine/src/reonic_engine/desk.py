@@ -15,7 +15,7 @@ from mcp.server.mcpserver.exceptions import ToolError  # its message reaches the
 
 from .agent import Run, summary
 
-TABS = ("home", "design", "cost", "checks", "offer")
+TABS = ("overview", "home", "design", "cost", "checks", "offer")
 PAGES = ("requests", "prices")
 # Facts the planner may correct by voice, as the Home tab's fields: (kind, lowest, highest) or (kind, allowed values).
 FACTS = {
@@ -95,7 +95,7 @@ def build(desk: Desk) -> MCPServer:
             raise ToolError("A request is open; go back to the list first.")
         return desk.act({"type": "page", "page": page}, f"Showing {page}.")
 
-    @server.tool(description="In the open request, show a section: home (facts and roof), design, cost (price and payback), checks (facts to confirm, site checks) or offer.")
+    @server.tool(description="In the open request, show a section: overview (the system, its money and the facts to confirm), home (facts and roof), design, cost (price and payback), checks (site checks) or offer.")
     def show_tab(tab: str) -> str:
         if tab not in TABS:
             raise ToolError(f"tab must be one of {TABS}")

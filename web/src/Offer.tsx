@@ -30,7 +30,7 @@ export default function Offer({ r, d, costs, first, roof, panels, facts, conditi
   return <>
     <div className={`offer-status ${sent ? "is-sent" : toConfirm ? "is-todo" : "is-ready"}`}>
       <div><b>{sent ? "Sent to the homeowner" : toConfirm ? `${toConfirm} assumed ${toConfirm === 1 ? "fact" : "facts"} to confirm first` : "Ready to send"}</b>
-        <small>{sent ? "Change anything and it reopens as a draft." : toConfirm ? "Confirm them at the top of Design; the offer below updates as you go." : "This is the page the homeowner gets. Open site checks print as conditions."}</small></div>
+        <small>{sent ? "Change anything and it reopens as a draft." : toConfirm ? "Confirm them in Overview; the offer below updates as you go." : "This is the page the homeowner gets. Open site checks print as conditions."}</small></div>
       <Button onClick={() => window.print()}>Print or PDF</Button>
       {!sent && <Button variant="solid" disabled={toConfirm > 0} onClick={send}>Approve and send</Button>}
     </div>

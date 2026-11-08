@@ -7,7 +7,7 @@ export type VoiceAction =
   | { type: "open"; id: string }
   | { type: "back" }
   | { type: "page"; page: "requests" | "prices" | "proof" }
-  | { type: "tab"; tab: "home" | "design" | "cost" | "checks" | "offer" }
+  | { type: "tab"; tab: "overview" | "home" | "design" | "cost" | "checks" | "offer" }
   | { type: "set"; overrides: Overrides }
   | { type: "confirm"; keys: string[] }
   | { type: "check"; ids: string[]; done: boolean }

@@ -202,7 +202,7 @@ function Line({ r, open }: { r: Request; open: () => void }) {
 }
 
 type Scores = { scores: Record<string, { kwp_within20: number; n: number; batt_exact_closest: number }> };
-type Tab = "home" | "design" | "cost" | "checks" | "offer";
+type Tab = "overview" | "home" | "design" | "cost" | "checks" | "offer";
 type Req = Request & { allowed?: string[] };
 const fmt = (r: Request, k: string, d: Design): string => {
   const i = r.inputs as unknown as Record<string, unknown>, v = i[k];
@@ -265,7 +265,7 @@ export const withPhotoSolar = (r: Request, obstacles: Obstacle[]): Partial<Reque
 };
 
 function Workspace({ r, update, back, scores, veiled = false, leaving = false, onShown }: { r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null; veiled?: boolean; leaving?: boolean; onShown?: () => void }) {
-  const [tab, setTab] = useState<Tab>("design");
+  const [tab, setTab] = useState<Tab>("overview"); // the request at a glance and what is left to do; the other tabs get the panel's height
   const home = r.buildings.length > 0;
   const [mapStep, setStep] = useState<"pick" | "review">(home ? "pick" : "review");
   // Under the list the map stays on its city view: the flight and the desk's uncovering wait until the list has gone (D131).
@@ -402,20 +402,20 @@ function Workspace({ r, update, back, scores, veiled = false, leaving = false, o
         <div className="grow"><h1>{splitLabel(r.label)[0]}</h1><p className="muted">{[splitLabel(r.label)[1], `${r.from} request`, r.ref].filter(Boolean).join(" · ")}</p></div>
         <span className={`reqstate ${r.status === "sent" ? "is-sent" : "is-open"}`}>{r.status === "sent" ? "Offer sent" : "Draft"}</span>
       </header>
-      {d && <DeskSummary r={r} d={d} costs={costs} go={setTab} />}
-      <div className="desktabs"><Segmented wide label="Sections" value={tab} onChange={setTab} options={[{ value: "home", label: "Home" }, { value: "design", label: "Design" }, { value: "cost", label: "Cost" }, { value: "checks", label: left ? `Checks ${left}` : "Checks" }, { value: "offer", label: "Offer" }]} /></div>
+      <div className="desktabs"><Segmented wide label="Sections" value={tab} onChange={setTab} options={[{ value: "overview", label: "Overview" }, { value: "home", label: "Home" }, { value: "design", label: "Design" }, { value: "cost", label: "Cost" }, { value: "checks", label: left ? `Checks ${left}` : "Checks" }, { value: "offer", label: "Offer" }]} /></div>
       <div className="deskbody">
         {!d && <DraftChain id={r.id} full />}
         {asks.map((x) => <AskCard key={x.id} x={x} tried={() => tryAsk(x)} done={() => answer(r.ref ?? "-", x.id)} />)}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
-        {d && tab === "design" && <><ConfirmCard r={r} d={d} confirm={confirm} setI={setI} confirmFacts={(keys) => update(r.id, { sources: { ...r.sources, ...Object.fromEntries(keys.map((k) => [k, "planner" as Source])) } })} more={() => setTab("home")} /><Brief points={warns.length} site={tasks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
+        {d && tab === "overview" && <><DeskSummary r={r} d={d} costs={costs} go={setTab} /><ConfirmCard r={r} d={d} confirm={confirm} setI={setI} confirmFacts={(keys) => update(r.id, { sources: { ...r.sources, ...Object.fromEntries(keys.map((k) => [k, "planner" as Source])) } })} more={() => setTab("home")} /><Brief points={warns.length} site={tasks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /></>}
+        {d && tab === "design" && <><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
             energy={<Fold title="Energy in a year" summary={`Makes ${d.energy.production_mwh.toFixed(1)} MWh against ${d.energy.total_mwh.toFixed(1)} MWh needed; ${d.energy.self_sufficiency_pct}% from own power`}><Energy d={d} inputs={r.inputs} measured={home} /></Fold>} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /></>}
         {tab === "home" && <><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} auto={photo} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, withPhotoSolar(r, obstacles)); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "cost" && (pricing ? <PriceBook installer={r.inputs.installer} close={() => setPricing(false)} />
           : <CostTab c={costs} failed={costsFailed} money={moneyOf(r)} setMoney={(money: Money) => update(r.id, { money } as Partial<Request>)} sent={r.status === "sent"}
             use={(change: Record<string, unknown>, label: string) => setO(change as Overrides, label)} prices={() => setPricing(true)} />)}
         {d && tab === "checks" && <Checks r={r} d={d} confirm={confirm} checks={checks} done={done} setDone={setDone} warns={warns.map((n) => ({ code: n.code, text: n.text }))}
-          confirmFacts={(keys) => update(r.id, { sources: { ...r.sources, ...Object.fromEntries(keys.map((k) => [k, "planner" as Source])) } })} change={() => setTab("design")} />}
+          confirmFacts={(keys) => update(r.id, { sources: { ...r.sources, ...Object.fromEntries(keys.map((k) => [k, "planner" as Source])) } })} change={() => setTab("overview")} />}
         {d && tab === "offer" && <Offer r={r} d={d} costs={costs} first={first.current} roof={roof} panels={out?.panels ?? {}} toConfirm={confirm.length} allowed={allowed} setAllowed={(a) => update(r.id, { allowed: a } as Partial<Request>)} send={send}
           conditions={tasks.filter((c) => !done.includes(c.id)).map((c) => c.title)}
           facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]),
@@ -424,7 +424,7 @@ function Workspace({ r, update, back, scores, veiled = false, leaving = false, o
       {/* The one main action, always in reach. The way back is the arrow at the top left only: a second "Requests" button here read as a new request. */}
       <div className="stick">
         {r.status === "sent" ? <Button variant="solid" size="lg" wide disabled>Offer sent</Button>
-          : confirm.length ? <Button variant="solid" size="lg" wide disabled={!d} onClick={() => setTab("design")}>Confirm {confirm.length} {confirm.length === 1 ? "fact" : "facts"} to send</Button>
+          : confirm.length ? <Button variant="solid" size="lg" wide disabled={!d} onClick={() => setTab("overview")}>Confirm {confirm.length} {confirm.length === 1 ? "fact" : "facts"} to send</Button>
           : home && photo === "looking" ? <Button variant="solid" size="lg" wide disabled><span className="spinner" aria-hidden="true" />Checking the roof photo</Button>
           : <Button variant="solid" size="lg" wide disabled={!d} onClick={send}>Send offer</Button>}
       </div>
@@ -699,7 +699,7 @@ function Checks({ r, d, confirm, checks, done, setDone, warns, confirmFacts, cha
       <div className={confirm.length ? "todo" : "ok"}><span>Before sending</span><b>{confirm.length ? `${confirm.length} ${confirm.length === 1 ? "fact" : "facts"} to confirm` : "Every fact confirmed"}</b></div>
       <div className={ticked === tasks.length ? "ok" : ""}><span>Before installing</span><b>{ticked} of {tasks.length} site checks done</b><i><em style={{ width: `${tasks.length ? (ticked / tasks.length) * 100 : 100}%` }} /></i></div>
     </div>
-    {confirm.length > 0 && <Button variant="plain" className="tofacts" onClick={change}>Confirm the {confirm.length} {confirm.length === 1 ? "fact" : "facts"} first, at the top of Design →</Button>}
+    {confirm.length > 0 && <Button variant="plain" className="tofacts" onClick={change}>Confirm the {confirm.length} {confirm.length === 1 ? "fact" : "facts"} first, in Overview →</Button>}
     {warns.length > 0 && <><h3>Points from the review</h3>{warns.map((n) => <p key={n.code} className="flag">{n.text}</p>)}</>}
     <h3>To check on site</h3>
     <p className="checks-rule">Tick what you have checked. <b>Anything not ticked prints on the offer as a condition.</b></p>
