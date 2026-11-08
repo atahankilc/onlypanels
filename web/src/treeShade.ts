@@ -19,7 +19,12 @@ export type Shade = {
   status: "much" | "some" | "none" | "unknown";
   trees: number; tallest: number | null; nearest: number | null; // the trees that take sun: count, tallest (m above ground), nearest (m)
   surfaces: { name: string; lost: number }[]; // roof sides that lose sun, with the share of their yearly sun lost
+  near?: TreeOnMap[]; // the trees around the home, for the map: where, how tall, and whether they take the home's sun
 };
+/** One tree for the map: longitude, latitude, height above ground (m), crown radius (m), and whether it shades the home. */
+export type TreeOnMap = { at: [number, number]; h: number; r: number; shades: boolean; share: number }; // share: of all the roof sun the trees take
+const SHOW_M = 40; // the map draws the trees this close to the home
+const SHARE_SHOWN = 0.03; // a tree is marked on the map when it takes at least this share of all the roof sun the trees take
 type Tree = [number, number, number]; // east, north (UTM 32), height above ground
 
 const squares = new Map<string, Promise<number[]>>();
@@ -80,6 +85,7 @@ export async function withTrees(buildings: Selected[]): Promise<{ buildings: Sel
     return unknown;
   }
   const blocking = new Map<number, number>(); // tree → nearest distance to a point it shades
+  const impact = new Map<number, number>(); // tree → the roof sun it takes, in m² of a year's direct sun (summed over roof points)
   const lost: Shade["surfaces"] = [];
   const out = buildings.map((b, bi) => {
     if (!b.sun) return b;
@@ -113,6 +119,7 @@ export async function withTrees(buildings: Selected[]): Promise<{ buildings: Sel
           open += weight[i];
           let pass = 1;
           for (const [t, k] of facing[i]) if (hits(pts[row], x.ux, x.uy, x.tanEl, t)) {
+            if (s.kind === "roof") impact.set(k, (impact.get(k) ?? 0) + (weight[i] / wsum) * x.stops * pass * (s.m2 / Math.max(1, s.year.length)));
             pass *= 1 - x.stops;
             const d = Math.hypot(t[0] - pts[row][0], t[1] - pts[row][1]);
             if (!blocking.has(k) || d < blocking.get(k)!) blocking.set(k, d);
@@ -133,12 +140,23 @@ export async function withTrees(buildings: Selected[]): Promise<{ buildings: Sel
   const roofs = [...lost.reduce((m, x) => ((m.get(x.name)?.lost ?? 0) >= x.lost ? m : m.set(x.name, x)), new Map<string, Shade["surfaces"][number]>()).values()]
     .filter((x) => x.lost >= SOME).sort((a, b) => b.lost - a.lost);
   const used = [...blocking.entries()];
+  // The trees near the home, back from the grid to longitude and latitude by the grid's own slope at one point of the home:
+  // within the 40 m drawn, that is a few centimetres off at most.
+  const ref = buildings.flatMap((b) => b.sun?.surfaces ?? []).find((s) => s.at.length)!, lon0 = ref.at[0], lat0 = ref.at[1], p0 = toUtm(lon0, lat0);
+  const [e1, n1] = toUtm(lon0 + 1e-4, lat0), [e2, n2] = toUtm(lon0, lat0 + 1e-4), [ea, na] = [e1 - p0[0], n1 - p0[1]], [eb, nb] = [e2 - p0[0], n2 - p0[1]], det = ea * nb - eb * na;
+  const back = (e: number, n: number): [number, number] => { const de = e - p0[0], dn = n - p0[1]; return [lon0 + ((de * nb - dn * eb) / det) * 1e-4, lat0 + ((dn * ea - de * na) / det) * 1e-4]; };
+  // A tree "takes the home's sun" on the map when it takes a real share of what all trees take from the roofs, not when its
+  // shadow touches a roof corner once a year: otherwise nearly every tree around lights up and the map says nothing.
+  const total = [...impact.values()].reduce((a, v) => a + v, 0);
+  const shading = new Set([...impact.entries()].filter(([, v]) => total > 0 && v / total >= SHARE_SHOWN).map(([k]) => k));
+  const near = trees.map((t, k) => [t, k] as [Tree, number]).filter(([t]) => all.some((p) => Math.hypot(t[0] - p[0], t[1] - p[1]) <= SHOW_M))
+    .map(([t, k]) => ({ at: back(t[0], t[1]), h: t[2], r: CROWN_RADIUS(t[2]), shades: shading.has(k), share: total > 0 ? (impact.get(k) ?? 0) / total : 0 }));
   return {
     buildings: out,
     shade: {
       status: roofs.some((x) => x.lost >= MUCH) ? "much" : roofs.length ? "some" : "none",
       trees: used.length, tallest: used.length ? Math.max(...used.map(([k]) => trees[k][2])) : null, nearest: used.length ? Math.min(...used.map(([, d]) => d)) : null,
-      surfaces: roofs,
+      surfaces: roofs, near,
     },
   };
 }

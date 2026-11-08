@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { Poly, Selected, SunSurface, View, homesIn, polyOf, surfaceKey, Square, homesUrl, squareEdges, squaresIn } from "./api";
 import { fit, ordered, take } from "./panels";
 import { avoidOf } from "./roofObstacles";
+import type { TreeOnMap } from "./treeShade";
 import { TILT_PER_PX, TURN_PER_PX, leash } from "./camera";
 import { P2, P3, centre, inside, normal, toLngLat, toLocal } from "./geometry";
 import { Info, Locate, Minus, Needle, Plus } from "./icons";
@@ -123,7 +124,7 @@ type Props = {
   // editsOn: the cells the tool changes now (priority or existing panels), to tell adding from taking out.
   // The homeowner's drawing: the cells marked on each surface, the tool in hand, and each stroke's cells. Without them a click toggles a whole surface.
   marked?: Record<string, number[]>; taken?: Record<string, number[]>; editsOn?: Record<string, number[]>;
-  priority?: Record<string, number[]>; obstacles?: { ring: P2[]; on: boolean }[]; keepClear?: { ring: P2[]; on: boolean }[]; hotObstacle?: number | null; tool?: Tool; onPaint?: (cells: Record<string, number[]>, on: boolean, start: boolean) => void; // priority: the homeowner's marked cells, where modules are drawn first, as the design placed them
+  priority?: Record<string, number[]>; obstacles?: { ring: P2[]; on: boolean }[]; keepClear?: { ring: P2[]; on: boolean }[]; trees?: TreeOnMap[]; showTrees?: boolean; hotObstacle?: number | null; tool?: Tool; onPaint?: (cells: Record<string, number[]>, on: boolean, start: boolean) => void; // priority: the homeowner's marked cells, where modules are drawn first, as the design placed them
 };
 export type Tool = "surface" | "draw";
 const SNAP_PX = 10; // a click this close to a point, corner or edge lands on it
@@ -452,7 +453,7 @@ type Real = { mesh: THREE.Mesh; ids: string[]; starts: Uint32Array; shade: Float
 type OnMap = { scene: THREE.Scene; at: P2; done: boolean; real?: Real };
 type Spot = { id: string; square: string };
 
-export default function HomeMap({ buildings, step, focus, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, editing, installed, panels, panelW, turn, onReady, marked, taken, editsOn, tool, onPaint, priority, obstacles, keepClear, hotObstacle }: Props) {
+export default function HomeMap({ buildings, step, focus, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, editing, installed, panels, panelW, turn, onReady, marked, taken, editsOn, tool, onPaint, priority, obstacles, keepClear, hotObstacle, trees, showTrees }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const models = useRef<{ scene: THREE.Scene; at: P2; id: string; polys: Poly[]; surfaces: { s: SunSurface; poly: number }[]; skins: ReturnType<typeof skinOf>[]; ghosts: THREE.Mesh }[]>([]); // one per building, each around its own origin
@@ -473,8 +474,8 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
   const spot = useRef<maplibregl.Marker | null>(null);
   const pins = useRef<maplibregl.Marker[]>([]);
   const sunOn = view.layer === "sun" && !!view.moment;
-  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken, obstacles, keepClear, hotObstacle, sunOn });
-  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken, obstacles, keepClear, hotObstacle, sunOn };
+  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken, obstacles, keepClear, hotObstacle, trees, showTrees, sunOn, sunLayer: view.layer === "sun" });
+  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken, obstacles, keepClear, hotObstacle, trees, showTrees, sunOn, sunLayer: view.layer === "sun" };
   const clearDraft = useRef(() => {});
   const drawing = () => live.current.step === "review" && live.current.editing && !!live.current.onPaint && !!live.current.tool;
 
@@ -606,6 +607,39 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     paintGhosts();
     paintPanels();
     paintObstacles();
+    paintTrees();
+  };
+
+  /** The trees around the home from Bavaria's tree map, as crowns on trunks: brighter where they take the home's sun. */
+  const paintTrees = () => {
+    models.current.forEach((x, i) => {
+      const g = x.scene.children[0] as THREE.Group | undefined, b = live.current.buildings.find((y) => y.id === x.id);
+      if (!g || !b) return;
+      const old = g.getObjectByName("trees");
+      if (old) { g.remove(old); empty(old as THREE.Group); }
+      if (i !== 0 || !live.current.showTrees || !live.current.trees?.length) return; // drawn once, with the home's first building
+      const ground = Math.min(0, ...x.polys.flatMap((p) => p.ring.map((q) => q[2])));
+      const out = new THREE.Group(); out.name = "trees";
+      const ball = new THREE.SphereGeometry(1, 14, 10), stick = new THREE.CylinderGeometry(0.15, 0.2, 1, 6);
+      for (const t of live.current.trees) {
+        const [px, py] = toLocal(b.origin, t.at), from = ground + 0.35 * t.h, top = ground + t.h;
+        // A tree that takes the home's sun is drawn warm and clear; the rest stay faint, so the ones that matter stand out.
+        const crown = new THREE.Mesh(ball, new THREE.MeshBasicMaterial({ color: t.shades ? "#F2A93B" : "#6F8F76", depthWrite: false }));
+        crown.material.userData.opacity = t.shades ? 0.55 : 0.18;
+        crown.scale.set(t.r, t.r, (top - from) / 2); crown.position.set(px, py, (from + top) / 2);
+        const rim: number[] = [];
+        for (let k = 0; k < 32; k++) { const a = (k / 32) * Math.PI * 2, c = ((k + 1) / 32) * Math.PI * 2; rim.push(px + t.r * Math.cos(a), py + t.r * Math.sin(a), (from + top) / 2, px + t.r * Math.cos(c), py + t.r * Math.sin(c), (from + top) / 2); }
+        const ring = lines(rim, t.shades ? "#FFC56B" : "#8FB197", t.shades ? 1 : 0.35);
+        ring.material.userData.opacity = t.shades ? 1 : 0.35;
+        const trunk = new THREE.Mesh(stick, new THREE.MeshBasicMaterial({ color: "#6B5A45" }));
+        trunk.material.userData.opacity = t.shades ? 0.9 : 0.4;
+        trunk.rotation.x = Math.PI / 2; trunk.scale.set(1, from - ground, 1); trunk.position.set(px, py, (ground + from) / 2);
+        out.add(crown, ring, trunk);
+      }
+      out.traverse((ob) => { const mat = (ob as THREE.Mesh).material as THREE.Material | undefined; if (mat) { mat.transparent = true; mat.opacity = shown.current * (mat.userData.opacity ?? 1); } });
+      g.add(out);
+    });
+    map.current?.triggerRepaint();
   };
 
   /** The modules the design places, on the surfaces it placed them, lowest rows first. */
@@ -670,8 +704,10 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         panels.geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
         (panels.material as THREE.MeshBasicMaterial).map = moduleLook;
         out.add(panels);
-        out.add(lines(edges, "#C9D6EA", 0.5));
-        out.traverse((o) => { const mat = (o as THREE.Mesh).material as THREE.Material | undefined; if (mat) { mat.userData.opacity = o instanceof THREE.LineSegments ? 0.5 : 1; mat.transparent = shown.current < 1; mat.opacity = shown.current * mat.userData.opacity; } });
+        // Over the sun's colours the modules stay as outlines on a faint fill: where they sit can be checked against the sun.
+        const sun = live.current.sunLayer;
+        out.add(lines(edges, sun ? "#FFFFFF" : "#C9D6EA", sun ? 0.95 : 0.5));
+        out.traverse((o) => { const mat = (o as THREE.Mesh).material as THREE.Material | undefined; if (mat) { mat.userData.opacity = o instanceof THREE.LineSegments ? (sun ? 0.95 : 0.5) : sun ? 0.18 : 1; mat.transparent = shown.current < 1 || sun; mat.opacity = shown.current * mat.userData.opacity; } });
       }
       g.add(out);
     });
@@ -1397,8 +1433,9 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     if (on && tool === "surface") m.dragPan.disable(); else m.dragPan.enable(PAN);
     clearDraft.current();
   }, [tool, step, editing]);
-  useEffect(() => { paintPanels(); }, [panels, obstacles, keepClear]);
+  useEffect(() => { paintPanels(); }, [panels, obstacles, keepClear, view.layer]);
   useEffect(() => { paintObstacles(); }, [obstacles, hotObstacle, buildings]);
+  useEffect(() => { paintTrees(); }, [trees, showTrees, buildings]);
   // Models are built when their sun arrives, so tiles appear without leaving the screen.
   const sunReady = buildings.filter((b) => b.sun).length;
   useEffect(() => {

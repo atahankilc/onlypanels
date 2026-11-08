@@ -26,6 +26,7 @@ import { askAhead, askKey, keepAnswer, lastAnswer } from "./answers";
 import { EvidenceCard } from "./Evidence";
 import { Money, moneyAsk, moneyOf, useCosts, usePriceVersion } from "./money";
 import { Button, Check, Field, Fold, IconButton, Input, Segmented, Select, Slider } from "./ui";
+import SunView from "./SunView";
 import { setDeskContext, setOpenContext, useVoiceActions } from "./voiceBus";
 import VoiceDock from "./Voice";
 import { ago } from "./Requests";
@@ -320,7 +321,9 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
     go(0);
     return () => { live = false; clearTimeout(t); };
   }, [r.id, roofReady]);
-  useEffect(() => { if (tab !== "home") { setView({ layer: "photo", moment: null }); setFace(null); } }, [tab]);
+  useEffect(() => { if (tab !== "home") setFace(null); }, [tab]); // the map's view stays as the planner chose it, on every tab
+  const [showTrees, setShowTrees] = useState(false);
+  const trees = r.shade?.near ?? [];
 
   const setI = (change: Partial<Inputs>, by: Source = "planner", label?: string) => { mark(label ?? `${Object.keys(change).map((k) => FACT[k] ?? k).join(", ")} changed`); update(r.id, { inputs: { ...r.inputs, ...change }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(change).filter((k) => k in FACT).map((k) => [k, by])) } }); };
   const setO = (change: Overrides, label?: string) => { mark(label ?? describe(change)); update(r.id, { overrides: { ...r.overrides, ...change } }); };
@@ -362,9 +365,18 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const tryAsk = (x: Ask) => { setO(x.change as Overrides, `Tried the customer's question: ${describeChange(x.change)}`); if (r.status === "sent") update(r.id, { status: "draft" }); setTab("design"); };
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
-    {home ? <HomeMap buildings={r.shaded ?? r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} obstacles={r.obstacles} hotObstacle={hotObs} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
-      panels={tab === "home" && view.layer === "sun" ? {} : out?.panels} panelW={LEFT} turn={turnTo(roof, out?.panels)} onReady={() => setStep("review")} />
+    {home ? <HomeMap buildings={view.layer === "sun" && !showTrees ? r.buildings : r.shaded ?? r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} obstacles={r.obstacles} hotObstacle={hotObs} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"} trees={trees} showTrees={showTrees}
+      panels={out?.panels} panelW={LEFT} turn={turnTo(roof, out?.panels)} onReady={() => setStep("review")} />
       : <NoHomeStage r={r} />}
+    {home && step === "review" && <SunView view={view} setView={setView} buildings={r.shaded ?? r.buildings}
+      extra={<Button variant="glass" aria-pressed={showTrees} disabled={!trees.length} onClick={() => setShowTrees(!showTrees)}
+        title={r.shade ? (trees.length ? `${trees.length} trees within 40 m, ${trees.filter((t) => t.shades).length} take the home's sun` : "No trees within 40 m") : "Trees are still loading"}>
+        Trees{trees.length ? ` ${trees.length}` : ""}</Button>}
+      below={showTrees && r.shade ? <div className="sunbox treenote">
+        <p><i className="dot warm" />{trees.some((t) => t.shades) ? `${trees.filter((t) => t.shades).length} marked trees cast ${Math.round(trees.filter((t) => t.shades).reduce((a, t) => a + t.share, 0) * 100)}% of the trees' shade on the roof` : "No tree here casts much shade on the roof"}</p>
+        {r.shade.surfaces.length > 0 && <ul>{r.shade.surfaces.map((x) => <li key={x.name}><span>{x.name}</span><b>−{Math.round(x.lost * 100)}% sun</b></li>)}</ul>}
+        <p className="muted">{view.layer === "sun" ? "The sun on the roof includes their shade. Switch Trees off to see it without them." : "Show the sun to see their shade on the roof."}</p>
+      </div> : view.layer === "sun" && r.shade && trees.some((t) => t.shades) ? <p className="sunbox treenote muted">Sun without the trees. Switch Trees on to add their shade.</p> : null} />}
     <aside className="panel tall desk">
       <header className="deskhead">
         <IconButton label="Back to requests" onClick={back}><Back /></IconButton>
@@ -631,22 +643,9 @@ function DesignTab({ d, first, r, setO, apply, lit, scores, review, energy }: { 
 }
 
 function RoofTab({ r, roof, d, off, panels, toggle, face, setFace, view, setView }: { r: Request; roof: Spot[]; d: Design; off: string[]; panels: Record<string, number>; toggle: (k: string) => void; face: Face | null; setFace: (f: Face | null) => void; view: View; setView: (v: View) => void }) {
-  const [play, setPlay] = useState(false);
-  const mode = view.layer === "photo" ? "photo" : view.moment ? "time" : "year";
-  const at = view.moment ?? { month: 6, hour: 12 };
-  const suns = r.buildings.find((b) => b.sun)?.sun?.suns ?? [], hours = suns.filter((s) => s.month === at.month).map((s) => s.hour);
-  useEffect(() => {
-    if (!play || !hours.length) return;
-    const t = setInterval(() => { const i = hours.indexOf(at.hour); setView({ layer: "sun", moment: { month: at.month, hour: hours[(i + 1) % hours.length] } }); }, 450);
-    return () => clearInterval(t);
-  }, [play, at.hour, at.month]);
   const fits = roof.filter((x) => !off.includes(x.key)).reduce((a, x) => a + x.fits, 0);
   return <>
-    <Segmented wide label="Show on the model" value={mode} onChange={(m) => { setPlay(false); setView({ layer: m === "photo" ? "photo" : "sun", moment: m === "time" ? at : null }); }} options={[{ value: "photo", label: "Photo and modules" }, { value: "year", label: "Yearly sun" }, { value: "time", label: "Sun by hour" }]} />
-    {mode === "time" && <div className="sunrow2"><Button onClick={() => setPlay(!play)}>{play ? "Pause" : "Play the day"}</Button>
-      <Field label="Month" value={MONTHS[at.month - 1]}><Slider min={1} max={12} value={at.month} onChange={(e) => { const m = Number(e.target.value), l = suns.filter((s) => s.month === m).map((s) => s.hour); setView({ layer: "sun", moment: { month: m, hour: Math.min(Math.max(at.hour, l[0]), l[l.length - 1]) } }); }} /></Field>
-      <Field label="Solar time" value={`${at.hour}:00`}><Slider min={hours[0]} max={hours[hours.length - 1]} value={at.hour} onChange={(e) => setView({ layer: "sun", moment: { month: at.month, hour: Number(e.target.value) } })} /></Field></div>}
-    {mode === "year" && <div className="legend" role="img" aria-label={`Sun on the surface from ${SUN_LOW} to ${SUN_HIGH} kWh per square metre a year`}><i /><span>{SUN_LOW} kWh/m²</span><span>{SUN_HIGH.toLocaleString("en")} kWh/m²</span></div>}
+    <p className="small muted">The map's top left shows the photo, the year's sun or one hour's, and the trees.</p>
     <table className="grid surfaces"><thead><tr><th /><th>Facing</th><th>Tilt</th><th>Area</th><th>Shade</th><th>kWh/kWp</th>{r.priority && Object.keys(r.priority).length > 0 && <th>Marked</th>}<th>Fits</th><th>Placed</th></tr></thead><tbody>
       {roof.map((x) => { const me = { building: x.b.id, poly: x.poly }; return <tr key={x.key} className={face?.building === me.building && face.poly === x.poly ? "on" : ""} onMouseEnter={() => setFace(me)} onMouseLeave={() => setFace(null)}>
         <td><Check checked={!off.includes(x.key)} onChange={() => toggle(x.key)}>{""}</Check></td><td>{facing(x.s)}</td><td>{x.s.tilt}°</td><td>{Math.round(x.s.m2)} m²</td><td>{x.s.kwh_per_kwp == null ? "?" : `${Math.round(x.shade * 100)}%`}</td><td>{x.s.kwh_per_kwp == null ? `~${x.yield_}` : x.yield_}</td>{r.priority && Object.keys(r.priority).length > 0 && <td>{x.inside}</td>}<td>{x.fits}</td><td><b>{panels[x.key] ?? 0}</b></td>

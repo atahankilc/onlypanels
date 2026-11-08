@@ -30,6 +30,18 @@
 /* ---------- The desk: the homeowner's review stage, a wider column ---------- */
 .stage.plan { z-index: 4; }
 .stage.plan .pin { display: none; }
+/* The map's view on the desk: its top left, beside the desk column, so the planner picks photo, sun or trees on any tab. */
+.stage.plan .sunview { top: 16px; right: auto; left: calc(var(--left) + 4px); width: 460px; }
+.sunpick { display: flex; gap: 8px; align-items: center; }
+.sunpick > :first-child { flex: 1; }
+.treenote { gap: 8px; font-size: 13px; }
+.app:has(.stage.plan.review) .topbar::before { opacity: 0; } /* on an open request the map's own controls sit up here; the logo is on the desk's dark */
+.treenote p { margin: 0; display: flex; align-items: center; gap: 8px; }
+.treenote ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.treenote li { display: flex; justify-content: space-between; color: var(--hud-ink-2); }
+.treenote li b { color: #F2A93B; font-weight: 500; }
+.treenote .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.treenote .dot.warm { background: #F2A93B; }
 /* Opening a request starts on the map's pick step while the camera flies to the home. The desk is already in its place, as on
    the review step, but cut away from the right; when the map slides right, its edge uncovers the desk on the map's own curve, as
    the homeowner's curtain does (styles.css). Words are never over the map, and never wait for the map to finish. */
