@@ -11,7 +11,10 @@ type WhatIf = { demand_kwh?: number; ev?: boolean; ev_km?: number; heat_kwh?: nu
 type Step = { tool: "try_design" | "battery_sizes"; fixed: Partial<Overrides>; what_if: WhatIf; why?: string; result: Partial<Result> & { sizes?: number } };
 type Fact = { id: string; title: string; text: string; from: string[]; changes: string | null; level: "note" | "warn" };
 type Ask = { fact: string; question: string; why: string; low: Result; high: Result };
-type Review = { headline: string; change: Overrides | null; after: Result | null; reasons: string[]; asks: Ask[]; steady: { fact: string; text: string }[]; conditions: { id: string; title: string; text: string }[]; facts: Fact[]; draft: Result; steps: Step[] };
+type ReviewMoney = { pays_eur: number; gross_eur: number; payback_years: number | null; gain_eur: number; draft_2027_payback_years: number | null; grant: { eur: number; rate_pct: number; path: string } | null;
+  counted: { title: string; effect: string; status: string }[]; todo: { title: string; action: string; status: string }[] };
+type Review = { headline: string; change: Overrides | null; after: Result | null; reasons: string[]; asks: Ask[]; steady: { fact: string; text: string }[]; conditions: { id: string; title: string; text: string }[]; facts: Fact[]; draft: Result; steps: Step[]; money?: ReviewMoney };
+const euro = (v: number) => `€${Math.round(v).toLocaleString("en")}`;
 type Answer = { headline: string; answer: string | null; change: Overrides | null; after: Result | null; steps: Step[]; source: string };
 type Turn = { asked: string; steps: Step[]; answer: Answer | null; failed?: boolean };
 
@@ -101,6 +104,11 @@ export function AgentPanel({ r, roof, use }: { r: Request; d: Design; roof: Spot
         {applied(review.change) ? <span className="agent-tag">In use</span> : <Button onClick={() => use(review.change!, `Review: ${changeWords(review.change!)}`)}>Use this</Button>}
       </div>}
       {review.asks.length > 0 && <><h4>Ask the customer: these move the design</h4><ol>{review.asks.map((a) => <li key={a.fact}><b>{a.question}</b><br /><small className="muted">{a.why}</small></li>)}</ol></>}
+      {review.money && <><h4>Money and rules</h4>
+        <p className="small">The homeowner pays {euro(review.money.pays_eur)}{review.money.grant ? ` after ${euro(review.money.grant.eur)} in heat pump grants (${review.money.grant.path === "fkg" ? "KfW and Munich" : "KfW"})` : ""}; {review.money.payback_years != null ? `it pays back in about ${review.money.payback_years} years` : "it does not pay back within 20 years"} and leaves them {euro(review.money.gain_eur)} ahead after 20 years.
+          {review.money.draft_2027_payback_years != null && review.money.draft_2027_payback_years !== review.money.payback_years ? ` Switched on in 2027 under the draft EEG: about ${review.money.draft_2027_payback_years} years.` : ""}</p>
+        {review.money.counted.length > 0 && <ul className="small muted">{review.money.counted.map((c) => <li key={c.title}>{c.title}: {c.effect}{c.status === "draft" ? " (draft law)" : ""}</li>)}</ul>}
+        {review.money.todo.length > 0 && <><h4>To do before the order</h4><ul>{review.money.todo.map((t) => <li key={t.title}><b>{t.title}.</b> {t.action}</li>)}</ul></>}</>}
       {review.conditions.length > 0 && <><h4>Before the offer</h4><ul>{review.conditions.map((c) => <li key={c.id}><b>{c.title}.</b> {c.text}</li>)}</ul></>}
       {fromAnswers.length > 0 && <><h4>Read from the answers</h4><ul>{fromAnswers.map((f) => <li key={f.id}><b>{f.title}.</b> {f.text}</li>)}</ul></>}
       {review.steady.length > 0 && <><h4>Fine as given</h4><ul className="small muted">{review.steady.map((s) => <li key={s.fact}>{s.text}</li>)}</ul></>}

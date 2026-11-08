@@ -136,6 +136,13 @@ The data holds no prices. Every price below is a typical German end-customer pri
 | Electricity +3% a year, gas and oil +4%, panels −0.4% a year | Payback | Data default; our assumption (CO₂ price); module warranties | `pricebook.py` RATES |
 | Upkeep: solar €150, heat pump €200, boiler and chimney sweep €250 a year | Payback | Our assumption | `pricebook.py` RATES |
 | Inverter replaced once after 15 years; battery counts for 15 years; 20 years looked at; 4 ct after the 20 feed-in years | Payback | Our assumption; EEG pays 20 years | `costs.py` |
+| 27% of feed-in unpaid | Negative-price hours (Solarspitzengesetz, EEG §51); the hours added after year 20 (§51a) are not counted | Share of a fixed rooftop system's 2025 output in negative-price hours (logicenergy) | `pricebook.py` RATES, `incentives.py` |
+| 60% of peak power | Feed-in limit up to 7 kWp without a smart meter, applied hour by hour | Solarspitzengesetz | `incentives.py` CAP_NO_METER, `energy.py` export_cap_kw |
+| €100 a year above 7 kWp | Smart meter and control box | MsbG price caps for 7–15 kWp, €50 each (topagrar) | `pricebook.py` RATES |
+| €138 a year | §14a EnWG module 1 grid fee rebate with a heat pump or wallbox | SWM Infrastruktur 2026 price sheet, as compared by 42watt; not checked against SWM's own sheet | `pricebook.py` RATES |
+| Munich FKG: 15% on KfW's eligible costs, at most 60% together, not with KfW's speed or income bonus | Heat pump grant path | Munich FKG guideline of 28 Sep 2026, ch. 2.2.1 | `incentives.py`, `costs.py` grant |
+| EEG 2027 draft: 5.2 ct for 36 months, then 4 ct, feed-in capped at 50% | Second payback, for a system switched on from 2027 | Cabinet draft of 29 July 2026 (homeandsmart, advant-beiten; one source says 6.2 ct) | `incentives.py` |
+| €300 over 20 years | Least gain for which a low-cost customer's design moves away from the engine's first draft | Our choice | `costs.py` MONEY_WORTH_EUR |
 
 ## Not available
 

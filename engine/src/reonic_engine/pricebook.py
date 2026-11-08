@@ -122,6 +122,10 @@ RATES = {
     "boiler_upkeep_eur": {"value": 250, "label": "Gas or oil boiler service and chimney sweep (€/year)", "source": "2026 guides €200–350"},
     "inverter_life": {"value": 15, "label": "Inverter replaced after (years)", "source": "Typical inverter life 12–20 years"},
     "years": {"value": 20, "label": "Years looked at", "source": "The feed-in is paid 20 years"},
+    "neg_price_share_pct": {"value": 27, "label": "Feed-in unpaid in negative-price hours (%)", "source": "Solarspitzengesetz (EEG §51); 2025 share of rooftop output: logicenergy"},
+    "smart_meter_eur": {"value": 100, "label": "Smart meter and control box above 7 kWp (€/year)", "source": "MsbG price caps, 7–15 kWp: €50 + €50"},
+    "grid_rebate_eur": {"value": 138, "label": "§14a grid fee rebate, module 1 (€/year)", "source": "SWM Infrastruktur 2026, via 42watt"},
+    "draft_feed_ct": {"value": 5.2, "label": "EEG 2027 draft: transitional feed-in (ct/kWh)", "source": "Cabinet draft 29 July 2026; at most 36 months"},
 }
 
 

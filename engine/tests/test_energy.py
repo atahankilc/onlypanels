@@ -20,7 +20,7 @@ def test_battery_raises_independence_with_diminishing_returns():
 
 
 def test_no_panels_means_no_saving():
-    assert run(production=0, battery=0) == {"self_sufficiency_pct": 0, "self_use_pct": 0, "saving_eur": 0, "load_kwh": 4500, "own_kwh": 0, "export_kwh": 0}
+    assert run(production=0, battery=0) == {"self_sufficiency_pct": 0, "self_use_pct": 0, "saving_eur": 0, "load_kwh": 4500, "own_kwh": 0, "export_kwh": 0, "curtailed_kwh": 0}
 
 
 def test_reasonable_german_home():

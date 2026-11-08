@@ -160,8 +160,48 @@ def design(req: DesignRequest):
     """The planner's design. Homeowner answers may be missing; what stood in for them is listed in the answer."""
     i, assumed = prepared(req)
     o = req.overrides.model_dump()
+    d = decided(i, o)
+    curve = batteries.curve(i, d)
+    money = costs.battery_options(i, d, curve, pricebook.book(i.get("installer"))) if d["pv"]["modules"] and not i.get("has_storage") else []
+    return {**d, "alternatives": engine().alternatives(i, o, d), "battery_curve": curve, "battery_money": money, "assumed": assumed}
+
+
+PICKS: dict[str, dict | None] = {}
+
+
+def decided(i, o):
+    """The engine's design. For a customer who puts low cost first, the battery and module count are then chosen by money
+    (costs.best_for_money), within what experts use for similar homes and never dearer than the draft. A planner's own
+    choice always stands; the locks the page shows stay the planner's."""
     d = engine().design(i, o)
-    return {**d, "alternatives": engine().alternatives(i, o, d), "battery_curve": batteries.curve(i, d), "assumed": assumed}
+    if i.get("goal") != "cost":
+        return d
+    book = pricebook.book(i.get("installer"))
+    key = json.dumps([i, o, [(x["id"], x["fixed"], x["per_unit"], x["vat"], x["when"]) for x in book["items"]], {k: v["value"] for k, v in book["rates"].items()}], sort_keys=True, default=str)
+    if key not in PICKS:  # the search runs the engine about 35 times: the design and cost views share one answer
+        if len(PICKS) > 64:
+            PICKS.clear()
+        PICKS[key] = costs.best_for_money(engine().design, i, o, book, base=d)
+    pick = PICKS[key]
+    if not pick:
+        return d
+    if pick["overrides"]:
+        d = engine().design(i, {**o, **pick["overrides"]})
+        d["pv"]["locked"], d["battery"]["locked"] = o.get("modules") is not None, o.get("battery_kwh") is not None
+        d["reasons"] = [r for r in d["reasons"] if r.get("code") not in ("pv_locked", "battery_locked")]
+    d["money_pick"] = pick
+    words = lambda m, kb: f"{m} modules, {'no battery' if not kb else f'{kb:g} kWh battery'}"
+    if pick["kept"]:
+        how, result = "Tried the battery sizes and module counts experts use for similar homes, none dearer than the draft.", "The draft already leaves the customer most ahead."
+    else:
+        dr = pick["draft"]
+        how = (f"Tried {pick['tried']} battery sizes and module counts experts use for similar homes, none dearer than the draft, "
+               f"priced with the price book and the same hourly estimate. Draft: {words(dr['modules'], dr['battery_kwh'])}, €{pick['draft_pays_eur']:,}, "
+               f"€{pick['draft_gain_eur']:,} ahead after 20 years.")
+        result = f"{words(d['pv']['modules'], d['battery']['kwh'])}: €{pick['pays_eur']:,}, about €{pick['gain_eur']:,} ahead after 20 years."
+        d["review"].append({"code": "money_pick", "level": "note", "on": "battery", "text": f"The customer puts low cost first, so the engine chose by money: {result} The draft was {words(dr['modules'], dr['battery_kwh'])}, €{pick['draft_gain_eur']:,} ahead."})
+    d["trace"].append({"id": "money", "title": "Chosen by money", "kind": "rule", "inputs": [{"key": "goal", "label": "Customer's priority", "value": "low cost"}], "how": how, "result": result})
+    return d
 
 
 @app.post("/api/review")
@@ -170,8 +210,19 @@ def review_request(req: DesignRequest):
     design, and one change that fits the customer. No language model; the same request always gives the same review."""
     as_request = lambda inputs, overrides: DesignRequest(inputs=Inputs(**inputs), overrides=Overrides(**overrides))
     full = lambda inputs, overrides: design(as_request(inputs, overrides))
-    quick = lambda inputs, overrides: engine().design(prepared(as_request(inputs, overrides))[0], overrides)
-    return casework.review(full, prepared(req)[0], req.overrides.model_dump(), quick)  # with a payment already turned into kWh
+    # The edges go through the same decision as the draft, so a low-cost customer's edges are chosen by money too.
+    quick = lambda inputs, overrides: decided(prepared(as_request(inputs, overrides))[0], overrides)
+    i, o = prepared(req)[0], req.overrides.model_dump()
+    out = casework.review(full, i, o, quick)  # with a payment already turned into kWh
+    # What the draft costs and the rules that touch it, so the review says it next to the design: money, grants, what to do.
+    d = decided(i, o)
+    m = costs.evaluate(i, d, pricebook.book(i.get("installer")))
+    live = [r for r in m["rules"] if r["applies"]]
+    out["money"] = {"pays_eur": m["pays_eur"], "gross_eur": m["gross_eur"], "payback_years": m["payback_years"], "gain_eur": m["gain_eur"],
+                    "draft_2027_payback_years": (m["draft_2027"] or {}).get("payback_years"), "grant": m["grant"],
+                    "counted": [{"title": r["title"], "effect": r["effect"], "status": r["status"]} for r in live if r["effect"]],
+                    "todo": [{"title": r["title"], "action": r["action"], "status": r["status"]} for r in live if r["action"] and r["id"] not in ("vat0", "kfw_270", "munich_pv", "negative_prices")]}
+    return out
 
 
 class ObstaclesRequest(BaseModel):
@@ -384,7 +435,7 @@ def cost_view(req: CostRequest):
     o = req.overrides.model_dump()
     m = req.money
     b = pricebook.book(i.get("installer"))
-    d = engine().design(i, o)
+    d = decided(i, o)
     money = costs.evaluate(i, d, b, m.extras, m.qty, m.income, m.kids)
     options = costs.battery_options(i, d, batteries.curve(i, d), b) if d["pv"]["modules"] and not i.get("has_storage") else []
     heat = None

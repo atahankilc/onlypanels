@@ -56,11 +56,12 @@ export default function Offer({ r, d, costs, first, roof, panels, facts, conditi
         <table><tbody>
           {Object.entries(costs.by_tech).map(([t, v]) => <tr key={t}><th scope="row">{({ solar: "Solar, installed", battery: "Battery, installed", wallbox: "Wallbox, installed", heatpump: "Heat pump, installed" } as Record<string, string>)[t] ?? t}</th><td>{eur(v)}</td></tr>)}
           <tr><th scope="row">Total</th><td>{eur(costs.gross_eur)}{costs.vat_eur ? ` incl. ${eur(costs.vat_eur)} VAT` : ", no VAT on solar and battery"}</td></tr>
-          {costs.grant && <tr><th scope="row">KfW heat pump grant</th><td>−{eur(costs.grant.eur)} ({costs.grant.rate_pct}%), applied for before ordering</td></tr>}
+          {costs.grant && <tr><th scope="row">{costs.grant.path === "fkg" ? "KfW and Munich heat pump grants" : "KfW heat pump grant"}</th><td>−{eur(costs.grant.eur)} ({costs.grant.rate_pct}%), applied for before ordering</td></tr>}
           <tr><th scope="row">You pay</th><td><b>{eur(costs.pays_eur)}</b></td></tr>
           <tr><th scope="row">Your costs a year</th><td>{eur(costs.bills.before.total_eur)} today, about {eur(costs.bills.after.total_eur)} with the system</td></tr>
           <tr><th scope="row">Pays back</th><td>{costs.payback_years != null ? `after about ${costs.payback_years.toLocaleString("en", { maximumFractionDigits: 1 })} years` : `not within ${costs.assumptions.years} years`}; about {eur(costs.gain_eur)} ahead after {costs.assumptions.years} years</td></tr>
         </tbody></table>
+        {costs.rules.some((x) => x.applies && x.effect && x.id !== "vat0") && <><h4>Rules and grants counted</h4><ul>{costs.rules.filter((x) => x.applies && (x.effect || x.status === "draft") && x.id !== "vat0").map((x) => <li key={x.id}>{x.title}{x.effect ? `: ${x.effect}` : ""}{x.status === "draft" ? " (draft law, not decided)" : ""}{x.action ? `. ${x.action}` : ""}</li>)}</ul></>}
         <p className="fine">Prices are typical and become binding with the order after a site visit. Payback assumes electricity {costs.assumptions.electricity_rise_pct}% dearer each year{costs.fuel ? `, ${costs.fuel.kind} ${costs.assumptions.fuel_rise_pct}% dearer` : ""}, panels losing {costs.assumptions.degradation_pct}% a year, one new inverter, upkeep and insurance included.{costs.grant ? " The grant needs an application at KfW before the order is signed." : ""}</p>
       </section>}
 

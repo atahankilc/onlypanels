@@ -21,19 +21,21 @@ export function CostTab({ c, failed, money, setMoney, use, prices, sent }: TabPr
   const fuelName = c.fuel?.kind === "oil" ? "Heating oil" : "Gas";
   return <>
     <dl className="money-head">
-      <div className="lead"><dt>The homeowner pays</dt><dd>{eur(c.pays_eur)}</dd><small>{c.grant ? `${eur(c.gross_eur)} less ${eur(c.grant.eur)} KfW grant` : c.vat_eur ? `${eur(c.net_eur)} + ${eur(c.vat_eur)} VAT` : "No VAT on solar and battery"}</small></div>
-      <div><dt>Pays back in</dt><dd>{c.payback_years != null ? <>{c.payback_years.toLocaleString("en", { maximumFractionDigits: 1 })}<small> years</small></> : "–"}</dd><small>{c.payback_years == null ? `not within ${n} years` : "prices rising, panels ageing"}</small></div>
+      <div className="lead"><dt>The homeowner pays</dt><dd>{eur(c.pays_eur)}</dd><small>{c.grant ? `${eur(c.gross_eur)} less ${eur(c.grant.eur)} ${c.grant.path === "fkg" ? "KfW and city" : "KfW"} grant` : c.vat_eur ? `${eur(c.net_eur)} + ${eur(c.vat_eur)} VAT` : "No VAT on solar and battery"}</small></div>
+      <div><dt>Pays back in</dt><dd>{c.payback_years != null ? <>{c.payback_years.toLocaleString("en", { maximumFractionDigits: 1 })}<small> years</small></> : "–"}</dd><small>{c.payback_years == null ? `not within ${n} years` : c.draft_2027 ? `${c.draft_2027.payback_years != null ? `${c.draft_2027.payback_years} years` : "not"} if switched on in 2027 (draft law)` : "prices rising, panels ageing"}</small></div>
       <div><dt>Gain over {n} years</dt><dd>{eur(c.gain_eur)}</dd><small>{c.irr_pct != null ? `${c.irr_pct}% a year return` : "after paying it off"}</small></div>
     </dl>
     {c.notes.map((x) => <div key={x.code} className={x.level === "warn" ? "money-note warn" : "money-note"}><p>{x.text}</p>{x.change && !sent && <Button onClick={() => use(x.change!, x.code === "money_battery" ? "Battery left out for the money" : "Battery size by money")}>Use</Button>}</div>)}
 
     <h3>How the homeowner gains</h3>
-    <p className="small muted">The first year, before and after. Electricity at {c.price_ct_kwh} ct per kWh, feed-in at {y.feed_ct} ct{c.fuel ? `, ${fuelName.toLowerCase()} at ${c.fuel.ct} ct` : ""}.</p>
+    <p className="small muted">The first year, before and after. Electricity at {c.price_ct_kwh} ct per kWh, feed-in at {y.feed_full_ct} ct but none in negative-price hours ({y.unpaid_pct}% of the year's output in 2025){c.fuel ? `, ${fuelName.toLowerCase()} at ${c.fuel.ct} ct` : ""}.</p>
     <table className="grid money-bill"><thead><tr><th /><th>Today</th><th>With the system</th></tr></thead><tbody>
       <tr><th scope="row">Electricity from the grid<small>{b.before.grid_kwh.toLocaleString("en")} → {b.after.grid_kwh.toLocaleString("en")} kWh</small></th><td>{eur(b.before.grid_eur)}</td><td>{eur(b.after.grid_eur)}</td></tr>
       <tr><th scope="row">Sold to the grid</th><td>{b.before.feed_eur ? `−${eur(b.before.feed_eur)}` : "–"}</td><td>−{eur(b.after.feed_eur)}</td></tr>
       {(b.before.fuel_eur > 0 || b.after.fuel_eur > 0) && <tr><th scope="row">{fuelName}<small>{c.fuel?.kwh.toLocaleString("en")} kWh a year</small></th><td>{eur(b.before.fuel_eur)}</td><td>{eur(b.after.fuel_eur)}</td></tr>}
       <tr><th scope="row">Upkeep<small>{[b.before.upkeep_eur && "boiler service, chimney sweep", "solar insurance and checks", c.lines.some((l) => l.tech === "heatpump") && "heat pump service"].filter(Boolean).join("; ")}</small></th><td>{b.before.upkeep_eur ? eur(b.before.upkeep_eur) : "–"}</td><td>{eur(b.after.upkeep_eur)}</td></tr>
+      {b.after.meter_eur > 0 && <tr><th scope="row">Smart meter and control box<small>required above 7 kWp</small></th><td>–</td><td>{eur(b.after.meter_eur)}</td></tr>}
+      {b.after.rebate_eur > 0 && <tr><th scope="row">Grid fee rebate<small>§14a, heat pump or wallbox controllable</small></th><td>–</td><td>−{eur(b.after.rebate_eur)}</td></tr>}
       <tr className="total"><th scope="row">A year</th><td>{eur(b.before.total_eur)}</td><td>{eur(b.after.total_eur)}</td></tr>
     </tbody></table>
     <ul className="money-why">
@@ -42,6 +44,8 @@ export function CostTab({ c, failed, money, setMoney, use, prices, sent }: TabPr
       {y.fuel_eur > 0 && <li><b>{signed(y.fuel_eur)}</b> {fuelName.toLowerCase()} no longer bought</li>}
       {y.extra_power_eur !== 0 && <li><b>{signed(-y.extra_power_eur)}</b> {y.extra_power_eur > 0 ? "more electricity used (heat pump, car)" : "less electricity used"}</li>}
       {y.upkeep_eur !== 0 && <li><b>{signed(y.upkeep_eur)}</b> upkeep</li>}
+      {y.meter_eur > 0 && <li><b>{signed(-y.meter_eur)}</b> smart meter and control box</li>}
+      {y.rebate_eur > 0 && <li><b>{signed(y.rebate_eur)}</b> lower grid fee (§14a)</li>}
       <li className="sum"><b>{signed(y.total_eur)}</b> in the first year{c.battery_eur ? `, of which the battery ${eur(c.battery_eur)}` : ""}</li>
     </ul>
     {c.solar_ct_kwh != null && <p className="small muted">Each kWh from the panels costs about {c.solar_ct_kwh} ct over {n} years, against {c.price_ct_kwh} ct from the grid.</p>}
@@ -54,7 +58,7 @@ export function CostTab({ c, failed, money, setMoney, use, prices, sent }: TabPr
         ...c.lines.filter((l) => l.tech === t).map((l) => <tr key={l.id}><th scope="row">{l.name}{(l.edited || l.custom) && <small>{l.custom ? "your part" : "your price"}</small>}</th><td>{qtyText(l)}</td><td>{eur(l.gross)}{l.vat ? <small>{eur(l.net)} + {l.vat}% VAT</small> : null}</td></tr>),
       ])}
       <tr className="total"><th scope="row" colSpan={2}>Total{c.vat_eur ? <small>{eur(c.net_eur)} net + {eur(c.vat_eur)} VAT</small> : <small>0% VAT on solar and battery (UStG §12(3))</small>}</th><td>{eur(c.gross_eur)}</td></tr>
-      {c.grant && <tr><th scope="row" colSpan={2}>KfW heat pump grant<small>{c.grant.rate_pct}% of {eur(c.grant.eligible_eur)}</small></th><td>−{eur(c.grant.eur)}</td></tr>}
+      {c.grant && <tr><th scope="row" colSpan={2}>{c.grant.path === "fkg" ? "KfW and Munich heat pump grants" : "KfW heat pump grant"}<small>{c.grant.rate_pct}% of {eur(c.grant.eligible_eur)}</small></th><td>−{eur(c.grant.eur)}</td></tr>}
       {c.grant && <tr className="total"><th scope="row" colSpan={2}>The homeowner pays</th><td>{eur(c.pays_eur)}</td></tr>}
     </tbody></table>
     <div className="money-actions"><Button onClick={prices}>Edit prices or add a part</Button></div>
@@ -64,7 +68,9 @@ export function CostTab({ c, failed, money, setMoney, use, prices, sent }: TabPr
       <ul className="tasks">{c.extras.map((x) => <li key={x.id}><Check checked={x.on} onChange={(v) => setMoney({ ...money, extras: { ...(money.extras ?? {}), [x.id]: v } })}>
         <b>{x.name} · {eur(x.net)}</b><small>{TECH[x.tech]}{x.share != null ? ` · in ${Math.round(x.share * 100)}% of this installer's offers` : ""}{x.unit !== "job" ? ` · ${qtyText(x)}` : ""}</small></Check></li>)}</ul></>}
 
-    {c.grant && <><h3>KfW grant</h3>
+    <Rules rules={c.rules} />
+
+    {c.grant && <><h3>Heat pump grant</h3>
       <ul className="small muted money-grant">{c.grant.notes.map((x) => <li key={x}>{x}</li>)}</ul>
       <div className="facts"><Field label="Taxable household income"><Select value={money.income ?? ""} onChange={(e) => setMoney({ ...money, income: e.target.value || null })}>{INCOME.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
         <div className="fact"><span>&nbsp;</span><Check checked={!!money.kids} onChange={(v) => setMoney({ ...money, kids: v })}>Child under 18 at home</Check></div></div></>}
@@ -80,6 +86,22 @@ export function CostTab({ c, failed, money, setMoney, use, prices, sent }: TabPr
 
     <p className="small muted trust">Typical German prices for autumn 2026, not a quote: each has its source on the price page, and you can set your own. Electricity +{c.assumptions.electricity_rise_pct}% a year, gas and oil +{c.assumptions.fuel_rise_pct}%, panels lose {c.assumptions.degradation_pct}% a year, the inverter is replaced after {c.assumptions.inverter_life} years, the battery counts for 15 years. Feed-in fixed for 20 years.</p>
   </>;
+}
+
+const STATUS: Record<string, string> = { law: "Law", draft: "Draft law", city: "Munich" };
+/** The rules and grants that touch this home, with what each does and what to do. */
+function Rules({ rules }: { rules: Costs["rules"] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const shown = rules.filter((r) => r.applies);
+  if (!shown.length) return null;
+  return <><h3>Rules and grants for this home</h3>
+    <p className="small muted">What German law, KfW and Munich mean for this system as of November 2026. Their money is already in the numbers above. Click one for what to do.</p>
+    <ul className="rules">{shown.map((r) => <li key={r.id} className={r.status}>
+      <button type="button" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>
+        <em>{STATUS[r.status]}</em><b>{r.title}</b>{r.effect && <span>{r.effect}</span>}
+      </button>
+      {open === r.id && <div><p>{r.text}</p>{r.action && <p><b>To do:</b> {r.action}</p>}<small>{r.source}</small></div>}
+    </li>)}</ul></>;
 }
 
 /** Money over the years, one bar a year: below the line while the system is being paid off, above once it has paid back. */

@@ -123,37 +123,40 @@ def sun_shape(surfaces=None, placed=None):
     return weather()
 
 
-def simulate(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, sun=None, ev_day=False, home_day=None):
+def simulate(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, sun=None, ev_day=False, home_day=None, export_cap_kw=None):
     """One estimate, averaged over the weather years. sun: hourly shapes from sun_shape(); the fallback is the clear-ish model.
-    home_day: "most" or "rarely" when someone is home in the day on weekdays; anything else keeps the standard day."""
+    home_day: "most" or "rarely" when someone is home in the day on weekdays; anything else keeps the standard day.
+    export_cap_kw: the most the grid takes in an hour (a feed-in limit by law); what is over it is lost (curtailed_kwh)."""
     years = sun if sun is not None else weather()
     house = HOUSES.get(home_day, HOUSE)
     if years is None:
-        return _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, SOLAR, ev_day, house)
-    runs = [_year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, y, ev_day, house) for y in np.atleast_2d(years)]
+        return _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, SOLAR, ev_day, house, export_cap_kw)
+    runs = [_year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, y, ev_day, house, export_cap_kw) for y in np.atleast_2d(years)]
     return {"self_sufficiency_pct": round(np.mean([r["self_sufficiency_pct"] for r in runs])),
             "self_use_pct": round(np.mean([r["self_use_pct"] for r in runs])),
             "saving_eur": int(round(np.mean([r["saving_eur"] for r in runs]) / 10) * 10),
-            **{k: round(float(np.mean([r[k] for r in runs]))) for k in ("load_kwh", "own_kwh", "export_kwh")}}
+            **{k: round(float(np.mean([r[k] for r in runs]))) for k in ("load_kwh", "own_kwh", "export_kwh", "curtailed_kwh")}}
 
 
-def _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, shape, ev_day=False, house=HOUSE):
+def _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, shape, ev_day=False, house=HOUSE, cap=None):
     load = (house_kwh * house + ev_kwh * (EV_SUN if ev_day else EV) + heat_kwh * HEAT).tolist()
     solar = (production_kwh * shape).tolist()
     capacity = battery_kwh * BATTERY_USABLE
     rate = battery_kwh * C_RATE
-    charge, direct, from_battery, exported = capacity / 2, 0.0, 0.0, 0.0
+    charge, direct, from_battery, exported, lost = capacity / 2, 0.0, 0.0, 0.0, 0.0
     for need, sun in zip(load, solar):
         used = min(need, sun)
         direct += used
         need -= used
         spare = sun - used
-        if spare > 0 and capacity:
-            stored = min(spare, rate, (capacity - charge) / WAY)
+        if spare > 0:
+            stored = min(spare, rate, (capacity - charge) / WAY) if capacity else 0.0
             charge += stored * WAY
-            exported += spare - stored
-        elif spare > 0:
-            exported += spare
+            out_now = spare - stored
+            if cap is not None and out_now > cap:
+                lost += out_now - cap
+                out_now = cap
+            exported += out_now
         if need > 0 and charge > 0:
             out = min(need, rate, charge * WAY)
             charge -= out / WAY
@@ -167,5 +170,5 @@ def _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, sh
         "self_use_pct": round(own / production_kwh * 100) if production_kwh else 0,
         "saving_eur": round((own * price_ct + exported * FEED_IN_CT_KWH) / 100 / 10) * 10,
         # The kWh behind the shares, for the money view (costs.py): what the home uses, covers itself and sells.
-        "load_kwh": round(total), "own_kwh": round(own), "export_kwh": round(exported),
+        "load_kwh": round(total), "own_kwh": round(own), "export_kwh": round(exported), "curtailed_kwh": round(lost),
     }

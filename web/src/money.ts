@@ -1,20 +1,22 @@
 // Money: the planner's price book and what a design costs and pays back. Every number comes from the API (costs.py,
 // pricebook.py): prices from the book, kWh from the engine's hourly estimate. The page only shows them.
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Design, Request, Spot, designBody } from "./plan";
 
 export type Money = { extras?: Record<string, boolean>; qty?: Record<string, number>; income?: string | null; kids?: boolean };
 export type Line = { id: string; tech: string; kind: string; name: string; qty: number; unit: string; fixed: number; per_unit: number; vat: number; net: number; gross: number; custom: boolean; edited: boolean; extra: boolean };
 export type Extra = { id: string; tech: string; name: string; on: boolean; share: number | null; qty: number; unit: string; net: number };
-export type Grant = { rate_pct: number; eligible_eur: number; eur: number; notes: string[] };
-export type Side = { grid_kwh: number; grid_eur: number; feed_eur: number; fuel_eur: number; upkeep_eur: number; total_eur: number };
+export type Grant = { rate_pct: number; eligible_eur: number; eur: number; notes: string[]; path: "beg" | "fkg"; beg_eur: number; fkg_eur: number; other_eur: number };
+export type Side = { grid_kwh: number; grid_eur: number; feed_eur: number; fuel_eur: number; upkeep_eur: number; meter_eur: number; rebate_eur: number; total_eur: number };
+export type Rule = { id: string; title: string; status: "law" | "draft" | "city"; applies: boolean; effect: string | null; text: string; action: string | null; source: string };
 export type BatteryMoney = { kwh: number; cost_eur: number; year1_eur: number; payback_years: number | null; gain_eur: number };
 export type Variant = { id: string; title: string; overrides: Record<string, unknown>; gross_eur: number; pays_eur: number; payback_years: number | null; gain_eur: number; irr_pct: number | null; year1_eur: number };
 export type MoneyNote = { code: string; level: "warn" | "note"; on: string; text: string; change?: Record<string, unknown> };
 export type Costs = {
   lines: Line[]; extras: Extra[]; inverter_kw: number; net_eur: number; vat_eur: number; gross_eur: number; by_tech: Record<string, number>;
   grant: Grant | null; pays_eur: number; battery_eur: number;
-  year1: { own_eur: number; feed_eur: number; fuel_eur: number; extra_power_eur: number; upkeep_eur: number; total_eur: number; feed_ct: number };
+  year1: { own_eur: number; feed_eur: number; fuel_eur: number; extra_power_eur: number; upkeep_eur: number; meter_eur: number; rebate_eur: number; total_eur: number; feed_ct: number; feed_full_ct: number; unpaid_pct: number };
+  neg_loss_eur: number; curtailed_kwh: number; draft_2027: { payback_years: number | null; gain_eur: number; feed_eur: number; curtailed_kwh: number } | null; rules: Rule[];
   fuel: { kwh: number; ct: number; eur: number; kind: string } | null; bills: { before: Side; after: Side };
   solar_ct_kwh: number | null; price_ct_kwh: number;
   rows: { year: number; eur: number; total: number }[]; payback_years: number | null; gain_eur: number; irr_pct: number | null;
@@ -64,6 +66,9 @@ export const resetRates = () => call<Book>("/api/prices/rates", "DELETE").then((
 export function useCosts(r: Request, roof: Spot[]) {
   const [out, setOut] = useState<Costs | null>(null);
   const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(0); // a failed call is asked again after a few seconds
+  const failedOnce = useRef(false);
+  failedOnce.current = failed;
   const v = usePriceVersion();
   const money = moneyOf(r);
   useEffect(() => {
@@ -73,10 +78,10 @@ export function useCosts(r: Request, roof: Spot[]) {
       const { body } = designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict);
       call<Costs>("/api/costs", "POST", { ...body, money: { extras: money.extras ?? {}, qty: money.qty ?? {}, income: money.income ?? null, kids: !!money.kids } })
         .then((c) => { if (live) { setOut(c); setFailed(false); setCurrent(c); } })
-        .catch(() => live && setFailed(true));
-    }, 250);
+        .catch(() => { if (live) { setFailed(true); setRetry((n) => n + 1); } });
+    }, failedOnce.current ? 3000 : 250);
     return () => { live = false; clearTimeout(t); };
-  }, [r.inputs, r.overrides, r.off, roof, r.existing, r.strict, JSON.stringify(money), v]);
+  }, [r.inputs, r.overrides, r.off, roof, r.existing, r.strict, JSON.stringify(money), v, retry]);
   useEffect(() => () => setCurrent(null), []);
   return { costs: out, failed };
 }

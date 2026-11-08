@@ -61,8 +61,12 @@ const useDesign = (r: Request, roof: Spot[]) => {
   const [out, setOut] = useState<{ d: Design; panels: Record<string, number> } | null>(null);
   useEffect(() => {
     if (!roof.length && r.buildings.length) return; // a shared home waits for its roof; without one the answers carry the design
-    let live = true;
-    const t = setTimeout(() => design(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).then((x) => live && setOut(x)).catch(() => undefined), 120);
+    let live = true, t = 0;
+    // A failed call (the API restarting, a slow square) is tried again, sooner first, so the desk never stays on "working".
+    const WAIT = [120, 1500, 4000, 8000, 15000];
+    const go = (k: number) => { t = window.setTimeout(() => design(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).then((x) => live && setOut(x))
+      .catch(() => { if (live) go(Math.min(k + 1, WAIT.length - 1)); }), WAIT[k]); };
+    go(0);
     return () => { live = false; clearTimeout(t); };
   }, [r.inputs, r.overrides, r.off, roof, r.existing, r.strict, r.buildings.length]);
   return out;

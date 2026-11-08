@@ -36,3 +36,12 @@
 .prices tr.edited th { color: var(--hud-route); }
 .inbox-col .pricebook { max-width: 860px; }
 @media print { .money-actions, .money-note .btn { display: none; } }
+.rules { list-style: none; margin: 0; padding: 0; }
+.rules li { max-width: none; margin: 0; border-bottom: 1px solid var(--hud-line); }
+.rules button { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 76px 1fr auto; gap: 10px; align-items: baseline; padding: 10px 2px; cursor: pointer; font-size: 13.5px; }
+.rules button:focus-visible { outline: 2px solid var(--hud-route); outline-offset: 2px; border-radius: 6px; }
+.rules em { font: 500 11px var(--font-ui); font-style: normal; color: var(--hud-ink-3); }
+.rules li.draft em { color: var(--hud-warn); }
+.rules b { font-weight: 600; } .rules span { color: var(--hud-ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rules div { padding: 0 2px 12px 88px; font-size: 13px; color: var(--hud-ink-2); display: flex; flex-direction: column; gap: 4px; }
+.rules div p { margin: 0; max-width: none; } .rules div b { color: var(--hud-ink); } .rules small { color: var(--hud-ink-3); }
