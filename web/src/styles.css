@@ -317,7 +317,7 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .start-promises li { display: grid; grid-template-columns: 28px 1fr; column-gap: 14px; margin: 0; padding: 14px 0; border-top: 1px solid var(--hud-line); counter-increment: promise; }
 .start-promises li::before { content: counter(promise); grid-row: span 2; font: 500 13px/28px var(--font-mono); color: var(--hud-ink-3); }
 .start-promises b { font: 650 20px/1.25 var(--font-ui); letter-spacing: -0.012em; color: var(--hud-ink); }
-.start-promises span { margin-top: 3px; font-size: 14px; color: var(--hud-ink-2); }
+.start-promises span { margin-top: 3px; font-size: 14px; color: var(--hud-ink-2); text-wrap: pretty; }
 .start-go { display: grid; justify-items: center; gap: 14px; }
 .start-form { font-size: 13.5px; }
 .start-src { margin: 22px 0 0; padding-top: 14px; border-top: 1px solid var(--hud-line); font-size: 11px; line-height: 1.6; color: var(--hud-ink-3); text-align: center; max-width: none; }

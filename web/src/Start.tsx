@@ -5,9 +5,10 @@ import { Button } from "./ui";
 export type Start = "map" | "form";
 
 const PROMISES: [string, string][] = [
-  ["We see nothing until you send.", "Your home is worked out here, in your browser."],
-  ["No location needed.", "Every piece of data about your home comes from Bavaria and the EU."],
-  ["You decide what goes.", "After picking your home, leave out its address, building or roof shape."],
+  ["We see nothing until you send.", "Your home and answers stay in this browser until you send."],
+  ["No location needed.", "Type an address or move the map. We never ask where you are."],
+  ["Only Bavarian and EU data.", "Roof, sun and address come only from Bavaria and the EU."],
+  ["You decide what goes.", "Before sending, leave out the address, the building or the roof shape."],
 ];
 
 export default function StartChoice({ onChoose }: { onChoose: (s: Start) => void }) {
