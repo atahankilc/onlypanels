@@ -98,7 +98,7 @@ type Req = Request & { allowed?: string[] };
 const fmt = (r: Request, k: string, d: Design): string => {
   const i = r.inputs as unknown as Record<string, unknown>, v = i[k];
   if (k === "demand_kwh") return v == null ? `${(d.energy.base_mwh * 1000).toLocaleString("en")} kWh (stand-in)` : `${Number(v).toLocaleString("en")} kWh`;
-  if (k === "heat_kwh") return v != null ? `${Number(v).toLocaleString("en")} kWh` : `${Math.round(d.energy.hp_mwh * 3.5 * 1000 / 100) * 100 ? (Math.round(d.energy.hp_mwh * 3.5 * 1000 / 100) * 100).toLocaleString("en") : "15,000"} kWh (${i.living_m2 && (i.built || i.area_built || i.cert_kwh_m2) ? "estimated from the house" : "stand-in"})`;
+  if (k === "heat_kwh") return v != null ? `${Number(v).toLocaleString("en")} kWh` : `${Math.round(d.energy.hp_mwh * 3.5 * 1000 / 100) * 100 ? (Math.round(d.energy.hp_mwh * 3.5 * 1000 / 100) * 100).toLocaleString("en") : "15,000"} kWh (${i.living_m2 && (i.built || i.area_built || i.cert_kwh_m2) && !d.review.some((n) => n.code === "model_area_large") ? "estimated from the house" : "stand-in"})`;
   if (k === "installer") return INSTALLERS.find(([x]) => x === v)?.[1] ?? String(v);
   if (k === "ev_kwh_month") return `${v} kWh a month`;
   if (k === "hp_kwh") return `${Number(v).toLocaleString("en")} kWh a year`;
@@ -121,8 +121,8 @@ const EXTRA = ["ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "hp_kw
 /** What the planner must confirm before the offer leaves: assumed facts this design uses, and a living area guessed
  * from the 3D model when a heat pump is sized from it. The request list counts the same. */
 const toConfirm = (r: Request, d: Design) => [...relevant(r, d).filter((k) => r.sources[k] === "assumed"),
-  ...(d.heatpump.included && r.inputs.heat_kwh == null && r.inputs.living_from_model && !r.sources.living_m2 ? ["living_m2"] : []),
-  ...(d.heatpump.included && r.inputs.heat_kwh == null && !r.inputs.cert_kwh_m2 && !r.inputs.built && r.inputs.area_built && !r.sources.built ? ["built"] : [])];
+  ...(d.heatpump.included && r.inputs.heat_kwh == null && r.inputs.living_from_model && !r.sources.living_m2 && !d.review.some((n) => n.code === "model_area_large") ? ["living_m2"] : []),
+  ...(d.heatpump.included && r.inputs.heat_kwh == null && !r.inputs.cert_kwh_m2 && !r.inputs.built && r.inputs.area_built && !r.sources.built && !d.review.some((n) => n.code === "model_area_large") ? ["built"] : [])];
 const SOURCE_LONG: Record<Source, string> = { customer: "from the customer", assumed: "assumed", planner: "confirmed by the planner" };
 
 function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null }) {
