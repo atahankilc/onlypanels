@@ -200,7 +200,7 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .requests .req .name { font: 600 14px var(--font-ui); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .requests .req small { grid-column: 1 / -1; color: var(--hud-ink-2); font-size: 12px; }
 .requests .state { padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--hud-glass-2); color: var(--hud-ink-2); }
-.requests .state.s1 { color: var(--hud-warn); }
+.requests .state.s1 { color: var(--hud-route); }
 .requests .state.s2 { background: var(--hud-live); color: var(--hud-base); }
 .quiz .status { margin: 18px 0 4px; }
 /* Trying the offer: the allowed choices as pills, then offer against the change, then one plain sentence. */
@@ -233,8 +233,10 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 @media (prefers-reduced-motion: reduce) { .requests li.loading span, .spinner { animation: none; } }
 .requests .track { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 2px 0 12px; padding: 0; list-style: none; }
 .requests .track li { padding-top: 8px; border-top: 3px solid var(--hud-line); font-size: 12px; color: var(--hud-ink-3); }
-.requests .track li.past, .requests .track li.now { border-color: var(--hud-live); color: var(--hud-ink); }
-.requests .track li.now { font-weight: 600; }
+.requests .track li.past { border-color: var(--hud-live); color: var(--hud-ink); }
+.requests .track li.now { border-color: var(--hud-route); color: var(--hud-route); font-weight: 600; animation: step-pulse 1.6s ease-in-out infinite; }
+@keyframes step-pulse { 50% { border-color: color-mix(in srgb, var(--hud-route) 30%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .requests .track li.now, .reqcard-steps i.now { animation: none; } }
 .requests .offer h3 { margin: 4px 0 8px; font: 600 15px var(--font-ui); color: var(--hud-ink); }
 .requests .offer dl { display: grid; gap: 6px; margin: 0 0 10px; }
 .requests .offer dl div { display: grid; grid-template-columns: 7em 1fr; gap: 12px; font-size: 14px; }
@@ -362,9 +364,11 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .reqcard-top b { font: 600 15px var(--font-ui); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reqcards small { color: var(--hud-ink-2); font-size: 12.5px; }
 .reqcards .state { flex: none; padding: 2px 9px; border-radius: 999px; font-size: 12px; color: var(--hud-ink-2); }
-.reqcards .state.s1 { color: var(--hud-warn); } .reqcards .state.s2 { background: var(--hud-live); color: var(--hud-base); }
+.reqcards .state.s1 { color: var(--hud-route); } .reqcards .state.s2 { background: var(--hud-live); color: var(--hud-base); }
 .reqcard-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 4px; }
-.reqcard-steps i { height: 3px; border-radius: 2px; background: var(--hud-line); } .reqcard-steps i.on { background: var(--hud-live); }
+.reqcard-steps i { height: 3px; border-radius: 2px; background: var(--hud-line); } .reqcard-steps i.past { background: var(--hud-live); }
+.reqcard-steps i.now { background: var(--hud-route); animation: step-blink 1.6s ease-in-out infinite; }
+@keyframes step-blink { 50% { opacity: 0.3; } }
 .reqcards .loading { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--hud-line); border-radius: 16px; }
 .reqcards .loading span { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--hud-glass-2) 25%, var(--hud-line) 50%, var(--hud-glass-2) 75%); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
 .reqcards .loading span:first-child { width: 60%; } .reqcards .loading span:last-child { width: 40%; height: 10px; }

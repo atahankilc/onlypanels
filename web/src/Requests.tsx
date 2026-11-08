@@ -4,6 +4,8 @@ import { Button } from "./ui";
 
 const STEPS = ["Sent", "Being planned", "Offer ready"] as const;
 export const stepOf = (m: Mine) => (m.offer ? 2 : m.opened ? 1 : 0);
+/** "Sent" and "Offer ready" are done the moment they happen; "Being planned" is work, so it runs (blue, pulsing) until the offer is in. */
+const stepClass = (i: number, at: number) => (i < at || (i === at && at !== 1) ? "past" : i === at ? "now" : undefined);
 export const day = (t: number) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 /** How long ago something was sent: minutes, hours for two days, then days. The planner's list says it the same way. */
 export const ago = (t: number) => {
@@ -49,7 +51,7 @@ export function RequestPage({ list, loading = 0, onOpen, onNew }: { list: Mine[]
         return <li key={m.ref}><button type="button" onClick={() => onOpen(m)}>
           <span className="reqcard-top"><b>{street || "Home not shared"}</b><span className={`state s${at}`}>{STEPS[at]}</span></span>
           <small>{[town, m.ref].filter(Boolean).join(" · ")} · <When t={m.sentAt} /></small>
-          <span className="reqcard-steps" aria-hidden="true">{STEPS.map((s, i) => <i key={s} className={i <= at ? "on" : ""} />)}</span>
+          <span className="reqcard-steps" aria-hidden="true">{STEPS.map((s, i) => <i key={s} className={stepClass(i, at)} />)}</span>
         </button></li>;
       })}
       {Array.from({ length: loading }, (_, i) => <li key={`loading${i}`} className="loading" aria-hidden="true"><span /><span /></li>)}
@@ -62,7 +64,7 @@ export function RequestPage({ list, loading = 0, onOpen, onNew }: { list: Mine[]
 export function Status({ m, onPanels }: { m: Mine; onPanels?: (p: Record<string, number> | null) => void }) {
   const at = stepOf(m), o = m.offer;
   return <div className="requests status">
-    <ol className="track">{STEPS.map((s, i) => <li key={s} className={i < at ? "past" : i === at ? "now" : undefined}>{s}</li>)}</ol>
+    <ol className="track">{STEPS.map((s, i) => <li key={s} className={stepClass(i, at)}>{s}</li>)}</ol>
     {o && <div className="offer">
       <h3>Your offer</h3>
       <dl>
