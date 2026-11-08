@@ -10,6 +10,14 @@ export type Look = { obstacles: Obstacle[]; source: string; reason?: string };
 
 export const KIND: Record<ObstacleKind, string> = { chimney: "Chimney", skylight: "Roof window", vent: "Vent", dormer: "Dormer", antenna: "Antenna or dish", solar: "Solar collectors", terrace: "Terrace or railing", other: "Something else" };
 const CLEAR_M = 0.3; // modules keep this far from an obstacle
+const within = (p: P2, ring: P2[]) => {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+};
 
 /** Asks the engine's server to look at this home's roofs on the photo. A low-confidence find starts switched off. */
 export async function findObstacles(buildings: Selected[]): Promise<Look> {
@@ -24,30 +32,35 @@ export async function findObstacles(buildings: Selected[]): Promise<Look> {
 export function blockedOf(buildings: Selected[], obstacles: Obstacle[] | undefined, clear = CLEAR_M): Record<string, number[]> {
   const on = (obstacles ?? []).filter((o) => o.on);
   if (!on.length) return {};
-  const boxes = on.map((o) => {
-    const lat = o.ring[0][1], dLon = clear / (111320 * Math.cos((lat * Math.PI) / 180)), dLat = clear / 111320;
-    return [Math.min(...o.ring.map((p) => p[0])) - dLon, Math.max(...o.ring.map((p) => p[0])) + dLon, Math.min(...o.ring.map((p) => p[1])) - dLat, Math.max(...o.ring.map((p) => p[1])) + dLat];
-  });
   const out: Record<string, number[]> = {};
-  for (const b of buildings) for (const s of b.sun?.surfaces ?? []) {
-    if (s.kind !== "roof") continue;
-    const hit: number[] = [];
-    for (let n = 0; n < s.year.length; n++) {
-      const lon = s.at[n * 3], lat = s.at[n * 3 + 1];
-      if (boxes.some(([w, e, so, no]) => lon >= w && lon <= e && lat >= so && lat <= no)) hit.push(n);
+  for (const b of buildings) {
+    const rings = on.map((o) => widened(b, o.ring, clear));
+    for (const s of b.sun?.surfaces ?? []) {
+      if (s.kind !== "roof") continue;
+      const hit: number[] = [];
+      for (let n = 0; n < s.year.length; n++) {
+        const p = toLocal(b.origin, [s.at[n * 3], s.at[n * 3 + 1]]);
+        if (rings.some((r) => within(p, r))) hit.push(n);
+      }
+      if (hit.length) out[`${b.id}|${s.kind}${s.index}`] = hit;
     }
-    if (hit.length) out[`${b.id}|${s.kind}${s.index}`] = hit;
   }
   return out;
 }
 
+/** An obstacle's outline in one building's metres, widened by the clearance along its own sides: the server turns each box
+ *  to its roof, so it is a turned rectangle, not one that follows the map's north. */
+const widened = (b: { origin: P2 }, ring: P2[], clear: number): P2[] => {
+  const q = ring.map((p) => toLocal(b.origin, p));
+  if (q.length !== 4) return q;
+  const side = (i: number): P2 => { const d: P2 = [q[i][0] - q[0][0], q[i][1] - q[0][1]], l = Math.hypot(...d) || 1; return [(d[0] / l) * clear, (d[1] / l) * clear]; };
+  const u = side(1), v = side(3);
+  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([su, sv], i) => [q[i][0] + su * u[0] + sv * v[0], q[i][1] + su * u[1] + sv * v[1]] as P2);
+};
+
 /** The kept obstacles in one building's own metres, seen from above and widened by the clearance: no module may touch one. */
 export function avoidOf(b: Selected, obstacles: { ring: P2[]; on: boolean }[] | undefined, clear = CLEAR_M): P2[][] {
-  return (obstacles ?? []).filter((o) => o.on).map((o) => {
-    const ring = o.ring.map((p) => toLocal(b.origin, p)), xs = ring.map((p) => p[0]), ys = ring.map((p) => p[1]);
-    const w = Math.min(...xs) - clear, e = Math.max(...xs) + clear, s = Math.min(...ys) - clear, n = Math.max(...ys) + clear;
-    return [[w, s], [e, s], [e, n], [w, n]];
-  });
+  return (obstacles ?? []).filter((o) => o.on).map((o) => widened(b, o.ring, clear));
 }
 
 /** Old panels and confirmed obstacles together: every cell where no new module may go. */

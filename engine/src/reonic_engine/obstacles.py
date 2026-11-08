@@ -57,6 +57,45 @@ def _lonlat(x, y):
     return math.degrees(x / R), math.degrees(2 * math.atan(math.exp(y / R)) - math.pi / 2)
 
 
+def _inside(p, ring):
+    inside = False
+    for i in range(len(ring)):
+        (xi, yi), (xj, yj) = ring[i], ring[i - 1]
+        if (yi > p[1]) != (yj > p[1]) and p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi:
+            inside = not inside
+    return inside
+
+
+def _square_up(ring, roofs):
+    """The model's box follows the photo's axes; on a turned roof it stands as a diamond and is larger than the thing in it.
+    Turned to the roof it sits on (its longest edge), the box becomes the rectangle whose upright outline the model drew:
+    a rectangle of sides a, b turned by t has an upright outline of w = a cos t + b sin t and h = a sin t + b cos t."""
+    pts = [_merc(*p[:2]) for p in ring]
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    c = ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2)
+    w, h = max(xs) - min(xs), max(ys) - min(ys)
+    roof = next((r for r in ([_merc(*p[:2]) for p in r] for r in roofs) if _inside(c, r)), None)
+    if roof is None:
+        return ring
+    edge = max(((roof[i - 1], roof[i]) for i in range(len(roof))), key=lambda e: math.dist(*e))
+    t = math.atan2(edge[1][1] - edge[0][1], edge[1][0] - edge[0][0]) % (math.pi / 2)
+    if t < math.radians(5) or t > math.radians(85):
+        return ring  # the roof already runs with the photo
+    ct, st = math.cos(t), math.sin(t)
+    det = ct * ct - st * st
+    a = (w * ct - h * st) / det if abs(det) > 0.35 else 0
+    b = (h * ct - w * st) / det if abs(det) > 0.35 else 0
+    if a <= 0.15 * max(w, h) or b <= 0.15 * max(w, h):  # near 45 degrees, or a box that is no turned rectangle: a square
+        a = b = (w + h) / 2 / (ct + st)
+    u, v = (ct, st), (-st, ct)
+    corners = [(sa, sb) for sa, sb in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    return [list(_lonlat(c[0] + sa * a / 2 * u[0] + sb * b / 2 * v[0], c[1] + sa * a / 2 * u[1] + sb * b / 2 * v[1])) for sa, sb in corners]
+
+
+def _turned(found, roofs):
+    return {**found, "obstacles": [{**o, "ring": _square_up(o["ring"], roofs)} for o in found["obstacles"]]}
+
+
 def find(roofs):
     """roofs: rings of [lon, lat] for one home. Returns {"obstacles": [{kind, ring, sure, note}], "source": ...}."""
     if not roofs:
@@ -64,7 +103,7 @@ def find(roofs):
     key = hashlib.sha1(json.dumps([PROMPT, MODEL, [[[round(c, 6) for c in p] for p in r] for r in roofs]]).encode()).hexdigest()[:16]  # a new prompt looks again
     hit = CACHE / f"{key}.json"
     if hit.exists():
-        return json.loads(hit.read_text())
+        return _turned(json.loads(hit.read_text()), roofs)
     if not os.environ.get("ANTHROPIC_API_KEY"):
         return {"obstacles": [], "source": "unavailable", "reason": "No vision model configured."}
 
@@ -107,5 +146,5 @@ def find(roofs):
         out.append({"kind": b.kind, "ring": ring, "sure": b.sure, "note": b.note})
     found = {"obstacles": out, "source": "claude", "model": MODEL}
     CACHE.mkdir(parents=True, exist_ok=True)
-    hit.write_text(json.dumps(found))
-    return found
+    hit.write_text(json.dumps(found))  # the model's own upright boxes; turned to the roof on the way out
+    return _turned(found, roofs)
