@@ -419,9 +419,8 @@ function Workspace({ r, update, back, scores, veiled = false, leaving = false, o
           facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]),
             ...EXTRA.filter((k) => !r.sources[k] && sourceOf(r, k) && (r.inputs.ev || !k.startsWith("ev_") && k !== "has_wallbox")).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[sourceOf(r, k)!]] as [string, string, string]), home ? ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"] : ["Roof", r.roofNumbers ? roofWords(r.roofNumbers) : "not shared", r.roofNumbers ? (r.roofNumbers.told ? "from the customer's description" : "from the customer, rounded") : "to be confirmed"]]} />}
       </div>
-      {/* As on the homeowner's pages: the way back and the one main action, always in reach. */}
+      {/* The one main action, always in reach. The way back is the arrow at the top left only: a second "Requests" button here read as a new request. */}
       <div className="stick">
-        <Button size="lg" onClick={back}>Requests</Button>
         {r.status === "sent" ? <Button variant="solid" size="lg" wide disabled>Offer sent</Button>
           : confirm.length ? <Button variant="solid" size="lg" wide disabled={!d} onClick={() => setTab("design")}>Confirm {confirm.length} {confirm.length === 1 ? "fact" : "facts"} to send</Button>
           : home && photo === "looking" ? <Button variant="solid" size="lg" wide disabled><span className="spinner" aria-hidden="true" />Checking the roof photo</Button>
