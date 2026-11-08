@@ -3,7 +3,7 @@
 // work while it works; the answer, with the question and its steps folded above it), and the dock sits below it at the
 // bottom left: the other way to ask on the left (keyboard), the main way in the middle (the ball), the options on the
 // right (ask by voice or text, tap or hold to talk, spoken replies on or off, start over), remembered on this device.
-// Before the first question only the dock shows.
+// Before the first question a one-line greeting sits above the dock.
 // What happens behind: ElevenLabs hears, Claude works the app through an MCP server, the page does what was asked as
 // taps would, ElevenLabs speaks the answer. Planner: the desk (desk.py). Homeowner: a helper through the questions
 // (guide.py), off until they allow it, since what they say leaves the browser before Send; it never gets the home, the
@@ -25,8 +25,8 @@ const threads: Record<Who, Message[]> = { planner: [], homeowner: [] }; // kept 
 const STEP: Record<string, string> = { try_design: "Ran the engine on a variant", battery_sizes: "Every battery size", money: "Worked out the money" };
 const stepOf = (s: Turn["steps"][number], key: number): Step => ({ key, label: s.said ?? STEP[s.tool] ?? s.tool.replace(/_/g, " ") });
 const SIDE = {
-  planner: { url: "/api/voice/turn", context: voiceContext, placeholder: "Ask the desk", name: "Desk" },
-  homeowner: { url: "/api/guide/turn", context: guideContext, placeholder: "Ask the helper", name: "Helper" },
+  planner: { url: "/api/voice/turn", context: voiceContext, placeholder: "Ask the desk", name: "Desk", greeting: <>Hi, I know this desk. <em>What should I do?</em></> },
+  homeowner: { url: "/api/guide/turn", context: guideContext, placeholder: "Ask the helper", name: "Helper", greeting: <>Hi, I can help you through. <em>Where shall we start?</em></> },
 };
 const CONSENT_KEY = "voice-helper-allowed";
 const read = (key: string, fallback: string) => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
@@ -196,7 +196,9 @@ export default function VoiceDock({ who = "planner" }: { who?: Who }) {
     caption = <div className="caption big"><p className="who live">You · live</p><p className="said"><em>{hold ? "Listening… let go to send" : "Listening… tap the ball to send"}</em></p></div>;
   } else if (state === "thinking") {
     caption = <div className="caption">{question && !past && <p className="asked">{question}</p>}<Thinking /></div>;
-  } else if (!fresh) {
+  } else if (fresh) {
+    caption = <div className="caption big"><p className="said">{side.greeting}</p></div>; // Steward's one-line greeting, until the first question
+  } else {
     caption = <div className="caption">
       {question && <Exchange key={turn} question={question} steps={answer?.role === "guide" ? answer.steps : []} history={turns.length > 1 ? { turn, count: turns.length, go: viewTurn } : undefined} />}
       {answer?.role === "note" && <p className="said warn">{answer.text}</p>}

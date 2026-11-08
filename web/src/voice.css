@@ -1,14 +1,17 @@
 /* The voice, ported from Steward's Guide (frontend/src/building/hud.css): a column floating at the bottom left with
    room around it (of the map, beside a side panel). Only the bubble, the chips and the dock's buttons have glass of
    their own. The map's With/Without switch sits at the bottom right, beside the map's buttons. Tokens from styles.css. */
-.guide { --btn-sm: 32px; position: fixed; z-index: 40; left: 32px; bottom: 28px; width: 360px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; pointer-events: none; animation: guide-in 0.32s var(--ease); }
-.guide > * { pointer-events: auto; max-width: 360px; }
+.guide { --btn-sm: 32px; position: fixed; z-index: 40; left: 32px; bottom: 28px; width: 360px; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; animation: guide-in 0.32s var(--ease); }
+.guide > * { pointer-events: auto; width: 100%; max-width: 360px; }
+.guide > .guide-bubble, .guide > .voice-error { width: fit-content; text-align: left; }
 .guide.homeowner { z-index: 60; } /* also over the start dialog, so it can help choose how to begin */
 body:has(.stage.review:not(.bare)) .guide.homeowner { left: calc(424px + 32px); }
 body:has(main.plan) .guide.planner { left: calc(548px + 32px); }
 body:has(.inbox-page) .guide.planner { left: 40px; }
+/* the request and price lists scroll their last rows clear of the dock */
+body:has(.guide.planner) .inbox-page { padding-bottom: 168px; }
 /* the map's hint moves right of the dock */
-body:has(.guide) .maphint { left: calc(var(--left, 424px) + 32px + 248px + 20px); }
+body:has(.guide) .maphint { left: calc(var(--left, 424px) + 32px + 360px + 16px); }
 @keyframes guide-in { from { opacity: 0; transform: translateY(8px); } }
 @keyframes hud-in { from { opacity: 0; transform: translateY(-4px); } }
 @keyframes hud-blink { 50% { opacity: 0.25; } }
@@ -71,8 +74,8 @@ body:has(.guide) .maphint { left: calc(var(--left, 424px) + 32px + 248px + 20px)
 .type-bar .send:disabled { background: transparent; color: var(--hud-ink-3); cursor: default; }
 
 /* the dock: the other way of asking on the left, the main one in the middle, the options on the right */
-.dock { display: grid; grid-template-columns: var(--btn-lg) 1fr var(--btn-lg); align-items: center; gap: 12px; min-height: 76px; width: 100%; }
-.guide.talk > .dock { width: 248px; }
+.dock { display: grid; grid-template-columns: var(--btn-lg) 1fr var(--btn-lg); align-items: center; gap: 12px; min-height: 76px; }
+.guide.talk > .dock { max-width: 248px; }
 .dock-side { position: relative; display: grid; place-items: center; }
 .dock-center { display: flex; justify-content: center; min-width: 0; }
 .dock-center .type-bar { flex: 1; min-width: 0; }
