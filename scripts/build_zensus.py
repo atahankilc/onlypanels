@@ -5,7 +5,7 @@ Downloads (Open Data licence Germany, attribution 2.0, © Statistisches Bundesam
   https://www.destatis.de/static/DE/zensus/gitterdaten/Gebaeude_mit_Wohnraum_nach_Energietraeger_der_Heizung.zip
 Unzip the two *_100m-Gitter.csv files into data/external/zensus/, then run from the repo root:
   uv run python scripts/build_zensus.py
-Writes data/external/zensus/region.json: {"E<x>N<y>": [built counts..., heating counts...]} for cells in the region.
+Writes data/external/zensus/region.json, and the same as web/public/zensus.json for the page: {"E<x>N<y>": [built counts..., heating counts...]} for cells in the region.
 """
 import json
 from pathlib import Path
@@ -36,5 +36,9 @@ built = read("Zensus2022_Gebaeude_nach_Baujahr_in_MZ_Klassen_100m-Gitter.csv", B
 heat = read("Zensus2022_Gebaeude_nach_Energietraeger_der_Heizung_100m-Gitter.csv", HEAT)
 both = built.join(heat, how="outer").fillna(0).astype(int)
 out = {cell: row.tolist() for cell, row in both.iterrows() if row.sum()}
-(HERE / "region.json").write_text(json.dumps({"built": BUILT, "heat": HEAT, "cells": out}, separators=(",", ":")))
+text = json.dumps({"built": BUILT, "heat": HEAT, "cells": out}, separators=(",", ":"))
+(HERE / "region.json").write_text(text)
+WEB = HERE.parents[2] / "web" / "public"  # the page reads the whole file, so no lookup ever names a place
+WEB.mkdir(exist_ok=True)
+(WEB / "zensus.json").write_text(text)
 print(f"{len(out)} cells in the region; built known in {(built.sum(axis=1) > 0).sum()}, heating in {(heat.sum(axis=1) > 0).sum()}")

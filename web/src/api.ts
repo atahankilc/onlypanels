@@ -1,6 +1,9 @@
 import { P2, P3 } from "./geometry";
 
-export type Place = { label: string; lat: number; lon: number };
+import type { Area, Place } from "./places";
+export type { Place, Area } from "./places";
+/** Asked from the browser itself: no address, point or area goes through our server. */
+export { searchPlace, placeAt, areaAt } from "./places";
 export type Poly = { ring: P3[]; holes: P3[][] };
 /** Bavaria's measured data comes in squares of 2 km. */
 export type Square = { name: string; ring: P2[] };
@@ -27,6 +30,19 @@ export const PRICE_CT = 32.4;
 // Gas in Munich, all in (base fee included, with VAT): SWM's model household, 15,000 kWh for about €1,764 a year from January 2026
 // (SWM press release of 7 November 2025, read from a search summary). Turns a yearly gas payment into kWh; shown to the planner as assumed.
 export const GAS_CT = 11.8;
+/** Monument status from the Bavarian monument office's map: the building itself listed, inside an ensemble, a listed building within
+ *  about 20 m, nothing listed, or the map did not answer. A hint for the planner; the authority decides. */
+export type MonumentHit = { kind: "listed" | "ensemble"; id: string | null; name: string | null; address: string | null };
+export type Monument = { status: "listed" | "ensemble" | "near" | "none" | "unknown"; here: MonumentHit[]; near: MonumentHit[] };
+const MONUMENT_ORDER: Monument["status"][] = ["listed", "ensemble", "near", "unknown", "none"];
+/** Every part of a home asked at its middle point; the strongest status wins. */
+export const monumentOf = (buildings: Selected[]): Promise<Monument> => Promise.all(buildings.map((b) =>
+  fetch(`/api/site/monument?lat=${b.origin[1]}&lon=${b.origin[0]}`).then((r) => (r.ok ? r.json() : { status: "unknown", here: [], near: [] })).catch(() => ({ status: "unknown", here: [], near: [] })) as Promise<Monument>))
+  .then((all) => {
+    const unique = (hits: MonumentHit[]) => [...new Map(hits.map((h) => [h.id ?? h.name, h])).values()];
+    const status = MONUMENT_ORDER.find((s) => all.some((m) => m.status === s)) ?? "unknown";
+    return { status, here: unique(all.flatMap((m) => m.here)), near: unique(all.flatMap((m) => m.near)) };
+  });
 /** A photo made small enough to keep in the page: at most 1,600 px on its longer side, as JPEG. It stays in the browser. */
 export const shrinkPhoto = (file: File, side = 1600): Promise<string> => new Promise((done, fail) => {
   const img = new Image(), url = URL.createObjectURL(file);
@@ -95,11 +111,6 @@ export const paintChoice = (buildings: Selected[], c: Choice, cells: Record<stri
 };
 
 const get = <T,>(url: string): Promise<T> => fetch(url).then((r) => { if (!r.ok) throw new Error(); return r.json(); });
-export const searchPlace = (q: string) => get<Place[]>(`/api/site/search?q=${encodeURIComponent(q)}`);
-/** The 2022 census around a point: the most common build period and heating, with their shares. Empty where there is no data. */
-export type Area = { built?: string | null; built_share?: number; heating?: string | null; heating_share?: number };
-export const areaAt = (lat: number, lon: number) => get<Area>(`/api/site/area?lat=${lat}&lon=${lon}`);
-export const placeAt = (lat: number, lon: number) => get<Place>(`/api/site/reverse?lat=${lat}&lon=${lon}`);
 export const squaresIn = (west: number, south: number, east: number, north: number) => get<Square[]>(`/api/site/squares?west=${west}&south=${south}&east=${east}&north=${north}`);
 /** The map's own worker fetches and reads this, so it costs the page nothing. Its worker needs a full address. */
 export const homesUrl = (name: string) => `${location.origin}/api/site/homes/${name}`;
