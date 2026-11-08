@@ -66,6 +66,13 @@ export const resetItem = (id: string) => call<Book>(`/api/prices/${encodeURIComp
 export const setRates = (values: Record<string, number>) => call<Book>("/api/prices/rates", "PUT", values).then((b) => { pricesChanged(); return b; });
 export const resetRates = () => call<Book>("/api/prices/rates", "DELETE").then((b) => { pricesChanged(); return b; });
 
+/** What the cost and the review ask the API for a request: the design's body and the planner's money choices. One place,
+ *  so the list's asking ahead (answers.ts) and the request's page keep the same answer. */
+export const moneyAsk = (r: Request, roof: Spot[]) => {
+  const money = moneyOf(r);
+  return { ...designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).body, money: { extras: money.extras ?? {}, qty: money.qty ?? {}, income: money.income ?? null, kids: !!money.kids } };
+};
+
 /** The money view of the open request, asked again when the design's facts, the planner's ticks or a price change. */
 export function useCosts(r: Request, roof: Spot[]) {
   const [out, setOut] = useState<Costs | null>(null);
@@ -78,8 +85,7 @@ export function useCosts(r: Request, roof: Spot[]) {
   useEffect(() => {
     if (!roof.length && r.buildings.length) return;
     let live = true;
-    const { body } = designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict);
-    const ask = { ...body, money: { extras: money.extras ?? {}, qty: money.qty ?? {}, income: money.income ?? null, kids: !!money.kids } };
+    const ask = moneyAsk(r, roof);
     // The last price of the same request shows at once (answers.ts); it is asked again behind it, so a price change arrives.
     const key = askKey("costs", ask), known = lastAnswer<Costs>(key);
     if (known && !out) { setOut(known); setCurrent(known); }

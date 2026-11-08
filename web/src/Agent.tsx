@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { askKey, keepAnswer, lastAnswer } from "./answers";
 import { Design, Overrides, Request, Spot, designBody } from "./plan";
 import { Button, Input } from "./ui";
-import { moneyOf, usePriceVersion } from "./money";
+import { moneyAsk, moneyOf, usePriceVersion } from "./money";
 
 type Result = { modules: number; kwp: number; battery_kwh: number; heatpump_kw: number; wallbox: boolean; production_mwh: number; own_power_pct: number; saving_eur_year: number; need_mwh?: number };
 type WhatIf = { demand_kwh?: number; ev?: boolean; ev_km?: number; heat_kwh?: number; heat_dist?: string; home_day?: string };
@@ -73,7 +73,7 @@ export function AgentPanel({ r, roof, use }: { r: Request; d: Design; roof: Spot
   useEffect(() => {
     if (!ready) return;
     let on = true;
-    const body = { ...designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).body, money: { extras: money.extras ?? {}, qty: money.qty ?? {}, income: money.income ?? null, kids: !!money.kids } };
+    const body = moneyAsk(r, roof);
     // The last review of the same request shows at once (answers.ts); it is asked again behind it.
     const key = askKey("review", body), known = lastAnswer<Review>(key);
     if (known) { setReview(known); setFailed(false); }

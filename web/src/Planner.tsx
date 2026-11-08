@@ -22,9 +22,9 @@ import type { RoofNumbers } from "./share";
 import { BatteryCurve } from "./BatteryCurve";
 import { CostTab, PriceBook } from "./Costs";
 import { DeskSummary } from "./DeskSummary";
-import { askKey, keepAnswer, lastAnswer } from "./answers";
+import { askAhead, askKey, keepAnswer, lastAnswer } from "./answers";
 import { EvidenceCard } from "./Evidence";
-import { Money, moneyOf, useCosts, usePriceVersion } from "./money";
+import { Money, moneyAsk, moneyOf, useCosts, usePriceVersion } from "./money";
 import { Button, Check, Field, IconButton, Input, Segmented, Select, Slider } from "./ui";
 import { setDeskContext, setOpenContext, useVoiceActions } from "./voiceBus";
 import VoiceDock from "./Voice";
@@ -144,6 +144,8 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
 function Line({ r, open }: { r: Request; open: () => void }) {
   const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, mergeCells(r.taken, blockedOf(r.shaded ?? r.buildings, r.obstacles))), [r.shaded, r.buildings, r.installed, r.priority, r.taken, r.obstacles]); // trees reach the sun after arrival; kept obstacles block cells
   const out = useDesign(r, roof);
+  // Once the draft is in, the review and the price are asked ahead, so the request opens on them without waiting.
+  useEffect(() => { if (!out) return; const ask = moneyAsk(r, roof); askAhead("review", "/api/review", ask); askAhead("costs", "/api/costs", ask); }, [out, r, roof]);
   // The same count Checks shows: only facts this design uses.
   const assumed = out ? toConfirm(r, out.d).length : Object.values(r.sources).filter((s) => s === "assumed").length;
   const [street, town] = splitLabel(r.label), sent = r.status === "sent";

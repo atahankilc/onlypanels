@@ -26,3 +26,23 @@ export const askKey = (kind: string, body: unknown) => {
 };
 export const lastAnswer = <T,>(key: string): T | null => (store[key]?.v as T) ?? null;
 export const keepAnswer = (key: string, v: unknown) => { store[key] = { at: Date.now(), v }; save(); };
+
+// Asked ahead, three at a time in the order asked: the list asks for what a request's page will need, so its first
+// opening does not wait.
+const LANES = 3;
+const waiting: (() => Promise<unknown>)[] = [];
+let running = 0;
+const pump = () => {
+  while (running < LANES && waiting.length) { running += 1; waiting.shift()!().finally(() => { running -= 1; pump(); }); }
+};
+const asked = new Set<string>();
+/** Asks the API for this answer in the background unless it is kept or already on its way. */
+export const askAhead = (kind: string, url: string, body: unknown) => {
+  const key = askKey(kind, body);
+  if (store[key] || asked.has(key)) return;
+  asked.add(key);
+  waiting.push(() => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+    .then((r) => (r.ok ? r.json() : Promise.reject())).then((v) => keepAnswer(key, v))
+    .catch(() => undefined).finally(() => asked.delete(key)));
+  pump();
+};
