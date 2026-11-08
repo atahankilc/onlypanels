@@ -6,7 +6,7 @@ Read `docs/project-state.md` first. Keep `project-state.md`, `decisions.md` and 
 
 ## Hard rules
 
-- Never commit, upload or paste raw project data, derived per-project data or trained models. They are gitignored; keep it that way. Sending data to any third party waits for an answer to Q2 in `docs/open-questions.md`.
+- Never commit or paste raw project data, derived per-project data or trained models. They are gitignored; keep it that way. They may be uploaded to the host the demo is deployed on (D133, the user's decision on 8 November); nowhere else.
 - Docs may contain aggregates only, never project or customer IDs.
 - The LLM never produces design numbers. The engine does.
 - Do not use parts-derived values as model features: that leaks the answer.

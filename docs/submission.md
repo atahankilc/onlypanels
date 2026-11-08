@@ -34,3 +34,5 @@ Yes. The planner runs the desk by voice: ElevenLabs hears the command (about 0.5
 ## Demo
 
 A video of at most 2 minutes: plan and voiceover in `docs/demo-video.md`.
+
+Live app: https://aberdeen-kde-designs-indiana.trycloudflare.com (homeowner at `/`, planner at `/planner`). It runs on our laptop through a tunnel, so it is online only while the laptop is (D134).
