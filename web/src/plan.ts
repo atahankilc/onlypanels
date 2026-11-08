@@ -1,5 +1,5 @@
 // The planner's side: one request, each fact with where it came from, and the calls to the engine.
-import { Answers, Choice, Place, Selected, SunSurface, chosenKeys, installedKeys, modelM2, measured, meanSun, placeAt, polyOf, sunOf, surfaceKey } from "./api";
+import { Answers, Choice, Place, Selected, SunSurface, chosenKeys, homeParts, installedKeys, modelM2, measured, meanSun, placeAt, polyOf, sunOf, surfaceKey } from "./api";
 import { P2, P3, toLocal } from "./geometry";
 import { fit } from "./panels";
 
@@ -110,7 +110,7 @@ const short = (label: string) => label.split(", ").slice(0, 2).join(", ");
 const here = (r: P3[], origin: P2) => r.map((p) => [...toLocal(origin, [p[0], p[1]]), p[2]] as P3);
 /** Every part of a home, ready for the model. */
 export async function loadHome(square: string, home: string): Promise<Selected[]> {
-  const parts: { id: string; at: P2 }[] = await fetch(`/api/site/home/${square}/${encodeURIComponent(home)}`).then((r) => r.json());
+  const parts = await homeParts(square, home);
   return Promise.all(parts.map(async ({ id, at }) => {
     const [place, sun, m] = await Promise.all([placeAt(at[1], at[0]).catch(() => ({ label: "Building" } as Place)), sunOf(square, id), measured(square, id)]);
     const polys = (list: typeof m.roofs) => list.map((p) => ({ ring: here(p.ring, at), holes: p.holes.map((h) => here(h, at)) }));

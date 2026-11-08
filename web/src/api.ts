@@ -4,6 +4,8 @@ import type { Area, Place } from "./places";
 export type { Place, Area } from "./places";
 /** Asked from the browser itself: no address, point or area goes through our server. */
 export { searchPlace, placeAt, areaAt } from "./places";
+import { localBuilding, localParts, localSun } from "./siteLocal";
+import { toLonLat, toUtm } from "./utm";
 export type Poly = { ring: P3[]; holes: P3[][] };
 /** Bavaria's measured data comes in squares of 2 km. */
 export type Square = { name: string; ring: P2[] };
@@ -98,15 +100,26 @@ export const paintChoice = (buildings: Selected[], c: Choice, cells: Record<stri
 };
 
 const get = <T,>(url: string): Promise<T> => fetch(url).then((r) => { if (!r.ok) throw new Error(); return r.json(); });
-export const squaresIn = (west: number, south: number, east: number, north: number) => get<Square[]>(`/api/site/squares?west=${west}&south=${south}&east=${east}&north=${north}`);
+/** The squares that cover a view, worked out here so the view itself is never sent. As engine lod2.squares and outline. */
+export const squaresIn = (west: number, south: number, east: number, north: number): Promise<Square[]> => {
+  const corners = [toUtm(west, south), toUtm(east, south), toUtm(west, north), toUtm(east, north)], xs = corners.map((c) => c[0]), ys = corners.map((c) => c[1]);
+  const r6 = (v: number) => Math.round(v * 1e6) / 1e6, found: Square[] = [];
+  for (let e = Math.floor(Math.min(...xs) / 2000) * 2; e <= Math.floor(Math.max(...xs) / 2000) * 2; e += 2)
+    for (let n = Math.floor(Math.min(...ys) / 2000) * 2; n <= Math.floor(Math.max(...ys) / 2000) * 2; n += 2) {
+      const x = e * 1000, y = n * 1000;
+      found.push({ name: `${e}_${n}`, ring: ([[x, y], [x + 2000, y], [x + 2000, y + 2000], [x, y + 2000], [x, y]] as P2[]).map(([a, b]) => toLonLat(a, b).map(r6) as P2) });
+    }
+  return Promise.resolve(found);
+};
 /** The map's own worker fetches and reads this, so it costs the page nothing. Its worker needs a full address. */
 export const homesUrl = (name: string) => `${location.origin}/api/site/homes/${name}`;
 /** Lines ready for the GPU: an origin in two float64, then x, y, z in float32. Nothing to parse. */
 export const squareEdges = (name: string) => fetch(`/api/site/edges/${name}`).then((r) => { if (!r.ok) throw new Error(); return r.arrayBuffer(); })
   .then((b) => ({ at: [...new Float64Array(b, 0, 2)] as P2, points: new Float32Array(b, 16) }));
-export const sunOf = (square: string, id: string) => get<SunData>(`/api/site/sun/${square}/${encodeURIComponent(id)}`);
+/** Worked out in this page (siteLocal.ts): the server only hands out whole squares, so it never learns which home was picked. */
+export const sunOf = (square: string, id: string) => localSun<SunData>(square, id);
 /** What the engine proposes, as ranges. */
-export const homeParts = (square: string, home: string) => get<{ id: string; at: P2 }[]>(`/api/site/home/${square}/${encodeURIComponent(home)}`);
+export const homeParts = (square: string, home: string) => localParts<{ id: string; at: P2 }[]>(square, home);
 /** The chosen homes. A home can be several measured parts. */
 export const homesIn = (list: Selected[]) => [...new Set(list.map((b) => b.home))].map((home) => ({ home, parts: list.filter((b) => b.home === home), label: list.find((b) => b.home === home)?.label ?? "Building" }));
-export const measured = (square: string, id: string) => get<{ roofs: { ring: P3[]; holes: P3[][] }[]; walls: { ring: P3[]; holes: P3[][] }[] }>(`/api/site/square/${square}/${encodeURIComponent(id)}`);
+export const measured = (square: string, id: string) => localBuilding<{ roofs: { ring: P3[]; holes: P3[][] }[]; walls: { ring: P3[]; holes: P3[][] }[] }>(square, id);
