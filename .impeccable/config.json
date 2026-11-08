@@ -41,6 +41,15 @@
         ],
         "createdAt": "2026-11-08T12:05:18.521Z",
         "reason": "1920x1080 slide deck: a title slide headline is meant to fill the slide"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "docs/pitch/deck.html"
+        ],
+        "createdAt": "2026-11-08T12:07:22.481Z",
+        "reason": "deck: the only zero-padding boxes are the full-bleed photo slide (text placed 130px in, absolutely) and screenshot frames holding only an image"
       }
     ]
   }
