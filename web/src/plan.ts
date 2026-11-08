@@ -156,6 +156,8 @@ export const design = (i: Inputs, o: Overrides, roof: Spot[], off: string[], ex?
 /** The advisor's reading of the same design: a pick among the engine's options, why, and what to ask. It writes, the engine counts. */
 export type Advice = { pick: string; headline: string; reasons: string[]; questions: string[]; risk: string | null; battery_kwh: number | null; source: string };
 export const advise = (i: Inputs, o: Overrides, roof: Spot[], off: string[], ex?: Existing, strict?: boolean) => post<Advice>("/api/advise", designBody(i, o, roof, off, ex, strict).body);
+/** How high a roof surface's lowest edge sits above the ground, from the measured 3D model: what the scaffolding must reach. */
+const eaveOf = (x: Spot) => { const p = x.b.real?.roofs[x.poly]; return p?.ring.length ? Math.round(Math.min(...p.ring.map((q) => q[2])) * 10) / 10 : null; };
 export const designBody = (i: Inputs, o: Overrides, roof: Spot[], off: string[], ex?: Existing, strict?: boolean) => {
   const use = roof.filter((r) => r.fits > 0 && !off.includes(r.key));
   // Beyond the customer's area only good surfaces take modules: a planner does not fill a north roof to reach a size.
@@ -165,7 +167,7 @@ export const designBody = (i: Inputs, o: Overrides, roof: Spot[], off: string[],
   const existing = ex ? { ...(i.has_solar ? { existing_kwp: ex.kwp, existing_year: ex.year, existing_m2: ex.m2 ?? null, existing_kwh_per_kwp: ex.kwh_per_kwp ?? null } : {}),
     ...(i.has_storage ? { existing_battery_kwh: ex.battery_kwh } : {}) } : {};
   // Every measured surface switched off: one surface that holds nothing, so the engine places no module instead of reading "no roof".
-  const surfaces = parts.length || !roof.length ? parts.map(({ r, n }) => ({ max_modules: n, kwh_per_kwp: r.yield_, tilt: r.s.tilt, azimuth: r.s.azimuth }))
+  const surfaces = parts.length || !roof.length ? parts.map(({ r, n }) => ({ max_modules: n, kwh_per_kwp: r.yield_, tilt: r.s.tilt, azimuth: r.s.azimuth, eave_m: eaveOf(r) }))
     : [{ max_modules: 0, kwh_per_kwp: roof[0].yield_, tilt: roof[0].s.tilt, azimuth: roof[0].s.azimuth }];
   return { parts, body: { inputs: { ...i, ...existing, surfaces }, overrides: o } };
 };

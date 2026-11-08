@@ -53,6 +53,7 @@ class Surface(BaseModel):
     kwh_per_kwp: float | None = None
     tilt: float | None = None  # degrees, for the hourly sun
     azimuth: float | None = None  # compass degrees, 180 is south
+    eave_m: float | None = None  # the surface's lowest edge above the ground, from the 3D model: the scaffolding grows with it
 
 
 class Inputs(BaseModel):

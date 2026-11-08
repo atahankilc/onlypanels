@@ -53,6 +53,17 @@ def _replaces(i, d):
     return d["heatpump"]["included"] and i.get("heating") in (*FOSSIL, "Electric")
 
 
+SCAFFOLD_EAVE_M = 6.0  # the price book's scaffolding is for a house whose eave is about this high: two storeys. Our assumption
+
+
+def scaffold_factor(i, d):
+    """Scaffolding grows with the height it must reach: the highest eave among the roof surfaces that carry modules, against the
+    two-storey house the price book's figure is for. Never below that figure. Without a measured roof it stays at 1."""
+    surfaces, placed = i.get("surfaces") or [], d["pv"].get("placed") or []
+    eaves = [s["eave_m"] for n, s in zip(placed, surfaces) if n and s.get("eave_m")]
+    return (max(1.0, max(eaves) / SCAFFOLD_EAVE_M), max(eaves)) if eaves else (1.0, None)
+
+
 def bill_of_materials(i, d, b, extras=None, qty=None):
     """Every line for this design: in it by rule, or an extra (ticked by the planner, else by how often this installer adds it)."""
     extras, qty = extras or {}, qty or {}
@@ -81,7 +92,13 @@ def bill_of_materials(i, d, b, extras=None, qty=None):
         elif not cond.get(item["when"], False):
             continue
         net = item["fixed"] + item["per_unit"] * n
-        lines.append({"id": item["id"], "tech": item["tech"], "kind": item["kind"], "name": item["name"], "qty": round(float(n), 2), "unit": item["unit"],
+        name = item["name"]
+        if item["id"] == "scaffolding":
+            k, eave = scaffold_factor(i, d)
+            net *= k
+            if eave:
+                name = f"{name}, to an eave about {eave:.0f} m up"
+        lines.append({"id": item["id"], "tech": item["tech"], "kind": item["kind"], "name": name, "qty": round(float(n), 2), "unit": item["unit"],
                       "fixed": item["fixed"], "per_unit": item["per_unit"], "vat": item["vat"], "net": round(net), "gross": round(net * (1 + item["vat"] / 100)),
                       "custom": item.get("custom", False), "edited": item.get("edited", False), "extra": item["when"] == "extra"})
     return lines, offered, inv_kw

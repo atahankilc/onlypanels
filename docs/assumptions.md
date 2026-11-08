@@ -125,6 +125,7 @@ The data holds no prices. Every price below is a typical German end-customer pri
 | Module €115, mounting €65 pitched / €85 flat, DC install €75, each per module | Solar | Our estimate inside the 2026 turnkey ranges | `pricebook.py` |
 | Hybrid inverter €900 + €110 per kW, sized to at least 85% of kWp | Solar | Our estimate | `pricebook.py`, `costs.py` DC_AC |
 | Scaffolding €1,000, AC install €900, planning €400, grid registration €250, travel €450 | Every solar offer | Our estimate; these groups are in about 90% of installer A's offers | `pricebook.py` |
+| Scaffolding grows with the eave: × (highest eave carrying modules ÷ 6 m), never below €1,000 | Every solar offer on a measured roof | Our assumption: the €1,000 is for a two-storey house (eave about 6 m), and scaffolding is priced by the façade it covers, so by its height. Eave from the 3D model | `costs.py` SCAFFOLD_EAVE_M, `plan.ts` eaveOf |
 | Meter cabinet €2,200, energy manager €300, breakers €450, surge protection €350 | Extras, ticked by default where the installer adds them to at least half of its offers | Share of offers from `scripts/profile_products.py` | `pricebook.py` SHARE |
 | Battery €400 per kWh + €600 install; backup box €900 | Battery | 2026 guides, low middle of the range | `pricebook.py` |
 | Wallbox €750 + €900 install, 19% VAT | Wallbox | 2026 guides | `pricebook.py` |
