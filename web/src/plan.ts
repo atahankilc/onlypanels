@@ -20,12 +20,13 @@ export type Design = {
 };
 export type Source = "customer" | "assumed" | "planner";
 export type Request = {
+  ref?: string; // the reference the homeowner was shown after sending, so a call can find the request
   id: string; label: string; from: string; buildings: Selected[]; inputs: Inputs; sources: Record<string, Source>; overrides: Overrides;
   off: string[]; installed: string[]; walls: string[]; existing: Existing; status: "draft" | "sent";
 };
 /** Solar already on the building: size and year as the customer gave them, else the area they marked and the sun it gets. */
 export type Existing = { kwp: number | null; year: number | null; battery_kwh: number | null; m2?: number | null; kwh_per_kwp?: number | null };
-export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice };
+export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string };
 
 const TYPICAL_KM = 11300;
 /** The marked area with panels and the sun it gets: measured yield after shade, weighted by area. */
@@ -46,10 +47,11 @@ const chosenOff = (buildings: Selected[], c: Choice) => {
 const source = (known: unknown): Source => (known === null || known === undefined ? "assumed" : "customer");
 
 /** What the homeowner produced becomes the planner's starting point. Skipped answers arrive marked, nothing is asked twice. */
-export function fromHomeowner({ buildings, answers: a, choice }: Handoff): Request {
+export function fromHomeowner(h: Handoff): Request {
+  const { buildings, answers: a, choice } = h;
   const car = !!(a.ev || a.ev_planned);
   return {
-    id: "homeowner", label: buildings[0]?.label ?? "Home", from: "Homeowner", buildings, status: "draft",
+    id: "homeowner", ref: h.ref, label: buildings[0]?.label ?? "Home", from: "Homeowner", buildings, status: "draft",
     inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating, heat_kwh: a.heat_kwh, hp_kwh: a.heating === "Heatpump" ? a.hp_kwh : null, has_solar: !!a.has_solar, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM * (a.ev_count ?? 1),
       ev_kwh_month: a.ev && !a.ev_planned ? a.ev_kwh_month : null, ev_charge_home: car ? a.ev_charge_home : null, ev_day: car ? a.ev_day : null, has_wallbox: car ? a.has_wallbox : null,
       demand_source: a.use_source === "exact" ? "bill" : a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source, monthly_eur: a.use_source === "payment" ? a.monthly_eur : null,

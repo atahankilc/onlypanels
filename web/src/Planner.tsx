@@ -86,7 +86,7 @@ function Line({ r, open }: { r: Request; open: () => void }) {
   // The same count Checks shows: only facts this design uses.
   const assumed = out ? toConfirm(r, out.d).length : Object.values(r.sources).filter((s) => s === "assumed").length;
   return <tr tabIndex={0} onClick={open} onKeyDown={(e) => e.key === "Enter" && open()}>
-    <th scope="row">{r.label}</th><td>{r.from}</td><td className="mono">{out ? summary(out.d) : "…"}</td><td>{assumed} assumed {assumed === 1 ? "fact" : "facts"}</td>
+    <th scope="row">{r.label}</th><td>{r.from}{r.ref && <small className="mono"> {r.ref}</small>}</td><td className="mono">{out ? summary(out.d) : "…"}</td><td>{assumed} assumed {assumed === 1 ? "fact" : "facts"}</td>
     <td><span className={`state ${r.status}`}>{r.status === "sent" ? "Offer sent" : "Draft ready"}</span></td>
   </tr>;
 }
@@ -171,7 +171,7 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
     <aside className="panel tall desk">
       <header className="deskhead">
         <Button variant="fill" aria-label="Back to requests" onClick={back}><Back /></Button>
-        <div className="grow"><b>{r.label}</b><small>{r.from} request · {r.status === "sent" ? "offer sent" : "draft"}</small></div>
+        <div className="grow"><b>{r.label}</b><small>{r.from} request{r.ref ? ` ${r.ref}` : ""} · {r.status === "sent" ? "offer sent" : "draft"}</small></div>
         <Button variant="solid" disabled={!d || r.status === "sent" || confirm.length > 0} title={confirm.length ? "Confirm the assumed facts in Checks first" : undefined} onClick={send}>{r.status === "sent" ? "Sent" : "Send offer"}</Button>
       </header>
       {d && <dl className="kpis">

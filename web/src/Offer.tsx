@@ -33,7 +33,7 @@ export default function Offer({ r, d, first, roof, panels, facts, conditions, to
     {toConfirm > 0 && <p className="flag">{toConfirm} assumed {toConfirm === 1 ? "fact needs" : "facts need"} your confirmation before this can be sent. See Checks.</p>}
 
     <article className="offer-sheet">
-      <header><small>{sent ? "Offer" : "Offer draft"} · {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</small><h2>{r.label}</h2></header>
+      <header><small>{sent ? "Offer" : "Offer draft"}{r.ref ? ` · ${r.ref}` : ""} · {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</small><h2>{r.label}</h2></header>
 
       <section><h4>System</h4>
         <table><tbody>{Object.entries(now).map(([k, v]) => <tr key={k}><th scope="row">{k}</th><td>{v}</td><td>{who[k] ? "set by the planner" : sent ? "engine proposal, approved by the planner" : "engine proposal"}</td></tr>)}</tbody></table>
