@@ -204,6 +204,11 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
     setFace(null); setStep("pick"); setMove("out"); setTool(null); setUndo([]); setBuildings([]); setFromList(true); setStart(savedStart() === "map" ? "map" : null);
     clearAfter.current = true;
   };
+  // While the page sweeps out it is drawn as it was the moment it started to leave: the home is already cleared for the map,
+  // and drawing the page without it would shorten its lines and the panel on the way out.
+  const reviewProps = { refId: ref, onPanels: setOfferPanels, progress: requests.find((m) => m.ref === ref), done: newRequest, stage, setStage, answers, setAnswers, buildings, setFace, m2: markedM2(buildings, choice), changed: Object.keys(choice.cells).length > 0, reset: startOver, panelM2: panelsM2(buildings, choice), retrySun, back: backToPick, request, shared, setShared };
+  const leaving = useRef(reviewProps);
+  if (move !== "out") leaving.current = reviewProps;
   const moved = () => {
     setMove(null);
     if (!clearAfter.current) return;
@@ -286,7 +291,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
       </aside>}
       </Curtain>}
 
-      {(step === "review" || move === "out") && !listing && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && moved()}><Review refId={ref} onPanels={setOfferPanels} progress={requests.find((m) => m.ref === ref)} done={newRequest} stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={backToPick} request={request} shared={shared} setShared={setShared} /></div>}
+      {(step === "review" || move === "out") && !listing && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && moved()}><Review {...leaving.current} /></div>}
     </main>
   );
 }
