@@ -3,6 +3,7 @@
 // that fits the customer, usable in one click. It runs again whenever the request changes, in about a second.
 // Below it, the planner can still ask Claude a question; Claude answers by running the engine (agent.py).
 import { useEffect, useRef, useState } from "react";
+import { askKey, keepAnswer, lastAnswer } from "./answers";
 import { Design, Overrides, Request, Spot, designBody } from "./plan";
 import { Button, Input } from "./ui";
 import { moneyOf, usePriceVersion } from "./money";
@@ -72,9 +73,13 @@ export function AgentPanel({ r, roof, use }: { r: Request; d: Design; roof: Spot
   useEffect(() => {
     if (!ready) return;
     let on = true;
-    const t = setTimeout(() => post("/api/review", { ...designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).body, money: { extras: money.extras ?? {}, qty: money.qty ?? {}, income: money.income ?? null, kids: !!money.kids } })
-      .then((x) => { if (!x.ok) throw new Error(); return x.json(); }).then((x: Review) => { if (on) { setReview(x); setFailed(false); } })
-      .catch(() => on && setFailed(true)), 200);
+    const body = { ...designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).body, money: { extras: money.extras ?? {}, qty: money.qty ?? {}, income: money.income ?? null, kids: !!money.kids } };
+    // The last review of the same request shows at once (answers.ts); it is asked again behind it.
+    const key = askKey("review", body), known = lastAnswer<Review>(key);
+    if (known) { setReview(known); setFailed(false); }
+    const t = setTimeout(() => post("/api/review", body)
+      .then((x) => { if (!x.ok) throw new Error(); return x.json(); }).then((x: Review) => { keepAnswer(key, x); if (on) { setReview(x); setFailed(false); } })
+      .catch(() => on && !known && setFailed(true)), known ? 400 : 200);
     return () => { on = false; clearTimeout(t); };
   }, [r.inputs, r.overrides, r.off, r.existing, r.strict, roof, ready, JSON.stringify(money), prices]);
 

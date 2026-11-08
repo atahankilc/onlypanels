@@ -22,6 +22,7 @@ import type { RoofNumbers } from "./share";
 import { BatteryCurve } from "./BatteryCurve";
 import { CostTab, PriceBook } from "./Costs";
 import { DeskSummary } from "./DeskSummary";
+import { askKey, keepAnswer, lastAnswer } from "./answers";
 import { EvidenceCard } from "./Evidence";
 import { Money, moneyOf, useCosts, usePriceVersion } from "./money";
 import { Button, Check, Field, IconButton, Input, Segmented, Select, Slider } from "./ui";
@@ -61,17 +62,22 @@ const describe = (o: Overrides) => [
 ].filter(Boolean).join(", ");
 const useDesign = (r: Request, roof: Spot[]) => {
   const prices = usePriceVersion(); // a low-cost customer's sizes are chosen by price: a price change asks again
-  const [out, setOut] = useState<{ d: Design; panels: Record<string, number> } | null>(null);
+  const wait = !roof.length && r.buildings.length > 0; // a shared home waits for its roof; without one the answers carry the design
+  // The last answer to the same question shows at once (answers.ts); the engine is asked again behind it.
+  const key = useMemo(() => (wait ? "" : askKey("design", designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).body)), [r.inputs, r.overrides, r.off, roof, r.existing, r.strict, wait]);
+  const [out, setOut] = useState<{ d: Design; panels: Record<string, number> } | null>(() => (key ? lastAnswer(key) : null));
   useEffect(() => {
-    if (!roof.length && r.buildings.length) return; // a shared home waits for its roof; without one the answers carry the design
+    if (!key) return;
+    const known = lastAnswer<{ d: Design; panels: Record<string, number> }>(key);
+    if (known) setOut(known);
     let live = true, t = 0;
     // A failed call (the API restarting, a slow square) is tried again, sooner first, so the desk never stays on "working".
-    const WAIT = [120, 1500, 4000, 8000, 15000];
-    const go = (k: number) => { t = window.setTimeout(() => design(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).then((x) => live && setOut(x))
+    const WAIT = [known ? 400 : 120, 1500, 4000, 8000, 15000];
+    const go = (k: number) => { t = window.setTimeout(() => design(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).then((x) => { keepAnswer(key, x); if (live) setOut(x); })
       .catch(() => { if (live) go(Math.min(k + 1, WAIT.length - 1)); }), WAIT[k]); };
     go(0);
     return () => { live = false; clearTimeout(t); };
-  }, [r.inputs, r.overrides, r.off, roof, r.existing, r.strict, r.buildings.length, prices]);
+  }, [key, prices]);
   return out;
 };
 

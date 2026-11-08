@@ -2,6 +2,7 @@
 // pricebook.py): prices from the book, kWh from the engine's hourly estimate. The page only shows them.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Design, Request, Spot, designBody } from "./plan";
+import { askKey, keepAnswer, lastAnswer } from "./answers";
 
 export type Money = { extras?: Record<string, boolean>; qty?: Record<string, number>; income?: string | null; kids?: boolean };
 export type Line = { id: string; tech: string; kind: string; name: string; qty: number; unit: string; fixed: number; per_unit: number; vat: number; net: number; gross: number; custom: boolean; edited: boolean; extra: boolean };
@@ -77,10 +78,14 @@ export function useCosts(r: Request, roof: Spot[]) {
   useEffect(() => {
     if (!roof.length && r.buildings.length) return;
     let live = true;
+    const { body } = designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict);
+    const ask = { ...body, money: { extras: money.extras ?? {}, qty: money.qty ?? {}, income: money.income ?? null, kids: !!money.kids } };
+    // The last price of the same request shows at once (answers.ts); it is asked again behind it, so a price change arrives.
+    const key = askKey("costs", ask), known = lastAnswer<Costs>(key);
+    if (known && !out) { setOut(known); setCurrent(known); }
     const t = setTimeout(() => {
-      const { body } = designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict);
-      call<Costs>("/api/costs", "POST", { ...body, money: { extras: money.extras ?? {}, qty: money.qty ?? {}, income: money.income ?? null, kids: !!money.kids } })
-        .then((c) => { if (live) { setOut(c); setFailed(false); setCurrent(c); } })
+      call<Costs>("/api/costs", "POST", ask)
+        .then((c) => { keepAnswer(key, c); if (live) { setOut(c); setFailed(false); setCurrent(c); } })
         .catch(() => { if (live) { setFailed(true); setRetry((n) => n + 1); } });
     }, failedOnce.current ? 3000 : 250);
     return () => { live = false; clearTimeout(t); };
