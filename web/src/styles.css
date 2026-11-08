@@ -235,8 +235,9 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .requests .track li { padding-top: 8px; border-top: 3px solid var(--hud-line); font-size: 12px; color: var(--hud-ink-3); }
 .requests .track li.past { border-color: var(--hud-live); color: var(--hud-ink); }
 .requests .track li.now { border-color: var(--hud-route); color: var(--hud-route); font-weight: 600; animation: step-pulse 1.6s ease-in-out infinite; }
-@keyframes step-pulse { 50% { border-color: color-mix(in srgb, var(--hud-route) 30%, transparent); } }
-@media (prefers-reduced-motion: reduce) { .requests .track li.now, .reqcard-steps i.now { animation: none; } }
+@keyframes step-pulse { 50% { border-color: color-mix(in srgb, var(--hud-route) 20%, transparent); } }
+/* A fade, not movement: it keeps running under reduced motion, so a request still being worked on always shows it. */
+.requests .state.s0::before, .requests .state.s1::before, .reqcards .state.s0::before, .reqcards .state.s1::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; vertical-align: 1px; border-radius: 50%; background: var(--hud-route); animation: step-blink 1.6s ease-in-out infinite; }
 .requests .offer h3 { margin: 4px 0 8px; font: 600 15px var(--font-ui); color: var(--hud-ink); }
 .requests .offer dl { display: grid; gap: 6px; margin: 0 0 10px; }
 .requests .offer dl div { display: grid; grid-template-columns: 7em 1fr; gap: 12px; font-size: 14px; }
