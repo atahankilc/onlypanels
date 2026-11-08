@@ -9,19 +9,22 @@ import ProofPage from "./Proof";
 import Offer from "./Offer";
 import { Options } from "./Options";
 import { BatteryCurve } from "./BatteryCurve";
-import { Button, Check, Field, Input, Segmented, Select, Slider } from "./ui";
+import { Button, Check, Field, IconButton, Input, Segmented, Select, Slider } from "./ui";
 
-const LEFT = 620;
+const LEFT = 548; // the desk's column: the homeowner's, widened for tables
+/** An address as the homeowner view writes it: the street large, the town under it. */
+const splitLabel = (label: string) => { const at = label.indexOf(", "); return at < 0 ? [label, ""] : [label.slice(0, at), label.slice(at + 2)]; };
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const SOURCE: Record<Source, string> = { customer: "Customer", assumed: "Assumed", planner: "You" };
 const INSTALLERS: [string, string][] = [["2a8ba8e2", "Installer A"], ["23c108b7", "Installer B"]];
 const HEATS: [string, string][] = [["", "Unknown"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherNonRenewable", "Other fossil"], ["OtherRenewable", "Wood or pellets"], ["District", "District heating"], ["Electric", "Electric heating"], ["Heatpump", "Heat pump"]];
 const summary = (d: Design) => `${d.pv.kwp.toFixed(1)} kWp · ${d.battery.kwh ? `${d.battery.kwh} kWh` : "no battery"}${d.wallbox.included ? " · wallbox" : ""}${d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}`;
 const FACT: Record<string, string> = { demand_kwh: "Yearly electricity", price_ct_kwh: "Price", heating: "Heating", heat_kwh: "Yearly heat", ev: "Electric car", ev_km: "Driving", has_solar: "Existing solar", has_storage: "Existing battery", installer: "Catalog",
-  ev_kwh_month: "Car charged at home", ev_charge_home: "Charging at home", ev_day: "Car charges in daytime", home_day: "Home in the day", heat_dist: "Heats through", has_wallbox: "Wallbox already there", hp_kwh: "Heat pump use now", monthly_eur: "Monthly payment",
+  ev_kwh_month: "Car charged at home", ev_charge_home: "Charging at home", ev_day: "Car charges in daytime", home_day: "Home in the day", heat_dist: "Heats through", boiler_age: "Boiler age", has_wallbox: "Wallbox already there", hp_kwh: "Heat pump use now", monthly_eur: "Monthly payment",
   big_users: "Big users", living_m2: "Living area", cert_kwh_m2: "Energy certificate", built: "Built", goal: "Customer's priority" };
 const BUILT: [string, string][] = [["", "Not given"], ["before1979", "Before 1979"], ["1979to1990", "1979 – 1990"], ["1991to2000", "1991 – 2000"], ["2001to2010", "2001 – 2010"], ["since2011", "2011 or later"]];
 const HOME_SHARE: [string, string][] = [["", "Not given"], ["most", "Most"], ["half", "About half"], ["little", "Little"]];
+const BOILER_AGE: [string, string][] = [["", "Not given"], ["under10", "Under 10 years"], ["10to20", "10 – 20 years"], ["over20", "Over 20 years"]];
 const HEAT_DIST: [string, string][] = [["", "Not given"], ["floor", "Underfloor"], ["radiators", "Radiators"], ["both", "Both"]];
 const HOME_DAY: [string, string][] = [["", "Not given"], ["most", "Mostly"], ["some", "Sometimes"], ["rarely", "Rarely"]];
 const GOAL: [string, string][] = [["", "Not given"], ["cost", "Lower cost"], ["independence", "Independence"], ["environment", "Environment"]];
@@ -69,15 +72,25 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
   useEffect(() => { if (openId) update(openId, { opened: true }); }, [openId]);
   const open = requests.find((r) => r.id === openId);
   if (open) return <Workspace key={open.id} r={open} update={update} back={() => setOpenId(null)} scores={scores} />;
+  const waiting = requests.filter((r) => r.status !== "sent").length;
   return <main className="inbox-page">
-    <div className="pagehead"><h1>{page === "requests" ? "Requests" : "Proof"}</h1>
-      <Segmented label="Page" value={page} onChange={setPage} options={[{ value: "requests", label: "Requests" }, { value: "proof", label: "Proof" }]} /></div>
-    {page === "proof" ? <ProofPage /> : <>
-    <p className="muted">A draft is ready before you open a request. You check it, change it and send it.</p>
-    <table className="inbox"><thead><tr><th>Home</th><th>From</th><th>AI draft</th><th>To check</th><th>Status</th></tr></thead>
-      <tbody>{requests.map((r) => <Line key={r.id} r={r} open={() => setOpenId(r.id)} />)}</tbody></table>
-    {loading > 0 && <p className="muted loadnote" role="status"><span className="spinner" aria-hidden="true" />{requests.length ? `Loading ${loading} more ${loading === 1 ? "request" : "requests"}…` : "Loading requests…"}</p>}
-    </>}
+    <div className="inbox-col">
+      <header className="inbox-head">
+        <div>
+          <h1>{page === "requests" ? "Requests" : "Proof"}</h1>
+          <p className="muted">{page === "requests"
+            ? (requests.length ? `${waiting ? `${waiting} waiting for an offer, ${requests.length - waiting} sent.` : "Every offer is sent."} Each comes with the engine's draft to check, change and send.` : "Requests arrive here with the engine's draft.")
+            : "How the engine's first drafts compare with what experts sold, on past projects it never saw."}</p>
+        </div>
+        <Segmented label="Page" value={page} onChange={setPage} options={[{ value: "requests", label: "Requests" }, { value: "proof", label: "Proof" }]} />
+      </header>
+      {page === "proof" ? <ProofPage /> : <>
+        <ul className="reqlist">{requests.map((r) => <Line key={r.id} r={r} open={() => setOpenId(r.id)} />)}
+          {Array.from({ length: loading }, (_, i) => <li key={`loading${i}`} className="loading" aria-hidden="true"><span /><span /></li>)}
+        </ul>
+        {loading > 0 && <p className="small muted loadnote" role="status"><span className="spinner" aria-hidden="true" />{requests.length ? `Loading ${loading} more ${loading === 1 ? "request" : "requests"}…` : "Loading requests…"}</p>}
+      </>}
+    </div>
   </main>;
 }
 
@@ -86,10 +99,15 @@ function Line({ r, open }: { r: Request; open: () => void }) {
   const out = useDesign(r, roof);
   // The same count Checks shows: only facts this design uses.
   const assumed = out ? toConfirm(r, out.d).length : Object.values(r.sources).filter((s) => s === "assumed").length;
-  return <tr tabIndex={0} onClick={open} onKeyDown={(e) => e.key === "Enter" && open()}>
-    <th scope="row">{r.label}</th><td>{r.from}{r.ref && <small className="mono"> {r.ref}</small>}</td><td className="mono">{out ? summary(out.d) : "…"}</td><td>{assumed} assumed {assumed === 1 ? "fact" : "facts"}</td>
-    <td><span className={`state ${r.status}`}>{r.status === "sent" ? "Offer sent" : "Draft ready"}</span></td>
-  </tr>;
+  const [street, town] = splitLabel(r.label), sent = r.status === "sent";
+  return <li>
+    <button type="button" className="reqrow" onClick={open}>
+      <span className="reqrow-home"><b>{street}</b><small>{[town, r.from, r.ref].filter(Boolean).join(" · ")}</small></span>
+      <span className="reqrow-draft">{out ? summary(out.d) : <span className="muted">Drafting…</span>}</span>
+      <span className={`reqrow-todo${!sent && assumed ? " open" : ""}`}>{sent ? "" : assumed ? `${assumed} to confirm` : "Ready to send"}</span>
+      <span className={`reqstate ${sent ? "is-sent" : r.opened ? "is-open" : "is-new"}`}>{sent ? "Offer sent" : r.opened ? "In progress" : "New"}</span>
+    </button>
+  </li>;
 }
 
 type Scores = { scores: Record<string, { kwp_within20: number; n: number; batt_exact_closest: number }> };
@@ -113,6 +131,7 @@ const fmt = (r: Request, k: string, d: Design): string => {
   if (k === "goal") return label(GOAL, v);
   if (k === "home_day") return label(HOME_DAY, v);
   if (k === "heat_dist") return label(HEAT_DIST, v);
+  if (k === "boiler_age") return label(BOILER_AGE, v);
   if (k === "big_users") return (v as string[]).map((x) => BIG[x] ?? x).join(", ");
   if (k === "price_ct_kwh") return `${v} ct per kWh`;
   if (k === "ev_km") return `${Number(v).toLocaleString("en")} km a year`;
@@ -121,7 +140,7 @@ const fmt = (r: Request, k: string, d: Design): string => {
 };
 /** Facts that matter for this design and were not given by anyone: they must be confirmed before the offer leaves. */
 const relevant = (r: Request, d: Design) => Object.keys(r.sources).filter((k) => (k !== "heat_kwh" || d.heatpump.included) && (k !== "ev_km" || r.inputs.ev));
-const EXTRA = ["home_day", "ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "hp_kwh", "heat_dist", "big_users", "living_m2", "cert_kwh_m2", "built", "goal"];
+const EXTRA = ["home_day", "ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "hp_kwh", "heat_dist", "boiler_age", "big_users", "living_m2", "cert_kwh_m2", "built", "goal"];
 /** What the planner must confirm before the offer leaves: assumed facts this design uses, and a living area guessed
  * from the 3D model when a heat pump is sized from it. The request list counts the same. */
 const toConfirm = (r: Request, d: Design) => [...relevant(r, d).filter((k) => r.sources[k] === "assumed"),
@@ -176,9 +195,9 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
       panels={tab === "home" && view.layer === "sun" ? {} : out?.panels} panelW={LEFT} turn={turnTo(roof)} onReady={() => setStep("review")} />
     <aside className="panel tall desk">
       <header className="deskhead">
-        <Button variant="fill" aria-label="Back to requests" onClick={back}><Back /></Button>
-        <div className="grow"><b>{r.label}</b><small>{r.from} request{r.ref ? ` ${r.ref}` : ""} · {r.status === "sent" ? "offer sent" : "draft"}</small></div>
-        <Button variant="solid" disabled={!d || r.status === "sent" || confirm.length > 0} title={confirm.length ? "Confirm the assumed facts in Checks first" : undefined} onClick={send}>{r.status === "sent" ? "Sent" : "Send offer"}</Button>
+        <IconButton label="Back to requests" onClick={back}><Back /></IconButton>
+        <div className="grow"><h1>{splitLabel(r.label)[0]}</h1><p className="muted">{[splitLabel(r.label)[1], `${r.from} request`, r.ref].filter(Boolean).join(" · ")}</p></div>
+        <span className={`reqstate ${r.status === "sent" ? "is-sent" : "is-open"}`}>{r.status === "sent" ? "Offer sent" : "Draft"}</span>
       </header>
       {d && <dl className="kpis">
         <div><dt>Solar</dt><dd>{d.pv.kwp.toFixed(1)}<small> kWp</small></dd></div><div><dt>Modules</dt><dd>{d.pv.modules}</dd></div>
@@ -206,6 +225,13 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
           facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]),
             ...EXTRA.filter((k) => !r.sources[k] && sourceOf(r, k) && (r.inputs.ev || !k.startsWith("ev_") && k !== "has_wallbox")).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[sourceOf(r, k)!]] as [string, string, string]), ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"]]} />}
       </div>
+      {/* As on the homeowner's pages: the way back and the one main action, always in reach. */}
+      <div className="stick">
+        <Button size="lg" onClick={back}>Requests</Button>
+        {r.status === "sent" ? <Button variant="solid" size="lg" wide disabled>Offer sent</Button>
+          : confirm.length ? <Button variant="solid" size="lg" wide disabled={!d} onClick={() => setTab("checks")}>Confirm {confirm.length} {confirm.length === 1 ? "fact" : "facts"} to send</Button>
+          : <Button variant="solid" size="lg" wide disabled={!d} onClick={send}>Send offer</Button>}
+      </div>
     </aside>
   </main>;
 }
@@ -219,9 +245,9 @@ function Brief({ r, d, assumed, points, site, open }: { r: Request; d: Design; a
   if (r.inputs.goal) why.push(`The customer puts ${label(GOAL, r.inputs.goal).toLowerCase()} first; the engine leans on it.`);
   const items = [assumed && `${assumed} assumed ${assumed === 1 ? "fact" : "facts"} to confirm`, points && `${points} review ${points === 1 ? "point" : "points"}`, site && `${site} site ${site === 1 ? "check" : "checks"}`].filter(Boolean);
   return <section className="brief">
-    <small>Design · summary written from the engine's numbers</small>
     <b>{d.pv.kwp.toFixed(1)} kWp · {d.battery.kwh ? `${d.battery.kwh} kWh battery` : "no battery"}{d.wallbox.included ? " · wallbox" : ""}{d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}</b>
     <ul>{why.map((w) => <li key={w}>{w}</li>)}</ul>
+    <small>Written from the engine's numbers by template, not by a language model.</small>
     {items.length > 0 && <Button variant="plain" onClick={open}>Open: {items.join(" · ")} →</Button>}
   </section>;
 }
@@ -247,7 +273,14 @@ function checkList(r: Request, d: Design) {
   if (i.backup) list.push({ id: "backup", title: "Backup power wanted", why: "Pick an inverter and battery that can run the home in an outage, with a backup box. About 1 in 7 past projects had one." });
   list.push({ id: "monument", title: "Check monument status", why: "Not in our data." });
   list.push({ id: "grid", title: "Check the grid connection and meter cabinet", why: "Not in our data." });
-  list.push({ id: "grants", title: "Check grants", why: "They depend on the customer. Not in our data." });
+  // KfW 458 speed bonus (secondary sources, November 2026): oil, coal and electric storage heating at any age, gas once 20 years
+  // in use, for owners living in the home. Its rate falls every half year from July 2026, so no figure is shown.
+  const age = r.inputs.boiler_age, heat = r.inputs.heating;
+  const speed = heat === "Oil" || heat === "Electric" ? "The speed bonus can apply to replacing this heating at any age."
+    : heat === "Gas" && age === "over20" ? "The customer says the gas boiler is over 20 years old, so the speed bonus can apply."
+    : heat === "Gas" && age ? "The customer says the gas boiler is under 20 years old: no speed bonus until it is."
+    : heat === "Gas" ? "The speed bonus needs a gas boiler 20 years in use; ask for the year on its type plate." : "";
+  list.push({ id: "grants", title: "Check grants", why: (speed ? `${speed} Only for owners living in the home; its rate falls every half year, check KfW 458. ` : "") + "Other grants depend on the customer." });
   list.push({ id: "meter", title: "Smart meter and grid feed limit", why: "Without a smart meter, a new system may feed at most 60% of its power to the grid." });
   return list;
 }
@@ -360,6 +393,7 @@ function Facts({ r, d, setI }: { r: Request; d?: Design; setI: (c: Partial<Input
       <Tagged label="Car charges in daytime" source={sourceOf(r, "ev_day")}>{yn("ev_day", i.ev_day)}</Tagged>
       <Tagged label="Wallbox already there" source={sourceOf(r, "has_wallbox")}>{yn("has_wallbox", i.has_wallbox)}</Tagged>
     </>}
+    {["Gas", "Oil", "OtherNonRenewable"].includes(i.heating ?? "") && <Tagged label="Boiler age" source={sourceOf(r, "boiler_age")}>{pick("boiler_age", BOILER_AGE)}</Tagged>}
     {i.heating !== "Heatpump" && i.heating !== "District" && <Tagged label="Heats through" source={sourceOf(r, "heat_dist")}>{pick("heat_dist", HEAT_DIST)}</Tagged>}
     {i.heating === "Heatpump" && <Tagged label="Heat pump use now (kWh a year)" source={sourceOf(r, "hp_kwh")}>{num("hp_kwh", 500)}</Tagged>}
     <Tagged label={i.living_from_model && !s.living_m2 ? "Living area (m², from the 3D model)" : "Living area (m²)"} source={sourceOf(r, "living_m2")}><Input type="number" step={5} value={i.living_m2 ?? ""} onChange={(e) => setI({ living_m2: e.target.value ? Number(e.target.value) : null, living_from_model: false })} /></Tagged>
