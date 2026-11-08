@@ -404,3 +404,27 @@
 .reqlist > li:has(.reqrow):hover { border-radius: 14px; background: var(--hud-fill); } /* rounded only on hover: the divider stays straight */
 .reqlist > li .reqrow:hover { background: none; }
 .reqrow-chain { cursor: pointer; }
+
+/* Before sending (ConfirmCard): the assumed facts at the top of Design, each confirmed or corrected in place. */
+.confirmcard > header > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.confirmcard > header small { font-size: 12.5px; line-height: 1.35; color: var(--hud-ink-2); }
+.factedit { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.factedit .control { width: 130px; flex: none; }
+.factedit span { font-size: 12.5px; color: var(--hud-ink-2); margin-right: auto; }
+.confirmdone { margin: 0; padding: 10px 14px; border-radius: 14px; background: color-mix(in srgb, var(--hud-live) 10%, transparent); color: var(--hud-live); font-size: 13px; }
+.btn.tofacts { align-self: flex-start; color: var(--hud-warn); }
+/* A change that moves nothing in the design: one line, gone by itself (Trace.tsx ChangeCard). */
+.change.quiet { display: flex; align-items: center; gap: 10px; margin: 0; padding: 4px 4px 4px 14px; border-radius: 12px; background: var(--hud-fill); font-size: 13px; animation: rise 0.2s var(--ease); }
+.change.quiet span { color: var(--hud-ink-3); margin-right: auto; }
+/* Design tab in two parts (desk3): the decision, then the details folded. */
+.askbox { flex-wrap: wrap; } .askbox label { flex-basis: 100%; font-size: 12.5px; line-height: 1.35; color: var(--hud-ink-2); }
+.deskbody h3.desk-sub { display: flex; flex-direction: column; gap: 2px; margin: 10px 0 0; padding: 0; border: 0; font: 600 15px/1.3 var(--font-ui); }
+.deskbody h3.desk-sub small { font: 400 12.5px/1.35 var(--font-ui); color: var(--hud-ink-3); }
+.fold .bcurve figcaption b { display: none; } /* the fold's title already names it */
+/* Roof obstacles (Obstacles.tsx): the unsure ones in sight, the rest behind a count by kind. */
+.obs-head { margin: 4px 0 0; color: var(--hud-warn); }
+.obs-more { border-top: 1px solid var(--hud-line); }
+.obs-more > summary { display: flex; align-items: center; gap: 10px; padding: 10px 0; list-style: none; cursor: pointer; font-size: 13px; color: var(--hud-ink-2); }
+.obs-more > summary::-webkit-details-marker { display: none; }
+.obs-more > summary span { margin-left: auto; color: var(--hud-route); white-space: nowrap; }
+.obs-more[open] > summary span { visibility: hidden; }

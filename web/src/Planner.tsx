@@ -19,7 +19,7 @@ import { KIND, Obstacle, blockedOf, findObstacles } from "./roofObstacles";
 import { Options } from "./Options";
 import { AgentPanel } from "./Agent";
 import type { RoofNumbers } from "./share";
-import { BatteryCurve } from "./BatteryCurve";
+import { BatteryCurve, curveOf } from "./BatteryCurve";
 import { CostTab, PriceBook } from "./Costs";
 import { DeskSummary, hpWhy, keptBattery } from "./DeskSummary";
 import { askAhead, askKey, keepAnswer, lastAnswer } from "./answers";
@@ -377,14 +377,14 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         {!d && <DraftChain id={r.id} full />}
         {asks.map((x) => <AskCard key={x.id} x={x} tried={() => tryAsk(x)} done={() => answer(r.ref ?? "-", x.id)} />)}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
-        {d && tab === "design" && <><Brief assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
+        {d && tab === "design" && <><ConfirmCard r={r} d={d} confirm={confirm} setI={setI} confirmFacts={(keys) => update(r.id, { sources: { ...r.sources, ...Object.fromEntries(keys.map((k) => [k, "planner" as Source])) } })} more={() => setTab("home")} /><Brief points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
             energy={<Fold title="Energy in a year" summary={`Makes ${d.energy.production_mwh.toFixed(1)} MWh against ${d.energy.total_mwh.toFixed(1)} MWh needed; ${d.energy.self_sufficiency_pct}% from own power`}><Energy d={d} inputs={r.inputs} measured={home} /></Fold>} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /></>}
         {tab === "home" && <><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} auto={photo} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, withPhotoSolar(r, obstacles)); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "cost" && (pricing ? <PriceBook installer={r.inputs.installer} close={() => setPricing(false)} />
           : <CostTab c={costs} failed={costsFailed} money={moneyOf(r)} setMoney={(money: Money) => update(r.id, { money } as Partial<Request>)} sent={r.status === "sent"}
             use={(change: Record<string, unknown>, label: string) => setO(change as Overrides, label)} prices={() => setPricing(true)} />)}
         {d && tab === "checks" && <Checks r={r} d={d} confirm={confirm} checks={checks} done={done} setDone={setDone} warns={warns.map((n) => ({ code: n.code, text: n.text }))}
-          confirmFacts={(keys) => update(r.id, { sources: { ...r.sources, ...Object.fromEntries(keys.map((k) => [k, "planner" as Source])) } })} change={() => setTab("home")} />}
+          confirmFacts={(keys) => update(r.id, { sources: { ...r.sources, ...Object.fromEntries(keys.map((k) => [k, "planner" as Source])) } })} change={() => setTab("design")} />}
         {d && tab === "offer" && <Offer r={r} d={d} costs={costs} first={first.current} roof={roof} panels={out?.panels ?? {}} toConfirm={confirm.length} allowed={allowed} setAllowed={(a) => update(r.id, { allowed: a } as Partial<Request>)} send={send}
           conditions={checks.filter((c) => !done.includes(c.id)).map((c) => c.title)}
           facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]),
@@ -429,9 +429,42 @@ function whyOf(r: Request, d: Design) {
   return why;
 }
 
+/** Why a fact is assumed, and what it moves: the same words in the confirm card wherever it shows. */
+const factWhy = (r: Request, k: string) => k === "demand_kwh" && r.inputs.demand_source && r.inputs.demand_source !== "bill" && r.inputs.demand_source !== "unknown" ? "Not from a bill. " : k === "heat_kwh" && r.inputs.gas_eur ? `Worked out from €${Math.round(r.inputs.gas_eur).toLocaleString("en")} of gas a year at ${GAS_CT} ct per kWh all in. ` : "Assumed: nobody gave this. ";
+const factWhat = (k: string) => k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : k === "living_m2" ? "Estimated from the 3D model; the heat estimate, and so the heat pump, follows it." : k === "built" ? "The customer did not say; the census's most common period nearby stands in for the heat estimate." : "It changes the design.";
+/** Facts a planner can correct right in the card: a number. Others open the Home tab, where their own control is. */
+const EDITS: Record<string, { step: number; unit: string }> = { demand_kwh: { step: 100, unit: "kWh a year" }, price_ct_kwh: { step: 0.5, unit: "ct per kWh" }, heat_kwh: { step: 500, unit: "kWh a year" }, ev_km: { step: 1000, unit: "km a year" }, living_m2: { step: 5, unit: "m²" } };
+
+/** Before sending: every assumed fact the design uses, where the planner lands. Confirm it as it is, or correct it in place;
+ *  a corrected value is the planner's, so it counts as confirmed, and the design follows. Sending waits until none is left. */
+function ConfirmCard({ r, d, confirm, confirmFacts, setI, more }: { r: Request; d: Design; confirm: string[]; confirmFacts: (keys: string[]) => void; setI: (c: Partial<Inputs>, by?: Source, label?: string) => void; more: () => void }) {
+  const [editing, setEditing] = useState<string | null>(null), [val, setVal] = useState("");
+  if (!confirm.length) return <p className="confirmdone">✓ Every fact the design uses is from the customer or confirmed by you.</p>;
+  const save = (k: string) => {
+    const v = Number(val);
+    if (!Number.isFinite(v) || v <= 0) return;
+    setI((k === "demand_kwh" ? { demand_kwh: v, demand_source: "bill" } : { [k]: v }) as Partial<Inputs>, "planner", `${FACT[k]} set to ${v.toLocaleString("en")} ${EDITS[k].unit}`);
+    setEditing(null);
+  };
+  return <section className="confirmcard" aria-label="Before sending">
+    <header><div><h3>Before sending · {confirm.length} {confirm.length === 1 ? "fact" : "facts"} to confirm</h3><small>The customer did not give {confirm.length === 1 ? "this" : "these"}. Confirm, or correct the value: the design follows.</small></div>
+      {confirm.length > 1 && <Button variant="solid" onClick={() => confirmFacts(confirm)}>Confirm all</Button>}</header>
+    <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm">
+      <div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>{factWhy(r, k)}{factWhat(k)}</small>
+        {editing === k && <form className="factedit" onSubmit={(e) => { e.preventDefault(); save(k); }}>
+          <Input type="number" aria-label={FACT[k]} autoFocus step={EDITS[k].step} value={val} onChange={(e) => setVal(e.target.value)} /><span>{EDITS[k].unit}</span>
+          <Button type="submit" variant="solid">Save</Button><Button variant="plain" onClick={() => setEditing(null)}>Cancel</Button>
+        </form>}
+      </div>
+      {editing !== k && <><Button onClick={() => confirmFacts([k])}>Confirm</Button>
+        <Button variant="plain" onClick={() => { if (EDITS[k]) { setEditing(k); setVal(String((r.inputs as unknown as Record<string, unknown>)[k] ?? "")); } else more(); }}>Edit</Button></>}
+    </li>)}</ul>
+  </section>;
+}
+
 /** What is still open. The system itself is in the tiles above, so it is not said again here. */
-function Brief({ assumed, points, site, open }: { assumed: number; points: number; site: number; open: () => void }) {
-  const items = [assumed && `${assumed} assumed ${assumed === 1 ? "fact" : "facts"} to confirm`, points && `${points} review ${points === 1 ? "point" : "points"}`, site && `${site} site ${site === 1 ? "check" : "checks"}`].filter(Boolean);
+function Brief({ points, site, open }: { points: number; site: number; open: () => void }) {
+  const items = [points && `${points} review ${points === 1 ? "point" : "points"}`, site && `${site} site ${site === 1 ? "check" : "checks"} before installing`].filter(Boolean);
   if (!items.length) return null;
   return <section className="brief"><Button variant="plain" onClick={open}>Open: {items.join(" · ")} →</Button></section>;
 }
@@ -571,12 +604,15 @@ function DesignTab({ d, first, r, setO, apply, lit, scores, review, energy }: { 
         <td><Segmented wide label="Heat pump" value={three(o.heatpump)} onChange={(v) => setO({ heatpump: from3(v) })} options={[{ value: "auto", label: "Auto" }, { value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></td></tr>
     </tbody></table>
       <form className="askbox" onSubmit={(e) => { e.preventDefault(); if (text.trim()) ask(); }}>
-      <Input aria-label="What changed?" placeholder="What changed? e.g. they are buying an electric car" value={text} onChange={(e) => setText(e.target.value)} /><Button type="submit">Apply</Button>
+      <label htmlFor="askbox-text">Something changed? Say it in a sentence; the engine sizes again and the card says what moved.</label>
+      <Input id="askbox-text" placeholder="e.g. they are buying an electric car" value={text} onChange={(e) => setText(e.target.value)} /><Button type="submit">Apply</Button>
     </form>
       {said && <p className="small muted">{said}</p>}
     </section>
     <Options d={d} pick={(a) => setO(a.overrides, `Option: ${a.title.toLowerCase()}`)} />
-    {!r.inputs.has_storage && <BatteryCurve d={d} pick={(kwh) => setO({ battery_kwh: kwh })} />}
+    <h3 className="desk-sub">Details<small>Open what you want to check; nothing here needs doing.</small></h3>
+    {!r.inputs.has_storage && curveOf(d).length > 1 && <Fold title="Battery sizes" summary="Own power and money for each size the installer sells; click one to use it">
+      <BatteryCurve d={d} pick={(kwh) => setO({ battery_kwh: kwh })} /></Fold>}
     <Fold title="Why this design" summary={why[0]}>
       <ul className="why">{why.map((w) => <li key={w}>{w}</li>)}</ul>
       <h3>How the engine decided</h3>
@@ -639,18 +675,12 @@ function Checks({ r, d, confirm, checks, done, setDone, warns, confirmFacts, cha
   const ticked = checks.filter((c) => done.includes(c.id)).length;
   const known = new Set(CHECK_GROUPS.flatMap(([, ids]) => ids));
   const groups: [string, SiteCheck[]][] = [...CHECK_GROUPS.map(([t, ids]) => [t, checks.filter((c) => ids.includes(c.id))] as [string, SiteCheck[]]), ["Other", checks.filter((c) => !known.has(c.id))] as [string, SiteCheck[]]].filter(([, l]) => l.length);
-  const why = (k: string) => k === "demand_kwh" && r.inputs.demand_source && r.inputs.demand_source !== "bill" && r.inputs.demand_source !== "unknown" ? "Not from a bill. " : k === "heat_kwh" && r.inputs.gas_eur ? `Worked out from €${Math.round(r.inputs.gas_eur).toLocaleString("en")} of gas a year at ${GAS_CT} ct per kWh all in. ` : "Assumed: nobody gave this. ";
-  const what = (k: string) => k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : k === "living_m2" ? "Estimated from the 3D model; the heat estimate, and so the heat pump, follows it." : k === "built" ? "The customer did not say; the census's most common period nearby stands in for the heat estimate." : "It changes the design.";
   return <>
     <div className="progress">
       <div className={confirm.length ? "todo" : "ok"}><span>Before sending</span><b>{confirm.length ? `${confirm.length} ${confirm.length === 1 ? "fact" : "facts"} to confirm` : "Every fact confirmed"}</b></div>
       <div className={ticked === checks.length ? "ok" : ""}><span>Before installing</span><b>{ticked} of {checks.length} site checks done</b><i><em style={{ width: `${checks.length ? (ticked / checks.length) * 100 : 100}%` }} /></i></div>
     </div>
-    {confirm.length > 0 && <section className="confirmcard">
-      <header><h3>Confirm before sending</h3>{confirm.length > 1 && <Button variant="solid" onClick={() => confirmFacts(confirm)}>Confirm all {confirm.length}</Button>}</header>
-      <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm"><div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>{why(k)}{what(k)}</small></div>
-        <Button onClick={() => confirmFacts([k])}>Confirm</Button><Button variant="plain" onClick={change}>Change</Button></li>)}</ul>
-    </section>}
+    {confirm.length > 0 && <Button variant="plain" className="tofacts" onClick={change}>Confirm the {confirm.length} {confirm.length === 1 ? "fact" : "facts"} first, at the top of Design →</Button>}
     {warns.length > 0 && <><h3>Points from the review</h3>{warns.map((n) => <p key={n.code} className="flag">{n.text}</p>)}</>}
     <h3>To check before installation</h3>
     <p className="small muted">Open items print on the offer as conditions. Tick what you have checked.</p>

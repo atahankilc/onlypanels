@@ -1,5 +1,5 @@
 // The engine's own decision steps, and what a change did. Every number shown here comes from the engine.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Design, Source, TraceStep } from "./plan";
 import { Button } from "./ui";
 
@@ -46,10 +46,13 @@ export function ChangeCard({ c, close }: { c: Change; close: () => void }) {
   if (a.wallbox.included !== b.wallbox.included) rows.push(["Wallbox", yes(a.wallbox.included, "included"), yes(b.wallbox.included, "included"), b.wallbox.locked ? "you chose it" : b.wallbox.included ? "for the car" : "no car"]);
   if (a.heatpump.included !== b.heatpump.included || a.heatpump.kw !== b.heatpump.kw) rows.push(["Heat pump", yes(a.heatpump.included, `${a.heatpump.kw} kW`), yes(b.heatpump.included, `${b.heatpump.kw} kW`), b.heatpump.locked ? "you chose it" : ""]);
   if (a.energy.production_mwh !== b.energy.production_mwh) rows.push(["Makes", `${a.energy.production_mwh.toFixed(1)} MWh`, `${b.energy.production_mwh.toFixed(1)} MWh`, ""]);
+  // A change that moves nothing in the design (the photo checked as the request opens, a fact confirmed) says so on one line and
+  // goes by itself; a card that stayed on every tab saying "the design stays the same" told the planner nothing.
+  useEffect(() => { if (rows.length) return; const t = setTimeout(close, 4000); return () => clearTimeout(t); }, [c]);
+  if (!rows.length) return <p className="change quiet" aria-live="polite"><b>{c.label}</b><span>Design unchanged</span><Button variant="plain" onClick={c.undo}>Undo</Button></p>;
   return <section className="change" aria-live="polite">
     <header><b>{c.label}</b><Button onClick={c.undo}>Undo</Button><Button variant="plain" aria-label="Close" onClick={close}>×</Button></header>
-    {rows.length ? <table><tbody>{rows.map(([what, from, to, why]) => <tr key={what}><th scope="row">{what}</th><td>{from}</td><td>→</td><td><b>{to}</b></td><td>{why}</td></tr>)}</tbody></table>
-      : <p>The design stays the same.</p>}
+    <table><tbody>{rows.map(([what, from, to, why]) => <tr key={what}><th scope="row">{what}</th><td>{from}</td><td>→</td><td><b>{to}</b></td><td>{why}</td></tr>)}</tbody></table>
   </section>;
 }
 
