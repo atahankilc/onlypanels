@@ -30,7 +30,8 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - Price no longer moves the system size (D82); feed-in at the 2026 rate of 7.7 ct
 - Heat pump size from 2,250 kWh of heat per kW, a car sizes solar at 75% of its use, cars compared with past wallbox homes (D84). Homeowner to planner tested end to end in the browser: request arrives with sources, assumed facts block sending until confirmed, sent offers show in the list
 - Map picking step: blocks appear first, then each 2 km square's real LoD2 roofs replace them in the background (a web worker shapes them, nearest square first, two at a time). The blocks stay invisible underneath for clicks. The API now gzips its answers. Checked in the browser
-- The map's ground is the Bavarian aerial photo (DOP20) in both steps, at full brightness on both themes. Real roofs carry the same photo: on the picking step one image around the view (15 cm to 1 m a pixel by zoom), on the chosen home's step for the neighbours on its street block too. The "Photo only" switch is gone
+- The map's ground is the Bavarian aerial photo (DOP20) in both steps, at full brightness. Ground and roofs share one set of 512 px photo tiles kept in the page, so roofs show what the ground already loaded at once instead of waiting for a separate image. Roofs take their photo from three rings around the view: one tile level sharper than the ground in the middle, coarser outside, the widest (about 5 km) past every drawn square. On the chosen home's step the street block's neighbours get photo roofs too. The "Photo only" switch is gone
+- The light theme is removed: the app is dark only, map labels are white on a dark halo
 
 ## Not done
 

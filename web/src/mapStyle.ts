@@ -43,8 +43,7 @@ type Palette = {
   fog: string
 }
 
-const PALETTE: Record<'light' | 'dark', Palette> = {
-  dark: {
+const P: Palette = {
     land: '#0F1013',
     urban: '#131418',
     park: '#16291F',
@@ -67,45 +66,13 @@ const PALETTE: Record<'light' | 'dark', Palette> = {
     footprintLine: '#1E2026',
     wall: '#15161B',
     roof: '#262830',
-    label: '#A2A6AE',
-    labelMuted: '#6E727A',
-    labelWater: '#4F7894',
-    labelGreen: '#5E8C72',
+    // White on a dark halo: the ground is the aerial photo, and white reads on roofs, trees and streets alike
+    label: '#FFFFFF',
+    labelMuted: '#F2F3F5',
+    labelWater: '#F2F3F5',
+    labelGreen: '#F2F3F5',
     halo: '#0F1013',
     fog: '#0F1013',
-  },
-  // light: paper ground with a hint of warmth, clear greens and blues, white roads drawn by their grey casing, and
-  // blocks lit from one side so their faces separate (the flat greys before read as fog)
-  light: {
-    land: '#F1F0EC',
-    urban: '#EAE9E4',
-    park: '#CFE6C6',
-    wood: '#C6DEBD',
-    grass: '#D6EACE',
-    water: '#A9CDEB',
-    waterLine: '#93BFE4',
-    casing: '#D3D1CA',
-    minor: '#FFFFFF',
-    mid: '#FFFFFF',
-    major: '#FFFFFF',
-    motorway: '#FFFFFF',
-    motorwayCasing: '#BDB9B0',
-    walk: '#FAF9F6',
-    walkUnpaved: '#E6DFD0',
-    cycle: '#E6EDF0',
-    steps: '#D3D0C8',
-    rail: '#C2C0B9',
-    footprint: '#E3E2DD',
-    footprintLine: '#D6D4CE',
-    wall: '#D9D7D1',
-    roof: '#FBFBF9',
-    label: '#2E3136',
-    labelMuted: '#73777F',
-    labelWater: '#3F709A',
-    labelGreen: '#4C7F57',
-    halo: '#F1F0EC',
-    fog: '#F1F0EC',
-  },
 }
 
 const LINES: ExpressionSpecification = ['match', ['geometry-type'], ['LineString', 'MultiLineString'], true, false]
@@ -142,7 +109,7 @@ const WALK_M = { footway: 2.5, pedestrian: 4, platform: 3, cycleway: 2 }
 const walkWidth = (metres: number): ExpressionSpecification => metric(15, 0, metres)
 const roadClass = (...classes: string[]): ExpressionSpecification => ['all', LINES, ['match', ['get', 'class'], classes, true, false], ['!=', ['get', 'brunnel'], 'tunnel']]
 
-function layers(p: Palette, dark: boolean): LayerSpecification[] {
+function layers(p: Palette): LayerSpecification[] {
   const src = { source: 'openmaptiles' } as const
   const height: ExpressionSpecification = ['coalesce', ['get', 'render_height'], 6]
   const solid = {
@@ -181,7 +148,7 @@ function layers(p: Palette, dark: boolean): LayerSpecification[] {
     { id: 'land', type: 'background', paint: { 'background-color': p.land } },
     { id: 'urban', type: 'fill', ...src, 'source-layer': 'landuse', filter: ['all', AREAS, ['match', ['get', 'class'], ['residential', 'suburb', 'neighbourhood', 'commercial', 'retail', 'industrial', 'railway', 'school', 'university', 'college', 'hospital'], true, false]], paint: { 'fill-color': p.urban, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0, 11, 1] } },
     // woods fade in with zoom: at city scale they are only a soft tint, not a patchwork
-    { id: 'wood', type: 'fill', ...src, 'source-layer': 'landcover', filter: ['all', AREAS, ['==', ['get', 'class'], 'wood']], paint: { 'fill-color': p.wood, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 6, dark ? 0.5 : 0.25, 12, 1] } },
+    { id: 'wood', type: 'fill', ...src, 'source-layer': 'landcover', filter: ['all', AREAS, ['==', ['get', 'class'], 'wood']], paint: { 'fill-color': p.wood, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0.5, 12, 1] } },
     { id: 'grass', type: 'fill', ...src, 'source-layer': 'landcover', filter: ['all', AREAS, ['==', ['get', 'class'], 'grass']], paint: { 'fill-color': p.grass, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 9, 0, 12, 1] } },
     { id: 'green-use', type: 'fill', ...src, 'source-layer': 'landuse', filter: ['all', AREAS, ['match', ['get', 'class'], ['cemetery', 'pitch', 'playground', 'garden', 'stadium'], true, false]], paint: { 'fill-color': p.grass } },
     { id: 'park', type: 'fill', ...src, 'source-layer': 'park', filter: AREAS, paint: { 'fill-color': p.park, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0.6, 10, 1] } },
@@ -217,9 +184,9 @@ function layers(p: Palette, dark: boolean): LayerSpecification[] {
       paint: { 'line-color': p.steps, 'line-width': walkWidth(WALK_M.footway), 'line-dasharray': [0.2, 0.2] },
     },
     { id: 'rail', type: 'line', ...src, 'source-layer': 'transportation', minzoom: 11, filter: roadClass('rail', 'transit'), paint: { 'line-color': p.rail, 'line-width': metric(11, 0.8, ROAD_M.rail) } },
-    ...road('road-minor', ['minor', 'service', 'track'], 13, dark ? null : 1.6, 1.2, p.minor),
-    ...road('road-mid', ['tertiary'], 11, dark ? null : 1.4, 1, p.mid),
-    ...road('road-major', ['primary', 'secondary'], 8, dark ? null : 1.4, 0.5, p.major),
+    ...road('road-minor', ['minor', 'service', 'track'], 13, null, 1.2, p.minor),
+    ...road('road-mid', ['tertiary'], 11, null, 1, p.mid),
+    ...road('road-major', ['primary', 'secondary'], 8, null, 0.5, p.major),
     ...road('road-motorway', ['motorway', 'trunk'], 5, 1.2, 0.6, p.motorway, p.motorwayCasing),
     ...(['motorway', 'trunk', 'primary'] as const).map((name) => ({ id: `bridge-${name}`, type: 'line', ...src, 'source-layer': 'transportation', minzoom: 12, filter: ['all', LINES, ['==', ['get', 'brunnel'], 'bridge'], ['==', ['get', 'class'], name]], layout: { 'line-cap': 'round' }, paint: { 'line-color': p.motorway, 'line-width': metric(12, 1.5, ROAD_M[name]) } }) satisfies LayerSpecification),
 
@@ -240,12 +207,12 @@ function layers(p: Palette, dark: boolean): LayerSpecification[] {
 
 const BLOCK_OPACITY = 0.95
 const LIGHT_POSITION: [number, number, number] = [1.2, 210, 40]
-const lightIntensity = (dark: boolean) => (dark ? 0.45 : 0.42)
+const LIGHT_INTENSITY = 0.45
 
 const ATTRIBUTION = '<a href="https://openfreemap.org">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 
-export function mapStyle(dark: boolean): StyleSpecification {
-  const p = PALETTE[dark ? 'dark' : 'light']
+export function mapStyle(): StyleSpecification {
+  const p = P
   return {
     version: 8,
     sources: {
@@ -255,7 +222,7 @@ export function mapStyle(dark: boolean): StyleSpecification {
     glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
     // the far ground fades into the background colour when the map is tilted, so the horizon stays quiet
     sky: { 'sky-color': p.fog, 'horizon-color': p.fog, 'fog-color': p.fog, 'fog-ground-blend': 0.6, 'horizon-fog-blend': 0.8, 'sky-horizon-blend': 1, 'atmosphere-blend': 0 },
-    light: { anchor: 'viewport', color: '#FFFFFF', intensity: lightIntensity(dark), position: LIGHT_POSITION },
-    layers: layers(p, dark),
+    light: { anchor: 'viewport', color: '#FFFFFF', intensity: LIGHT_INTENSITY, position: LIGHT_POSITION },
+    layers: layers(p),
   }
 }

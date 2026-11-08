@@ -19,8 +19,6 @@ export default function App() {
   const [loading, setLoading] = useState(DEMO_COUNT); // demo requests still on their way
   useEffect(() => loadDemo((h) => sent(h, h.sentAt), () => setLoading((n) => Math.max(0, n - 1))), []);
   const progress = (ref: string, p: Progress) => setMine((l) => l.map((x) => (x.ref === ref ? { ...x, opened: x.opened || p.opened, offer: p.offer ?? x.offer } : x)));
-  const [dark, setDark] = useState(localStorage.getItem("theme") !== "light");
-  useEffect(() => { document.documentElement.dataset.theme = dark ? "dark" : "light"; localStorage.setItem("theme", dark ? "dark" : "light"); }, [dark]);
   // The demo tools fold into one small button; a click elsewhere or Escape folds them again.
   const [devOpen, setDevOpen] = useState(false);
   const devRef = useRef<HTMLDivElement>(null);
@@ -39,12 +37,11 @@ export default function App() {
           <Button variant="dev" aria-expanded={devOpen} aria-label="Demo tools" onClick={() => setDevOpen(!devOpen)}>DEV</Button>
           {devOpen && <div className="devmenu" role="group" aria-label="Demo tools">
             <Segmented label="Demo only: switch profile" variant="dev" value={view} onChange={setView} options={[{ value: "homeowner", label: "Homeowner" }, { value: "planner", label: "Planner" }]} />
-            <Button variant="dev" aria-label="Demo only: switch theme" onClick={() => setDark(!dark)}>{dark ? "Dark" : "Light"}</Button>
           </div>}
         </div>
       </header>
-      <FindHome dark={dark} onSend={sent} requests={mine} loading={loading} />
-      {view === "planner" && <Planner dark={dark} handoffs={handoffs} onProgress={progress} loading={loading} />}
+      <FindHome onSend={sent} requests={mine} loading={loading} />
+      {view === "planner" && <Planner handoffs={handoffs} onProgress={progress} loading={loading} />}
     </div>
   );
 }

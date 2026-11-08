@@ -20,7 +20,7 @@ function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real 
 
 const newRef = () => `R-${Math.random().toString(36).slice(2, 7).toUpperCase()}`; // a reference the homeowner can quote
 
-export default function FindHome({ dark, onSend, requests, loading = 0 }: { dark: boolean; onSend: (h: Handoff) => void; requests: Mine[]; loading?: number }) {
+export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h: Handoff) => void; requests: Mine[]; loading?: number }) {
   const [q, setQ] = useState("");
   const [places, setPlaces] = useState<Place[] | null>(null);
   const [active, setActive] = useState(0);
@@ -142,7 +142,7 @@ export default function FindHome({ dark, onSend, requests, loading = 0 }: { dark
 
   return (
     <main className={`stage ${step}`}>
-      <HomeMap dark={dark} buildings={buildings} step={step} focus={focus} onPick={step === "pick" ? toggle : undefined}
+      <HomeMap buildings={buildings} step={step} focus={focus} onPick={step === "pick" ? toggle : undefined}
         open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={step === "review" && stage === "roof" ? view : PHOTO} chosen={step === "review" ? chosen : []} onToggle={() => undefined} editing={drawing && !!tool} installed={[]}
         marked={step === "review" ? marked : undefined} taken={step === "review" ? taken : undefined} editsOn={drawn === "panels" ? taken : marked} tool={drawing ? tool ?? undefined : undefined} onPaint={drawing ? paint : undefined} />
       {step === "review" && drawing && !move && <div className="tools">

@@ -12,6 +12,7 @@ import SunLight from "./SunLight";
 import { MUNICH, REGION_EDGE, REGION_OUTSIDE, VIEW_LIMIT, inRegion } from "./region";
 import { Button, IconButton } from "./ui";
 import type { Detail } from "./solids.worker";
+import { GROUND_TILES, TILE_PX, WORLD_M, mosaic, tile, tileAt } from "./photoTiles";
 
 const BLOCKS = "buildings-3d"; // the base map's blocks: a rough picture from afar, never selected
 const homesOf = (square: string) => `homes-${square}`; // measured buildings, one feature each: what people select. A source and layer per square
@@ -24,10 +25,12 @@ const KEEP_SQUARES = 16; // the farthest beyond this leave the map, so a long se
 const MOVE_CHECK_MS = 300, PULSE_MS = 1100;
 const EDGES_FROM_ZOOM = 16, EDGES_FULL_ZOOM = 17; // from afar houses cannot be told apart anyway, so no lines to draw
 const EDGE_OPACITY = 0.8;
-// One photo around the view for every real roof in it, sharper the closer the view: 15 cm, 30 cm, 1 m a pixel. The service takes over 10 s for 4096 px and under 2 s for 2048.
-const ROOF_PHOTO = [{ fromZoom: 18, sideM: 300 }, { fromZoom: 17, sideM: 600 }, { fromZoom: 0, sideM: 2000 }];
-const ROOF_PHOTO_PX = 2048;
-const WEB_MERCATOR_M = 40075016.686; // the world's width in EPSG:3857 metres
+// The roofs take their photo from the same tiles as the ground, so what the map already shows is on the roofs at once.
+// The roofs' photo on the picking step, in three rings around the view's centre: sharp in the middle, a level finer than the ground;
+// coarser further out, the widest reaching past every square drawn. A roof takes the sharpest ring that covers it.
+const ROOF_LEVELS = [{ dz: 1, tiles: 5 }, { dz: -1, tiles: 6 }, { dz: -3, tiles: 6 }];
+const ROOF_TILE_ZOOM = { min: 12, max: 19 }; // 19 is about 10 cm a pixel here, finer than the photo itself
+const NEIGHBOUR_TILE_ZOOM = 19, NEIGHBOUR_TILES_MAX = 6; // across, for the roofs on the chosen home's step
 const MAX_DETAIL_LOADS = 2; // real roofs come after the blocks, a square or two at a time, nearest first
 export const SUN_LOW = 500, SUN_HIGH = 1400; // kWh per m² a year
 const PANEL_W = 424; // room the panel takes on a wide screen
@@ -38,7 +41,6 @@ const PAN = { maxSpeed: 500, deceleration: 4000 }; // less fling after a drag
 const SITE = "site-fade"; // around the chosen buildings the map fades into plain ground
 const SITE_FROM_M = 45, SITE_RING_M = 10, SITE_RINGS = [0.2, 0.25, 0.3, 0.4, 0.6, 1];
 const FADE_MS = 900; // from the map's blocks to the measured buildings, and back
-const AERIAL = "https://geoservices.bayern.de/od/wms/dop/v1/dop20?service=WMS&version=1.3.0&request=GetMap&layers=by_dop20c&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=512&height=512&format=image/jpeg";
 const COLORS = { roof: "#3A6FA8", edge: "#8A95A8", hover: "#2F5E94", pendingDim: "#2A2C34", pendingBright: "#6F93BF", face: "#FF9F0A", otherRoof: "#3A3D47", otherWall: "#23252C", limit: "#FFD60A", land: "#0F1013" };
 // One light from the south, so the sides of a roof read apart.
 const lit = (hex: string, n: P3) => new THREE.Color(hex).multiplyScalar(0.95 - 0.35 * n[1]).getHex();
@@ -48,16 +50,32 @@ const litWall = (hex: string, n: P3) => new THREE.Color(hex).multiplyScalar(1 - 
 function roofMaterial() {
   return new THREE.ShaderMaterial({
     vertexColors: true, side: THREE.DoubleSide,
-    uniforms: { photo: { value: null }, fit: { value: new THREE.Vector4() }, hasPhoto: { value: 0 }, opacity: { value: 1 } },
+    uniforms: {
+      photo0: { value: null }, fit0: { value: new THREE.Vector4() }, has0: { value: 0 },
+      photo1: { value: null }, fit1: { value: new THREE.Vector4() }, has1: { value: 0 },
+      photo2: { value: null }, fit2: { value: new THREE.Vector4() }, has2: { value: 0 },
+      opacity: { value: 1 },
+    },
     vertexShader: `attribute float roof; attribute float mark; varying vec3 vColor; varying float vRoof; varying float vMark; varying vec2 vXY;
       void main() { vColor = color; vRoof = roof; vMark = mark; vXY = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: `uniform sampler2D photo; uniform vec4 fit; uniform float hasPhoto; uniform float opacity;
+    fragmentShader: `uniform sampler2D photo0; uniform vec4 fit0; uniform float has0;
+      uniform sampler2D photo1; uniform vec4 fit1; uniform float has1;
+      uniform sampler2D photo2; uniform vec4 fit2; uniform float has2;
+      uniform float opacity;
       varying vec3 vColor; varying float vRoof; varying float vMark; varying vec2 vXY;
+      // A tile still on its way is see-through, so the next ring, or the roof's colour, shows meanwhile.
+      vec4 look(sampler2D photo, vec4 fit, float has) {
+        vec2 uv = vec2(vXY.x * fit.x + fit.y, vXY.y * fit.z + fit.w);
+        if (has < 0.5 || any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return vec4(0.0);
+        return texture2D(photo, uv);
+      }
       void main() {
         vec3 c = vColor;
-        vec2 uv = vec2(vXY.x * fit.x + fit.y, vXY.y * fit.z + fit.w);
-        if (hasPhoto > 0.5 && vRoof > 0.5 && all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)))) {
-          c = mix(texture2D(photo, uv).rgb, vColor, vMark * 0.55);
+        if (vRoof > 0.5) {
+          vec4 t = look(photo0, fit0, has0);
+          if (t.a < 0.5) t = look(photo1, fit1, has1);
+          if (t.a < 0.5) t = look(photo2, fit2, has2);
+          if (t.a > 0.5) c = mix(t.rgb, vColor, vMark * 0.55);
         }
         gl_FragColor = vec4(c, opacity);
         #include <colorspace_fragment>
@@ -67,7 +85,7 @@ function roofMaterial() {
 const mercator = (lon: number, lat: number): P2 => [(180 + lon) / 360, (180 - (180 / Math.PI) * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360))) / 360];
 /** Turns a square's local metres into the photo's 0..1, as x * a + b and y * c + d. The photo's box is in EPSG:3857 metres. */
 function photoFit(at: P2, box: number[]) {
-  const [ox, oy] = mercator(at[0], at[1]), unit = 1 / (2 * Math.PI * 6371008.8 * Math.cos((at[1] * Math.PI) / 180)), C = WEB_MERCATOR_M;
+  const [ox, oy] = mercator(at[0], at[1]), unit = 1 / (2 * Math.PI * 6371008.8 * Math.cos((at[1] * Math.PI) / 180)), C = WORLD_M;
   const w = box[2] - box[0], h = box[3] - box[1];
   return new THREE.Vector4((unit * C) / w, (ox * C - C / 2 - box[0]) / w, (unit * C) / h, ((0.5 - oy) * C - box[1]) / h);
 }
@@ -81,7 +99,7 @@ type Props = {
   buildings: Selected[]; step: Step; focus: P2 | null; onPick?: (b: Picked) => void;
   open: string | null; near: string | null; face: Face | null; look: { id: string } | null;
   onFace: (f: Face | null) => void; onOpen: (id: string) => void;
-  view: View; chosen: string[]; onToggle: (key: string) => void; dark: boolean; editing: boolean; installed: string[];
+  view: View; chosen: string[]; onToggle: (key: string) => void; editing: boolean; installed: string[];
   panels?: Record<string, number>; panelW?: number; turn?: number; onReady?: () => void; // the planner's desk
   // editsOn: the cells the tool changes now (priority or existing panels), to tell adding from taking out.
   // The homeowner's drawing: the cells marked on each surface, the tool in hand, and each stroke's cells. Without them a click toggles a whole surface.
@@ -90,12 +108,9 @@ type Props = {
 export type Tool = "surface" | "draw";
 const SNAP_PX = 10; // a click this close to a point, corner or edge lands on it
 
-// What changes with the theme on the map itself. Everything else comes from the base style.
-const TONES = {
-  dark: { ground: "#0F1013", ghost: "#3A3D47", block: "#2A2C34", edge: "#8A95A8", hover: "#2F5E94", land: "#0F1013", wall: "#1F3A5C", roof: COLORS.roof, line: "#BFD8F5" },
-  light: { ground: "#F1F0EC", ghost: "#E3E2DE", block: "#E4E2DC", edge: "#8E8B82", hover: "#9FC2EC", land: "#F1F0EC", wall: "#FFFFFF", roof: "#B0735A", line: "#55565A" },
-};
-const blockColour = (dark: boolean): maplibregl.ExpressionSpecification => { const t = TONES[dark ? "dark" : "light"]; return ["case", ["boolean", ["feature-state", "near"], false], COLORS.face, ["boolean", ["feature-state", "picked"], false], COLORS.roof, ["boolean", ["feature-state", "hover"], false], t.hover, t.block]; };
+// The map's own colours for what is drawn on it. Everything else comes from the base style.
+const TONE = { ground: "#0F1013", ghost: "#3A3D47", block: "#2A2C34", edge: "#8A95A8", hover: "#2F5E94", land: "#0F1013", wall: "#1F3A5C", roof: COLORS.roof, line: "#BFD8F5" };
+const blockColour = (): maplibregl.ExpressionSpecification => { const t = TONE; return ["case", ["boolean", ["feature-state", "near"], false], COLORS.face, ["boolean", ["feature-state", "picked"], false], COLORS.roof, ["boolean", ["feature-state", "hover"], false], t.hover, t.block]; };
 
 const HEAT = ["#2C6BED", "#18C3C9", "#FFE14A", "#FF8A1F", "#E5261F"].map((c) => new THREE.Color(c));
 const heat = (t: number) => {
@@ -115,13 +130,10 @@ const glide = (t: number) => (t < 0.5 ? 8 * t ** 4 : 1 - (-2 * t + 2) ** 4 / 2);
 const HATCH_M = 0.6; // metres between hatch lines
 const HATCH_INK = 0.32; // share of each period that is line
 const hatchLook = (veil: string, veilA: number, ink: string, inkA: number) => ({ veil: new THREE.Vector4(...new THREE.Color(veil).toArray(), veilA), ink: new THREE.Vector4(...new THREE.Color(ink).toArray(), inkA) });
-const OVERLAY = {
-  dark: { hatch: hatchLook("#0E0F13", 0.55, "#FFFFFF", 0.7), has: "#FFB547" },
-  light: { hatch: hatchLook("#F1F0EC", 0.5, "#111215", 0.65), has: "#B85F00" },
-};
+const OVERLAY = { hatch: hatchLook("#0E0F13", 0.55, "#FFFFFF", 0.7), has: "#FFB547" };
 /** The hatch material: uv carries metres on the surface; uv1 the cell mask, as for every overlay. */
 function hatchMaterial() {
-  const uniforms = { uVeil: { value: OVERLAY.dark.hatch.veil.clone() }, uInk: { value: OVERLAY.dark.hatch.ink.clone() } };
+  const uniforms = { uVeil: { value: OVERLAY.hatch.veil.clone() }, uInk: { value: OVERLAY.hatch.ink.clone() } };
   const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, depthWrite: false });
   material.userData.hatch = uniforms;
   material.customProgramCacheKey = () => "hatch";
@@ -214,7 +226,7 @@ function skinOf(s: SunSurface, poly: Poly, step: number) {
   cover.geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(outline.flatMap((p) => [p[0] * step, p[1] * step])), 2));
   // Panels already there: their photo under a faint amber, on the cells that carry them.
   const [fitted, fit] = cellMask();
-  const amber = new THREE.MeshBasicMaterial({ color: OVERLAY.dark.has, side: THREE.DoubleSide, transparent: true, depthWrite: false });
+  const amber = new THREE.MeshBasicMaterial({ color: OVERLAY.has, side: THREE.DoubleSide, transparent: true, depthWrite: false });
   amber.userData.alpha = true; amber.userData.opacity = HAS_TINT;
   const plate = lifted(0.2, amber);
   plate.visible = false;
@@ -350,62 +362,56 @@ function fadeAround(list: Selected[], extra: P2[] = []) {
   return { type: "FeatureCollection" as const, features: SITE_RINGS.map((opacity, i) => ({ type: "Feature" as const, properties: { o: opacity }, geometry: { type: "Polygon" as const, coordinates: [world, hole(SITE_FROM_M + i * SITE_RING_M).reverse()] } })) };
 }
 
-/** Where a building's roof photo comes from, and the part of the ground it covers. */
-function photoOf(b: Selected) {
-  const all = b.real?.roofs.flatMap((p) => p.ring) ?? [];
-  if (!all.length) return null;
-  const x0 = Math.min(...all.map((p) => p[0])) - 3, x1 = Math.max(...all.map((p) => p[0])) + 3, y0 = Math.min(...all.map((p) => p[1])) - 3, y1 = Math.max(...all.map((p) => p[1])) + 3;
+/** The ground's tiles under a box around an origin, in its metres: as fine as the photo, coarser only when the box is large. */
+function tilesUnder(origin: P2, x0: number, x1: number, y0: number, y1: number) {
   const merc = (p: P2): P2 => [(p[0] * 20037508.34) / 180, Math.log(Math.tan(((90 + p[1]) * Math.PI) / 360)) * 6378137];
-  const [a, c] = [merc(toLngLat(b.origin, [x0, y0])), merc(toLngLat(b.origin, [x1, y1]))];
-  const px = (m: number) => Math.min(4096, Math.max(256, Math.round(m / 0.1))); // the photo is 20 cm: twice that, so resampling does not soften it
-  return { x0, x1, y0, y1, url: `https://geoservices.bayern.de/od/wms/dop/v1/dop20?service=WMS&version=1.3.0&request=GetMap&layers=by_dop20c&styles=&crs=EPSG:3857&bbox=${a[0]},${a[1]},${c[0]},${c[1]}&width=${px(x1 - x0)}&height=${px(y1 - y0)}&format=image/png` };
+  const [a, c] = [merc(toLngLat(origin, [x0, y0])), merc(toLngLat(origin, [x1, y1]))];
+  let z = NEIGHBOUR_TILE_ZOOM, sw = tileAt(z, a[0], a[1]), ne = tileAt(z, c[0], c[1]);
+  while (z > ROOF_TILE_ZOOM.min && Math.max(ne[0] - sw[0], sw[1] - ne[1]) + 1 > NEIGHBOUR_TILES_MAX) { z--; sw = tileAt(z, a[0], a[1]); ne = tileAt(z, c[0], c[1]); }
+  return { z, x: sw[0], y: ne[1], nx: ne[0] - sw[0] + 1, ny: sw[1] - ne[1] + 1, a, c };
+}
+const boundsOf = (points: { x: number; y: number }[]) => {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const p of points) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+  return Number.isFinite(x0) ? { x0, x1, y0, y1 } : null;
+};
+/** Asks for the tiles a chosen building's roofs will need, while the user is still picking. */
+function warmRoof(b: Selected) {
+  const box = boundsOf((b.real?.roofs ?? []).flatMap((r) => r.ring.map((p) => ({ x: p[0], y: p[1] }))));
+  if (!box) return;
+  const t = tilesUnder(b.origin, box.x0, box.x1, box.y0, box.y1);
+  for (let i = 0; i < t.nx; i++) for (let j = 0; j < t.ny; j++) tile(t.z, t.x + i, t.y + j).catch(() => undefined);
 }
 
 /** The aerial photo of the ground under a building, as a texture lying on its roofs. */
 function roofPhoto(b: Selected, roofs: THREE.Mesh[], redraw: () => void) {
-  const photo = photoOf(b);
-  if (!photo) return;
-  const { x0, x1, y0, y1, url } = photo;
-  new THREE.TextureLoader().setCrossOrigin("anonymous").load(url, (texture) => {
+  drapePhoto(b.origin, roofs, () => { roofs.forEach((r) => { r.userData.color = 0xffffff; }); redraw(); });
+}
+
+/** The aerial photo laid on roofs drawn around an origin, from the ground's tiles: the chosen home's and its neighbours'. */
+function drapePhoto(origin: P2, roofs: THREE.Mesh[], redraw: () => void) {
+  const points: { x: number; y: number }[] = [];
+  for (const roof of roofs) { const at = roof.geometry.getAttribute("position"); for (let i = 0; i < at.count; i++) points.push({ x: at.getX(i), y: at.getY(i) }); }
+  const bounds = boundsOf(points);
+  if (!bounds) return;
+  const { x0, x1, y0, y1 } = bounds, t = tilesUnder(origin, x0, x1, y0, y1), { a, c } = t;
+  const photo = mosaic(t.z, t.x, t.y, t.nx, t.ny, () => undefined, () => true), box = photo.box;
+  photo.done.then(() => {
+    const texture = new THREE.CanvasTexture(photo.canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 16; // roofs are seen at an angle
     for (const roof of roofs) {
       const at = roof.geometry.getAttribute("position"), uv = new Float32Array(at.count * 2);
-      for (let i = 0; i < at.count; i++) { uv[i * 2] = (at.getX(i) - x0) / (x1 - x0); uv[i * 2 + 1] = (at.getY(i) - y0) / (y1 - y0); }
+      for (let i = 0; i < at.count; i++) {
+        const X = a[0] + ((at.getX(i) - x0) / (x1 - x0 || 1)) * (c[0] - a[0]), Y = a[1] + ((at.getY(i) - y0) / (y1 - y0 || 1)) * (c[1] - a[1]);
+        uv[i * 2] = (X - box[0]) / (box[2] - box[0]); uv[i * 2 + 1] = (Y - box[1]) / (box[3] - box[1]);
+      }
       roof.geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
       const material = roof.material as THREE.MeshBasicMaterial;
       material.map = texture; material.color.set("#FFFFFF"); material.needsUpdate = true;
-      roof.userData.color = 0xffffff;
     }
     redraw();
   });
-}
-
-/** The aerial photo laid on roofs drawn around an origin, one image for all of them. Used for the neighbours of the chosen home. */
-function drapePhoto(origin: P2, roofs: THREE.Mesh[], redraw: () => void) {
-  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-  for (const roof of roofs) {
-    const at = roof.geometry.getAttribute("position");
-    for (let i = 0; i < at.count; i++) { x0 = Math.min(x0, at.getX(i)); x1 = Math.max(x1, at.getX(i)); y0 = Math.min(y0, at.getY(i)); y1 = Math.max(y1, at.getY(i)); }
-  }
-  if (!roofs.length || !Number.isFinite(x0)) return;
-  x0 -= 3; x1 += 3; y0 -= 3; y1 += 3;
-  const merc = (p: P2): P2 => [(p[0] * 20037508.34) / 180, Math.log(Math.tan(((90 + p[1]) * Math.PI) / 360)) * 6378137];
-  const [a, c] = [merc(toLngLat(origin, [x0, y0])), merc(toLngLat(origin, [x1, y1]))];
-  const px = (m: number) => Math.min(ROOF_PHOTO_PX, Math.max(256, Math.round(m / 0.1))); // 10 cm where it fits, so close up it is as sharp as the chosen roof
-  const url = `https://geoservices.bayern.de/od/wms/dop/v1/dop20?service=WMS&version=1.3.0&request=GetMap&layers=by_dop20c&styles=&crs=EPSG:3857&bbox=${a[0]},${a[1]},${c[0]},${c[1]}&width=${px(x1 - x0)}&height=${px(y1 - y0)}&format=image/jpeg`;
-  new THREE.TextureLoader().setCrossOrigin("anonymous").load(url, (texture) => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = 16;
-    for (const roof of roofs) {
-      const at = roof.geometry.getAttribute("position"), uv = new Float32Array(at.count * 2);
-      for (let i = 0; i < at.count; i++) { uv[i * 2] = (at.getX(i) - x0) / (x1 - x0); uv[i * 2 + 1] = (at.getY(i) - y0) / (y1 - y0); }
-      roof.geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-      const material = roof.material as THREE.MeshBasicMaterial;
-      material.map = texture; material.color.set("#FFFFFF"); material.needsUpdate = true;
-    }
-    redraw();
-  }, undefined, () => undefined);
 }
 
 function mesh(points: P3[], faces: number[], color: THREE.ColorRepresentation, opacity = 1) {
@@ -451,7 +457,7 @@ type Real = { mesh: THREE.Mesh; ids: string[]; starts: Uint32Array; shade: Float
 type OnMap = { scene: THREE.Scene; at: P2; done: boolean; real?: Real };
 type Spot = { id: string; square: string };
 
-export default function HomeMap({ buildings, step, focus, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, dark, editing, installed, panels, panelW, turn, onReady, marked, taken, editsOn, tool, onPaint }: Props) {
+export default function HomeMap({ buildings, step, focus, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, editing, installed, panels, panelW, turn, onReady, marked, taken, editsOn, tool, onPaint }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const models = useRef<{ scene: THREE.Scene; at: P2; id: string; polys: Poly[]; surfaces: { s: SunSurface; poly: number }[]; skins: ReturnType<typeof skinOf>[]; ghosts: THREE.Mesh }[]>([]); // one per building, each around its own origin
@@ -471,8 +477,8 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
   const [bearing, setBearing] = useState(0);
   const spot = useRef<maplibregl.Marker | null>(null);
   const pins = useRef<maplibregl.Marker[]>([]);
-  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, dark, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint });
-  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, dark, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint };
+  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint });
+  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint };
   const clearDraft = useRef(() => {});
   const drawing = () => live.current.step === "review" && live.current.editing && !!live.current.onPaint && !!live.current.tool;
 
@@ -495,7 +501,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
   const tint = (name: string, only?: string) => {
     const real = squares.current.get(name)?.real;
     if (!real) return;
-    const t = TONES[live.current.dark ? "dark" : "light"], colour = real.mesh.geometry.getAttribute("color") as THREE.BufferAttribute, out = colour.array as Uint8Array;
+    const t = TONE, colour = real.mesh.geometry.getAttribute("color") as THREE.BufferAttribute, out = colour.array as Uint8Array;
     const roofC = new THREE.Color(), wallC = new THREE.Color(), marks = real.mesh.geometry.getAttribute("mark") as THREE.BufferAttribute, marked = marks.array as Uint8Array;
     const one = (k: number) => {
       const f = flags.current.get(`${name}|${real.ids[k]}`), state = f?.has("near") ? COLORS.face : f?.has("picked") ? COLORS.roof : f?.has("hover") ? t.hover : null;
@@ -620,9 +626,9 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
   };
 
 
-  // The theme's colours on the measured buildings. A roof that has its photo keeps it.
+  // The colours of the measured buildings. A roof that has its photo keeps it.
   const paintGhosts = () => {
-    const { dark } = live.current, t = TONES[dark ? "dark" : "light"];
+    const t = TONE;
     models.current.forEach((x) => {
       (x.ghosts.material as THREE.MeshBasicMaterial).color.set(t.ghost);
       x.scene.getObjectByName("neighbours")?.children.forEach((o) => {
@@ -635,7 +641,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         if (o.name === "outline") material.color.set(t.line);
         if (!o.userData.part || material.map) return;
         const n = normal(x.polys[o.userData.face.poly].ring);
-        material.color.set(o.userData.part === "roof" ? lit(t.roof, n) : dark ? t.wall : litWall(t.wall, n));
+        material.color.set(o.userData.part === "roof" ? lit(t.roof, n) : t.wall);
       });
     });
   };
@@ -645,7 +651,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     const picked = new Set(chosen), hot = face;
     const low = SUN_LOW, high = SUN_HIGH; // one fixed scale, so a surface keeps its colour whatever else is selected
     const dim = new THREE.Color("#0F1013"), mark = new THREE.Color("#FFFFFF");
-    const look = OVERLAY[live.current.dark ? "dark" : "light"];
+    const look = OVERLAY;
     models.current.forEach((m) => {
       const b = live.current.buildings.find((x) => x.id === m.id);
       if (!b?.sun) return;
@@ -711,7 +717,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
 
   useEffect(() => {
     const m = new maplibregl.Map({
-      container: box.current as HTMLDivElement, style: mapStyle(dark), attributionControl: false, center: MUNICH, zoom: 11, pitch: 30, maxPitch: MAX_PITCH, bearing: 0,
+      container: box.current as HTMLDivElement, style: mapStyle(), attributionControl: false, center: MUNICH, zoom: 11, pitch: 30, maxPitch: MAX_PITCH, bearing: 0,
       maxBounds: VIEW_LIMIT, clickTolerance: 8, canvasContextAttributes: { antialias: true }, reduceMotion: false, boxZoom: false, doubleClickZoom: false,
       rotateSpeed: TURN_PER_PX, pitchSpeed: -TILT_PER_PX,
       // By default tiles are cut into smaller ones when zooming in, which cuts every building along a grid.
@@ -775,13 +781,13 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
           if (shown.current > 0) models.current.forEach(({ scene, at }) => draw(scene, at));
         },
       });
-      m.addSource("aerial", { type: "raster", tiles: [AERIAL], tileSize: 512 });
+      m.addSource("aerial", { type: "raster", tiles: [GROUND_TILES], tileSize: TILE_PX });
       // The aerial photo is the ground, in place of the base map's roads and land. Its labels stay on top.
       m.addLayer({ id: "aerial", type: "raster", source: "aerial" }, BLOCKS);
 
       // The edge of the prototype: dimmed outside, a yellow line, and the reason written along it.
       m.addSource(SITE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      m.addLayer({ id: SITE, type: "fill", source: SITE, layout: { visibility: "none" }, paint: { "fill-color": TONES[live.current.dark ? "dark" : "light"].ground, "fill-opacity": 0 } }, "home-3d");
+      m.addLayer({ id: SITE, type: "fill", source: SITE, layout: { visibility: "none" }, paint: { "fill-color": TONE.ground, "fill-opacity": 0 } }, "home-3d");
       m.addSource("outside", { type: "geojson", data: REGION_OUTSIDE });
       m.addSource("limit", { type: "geojson", data: REGION_EDGE });
       m.addLayer({ id: "outside", type: "fill", source: "outside", paint: { "fill-color": COLORS.land, "fill-opacity": 0.72 } });
@@ -847,7 +853,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
           m.addLayer({
             id: homesOf(name), type: "fill-extrusion", source: homesOf(name), minzoom: HOMES_FROM_ZOOM, layout: { visibility: solid.current.visibility },
             paint: {
-              "fill-extrusion-color": blockColour(live.current.dark),
+              "fill-extrusion-color": blockColour(),
               "fill-extrusion-height": ["get", "h"],
               "fill-extrusion-base": 0,
               "fill-extrusion-opacity": solid.current.opacity,
@@ -856,36 +862,42 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
           }, BLOCKS);
         }).catch(() => { asking.delete(name); failed.add(name); showMissing(); pump(); });
       };
-      // The roofs' photo: one image around the view's centre, fetched again once the centre leaves its middle half or the zoom changes tier.
-      let photo: { texture: THREE.Texture; box: number[] } | null = null, photoAsk = 0;
+      // The roofs' photo: for each ring, tiles around the view's centre drawn into one image. Tiles the ground already has are on the
+      // roofs at once; the rest fill in as they arrive. A ring is made again once the centre moves to another of its tiles or the zoom changes.
+      const rings: ({ texture: THREE.Texture; box: number[]; key: string } | null)[] = ROOF_LEVELS.map(() => null), asked = ROOF_LEVELS.map(() => "");
       const dress = (square: OnMap) => {
         const material = square.real?.mesh.material as THREE.ShaderMaterial | undefined;
         if (!material) return;
-        material.uniforms.photo.value = photo?.texture ?? null;
-        material.uniforms.hasPhoto.value = photo ? 1 : 0;
-        if (photo) material.uniforms.fit.value = photoFit(square.at, photo.box);
+        rings.forEach((r, k) => {
+          material.uniforms[`photo${k}`].value = r?.texture ?? null;
+          material.uniforms[`has${k}`].value = r ? 1 : 0;
+          if (r) material.uniforms[`fit${k}`].value = photoFit(square.at, r.box);
+        });
       };
       dressAll.current = () => { squares.current.forEach(dress); m.triggerRepaint(); };
       const refreshPhoto = () => {
         if (live.current.step !== "pick" || m.getZoom() < HOMES_FROM_ZOOM) return;
-        const c = m.getCenter(), X = ((c.lng + 180) / 360 - 0.5) * WEB_MERCATOR_M, Y = (0.5 - mercator(c.lng, c.lat)[1]) * WEB_MERCATOR_M;
-        const metre = 1 / Math.cos((c.lat * Math.PI) / 180); // EPSG:3857 metres per real metre here
-        const half = ((ROOF_PHOTO.find((t) => m.getZoom() >= t.fromZoom) as { sideM: number }).sideM / 2) * metre;
-        if (photo) {
-          const [x0, y0, x1, y1] = photo.box, h = (x1 - x0) / 2;
-          if (Math.abs(h - half) < 1 && Math.abs(X - (x0 + h)) < h / 2 && Math.abs(Y - (y0 + h)) < h / 2) return;
-        }
-        const box = [X - half, Y - half, X + half, Y + half], ticket = ++photoAsk;
-        const url = `https://geoservices.bayern.de/od/wms/dop/v1/dop20?service=WMS&version=1.3.0&request=GetMap&layers=by_dop20c&styles=&crs=EPSG:3857&bbox=${box.join(",")}&width=${ROOF_PHOTO_PX}&height=${ROOF_PHOTO_PX}&format=image/jpeg`;
-        new THREE.TextureLoader().setCrossOrigin("anonymous").load(url, (texture) => {
-          if (ticket !== photoAsk || !ready.current) { texture.dispose(); return; }
-          texture.colorSpace = THREE.SRGBColorSpace;
-          texture.anisotropy = 8;
-          const old = photo?.texture;
-          photo = { texture, box };
-          dressAll.current();
-          old?.dispose();
-        }, undefined, () => undefined);
+        const c = m.getCenter(), X = ((c.lng + 180) / 360 - 0.5) * WORLD_M, Y = (0.5 - mercator(c.lng, c.lat)[1]) * WORLD_M;
+        ROOF_LEVELS.forEach(({ dz, tiles }, k) => {
+          const z = Math.min(ROOF_TILE_ZOOM.max, Math.max(ROOF_TILE_ZOOM.min, Math.round(m.getZoom()) + dz)), [cx, cy] = tileAt(z, X, Y);
+          const key = `${z}/${cx}/${cy}`;
+          if (asked[k] === key) return;
+          asked[k] = key;
+          const alive = () => asked[k] === key && ready.current, half = Math.floor(tiles / 2);
+          let texture: THREE.CanvasTexture | null = null, queued = 0;
+          const drew = () => { if (texture && !queued) queued = requestAnimationFrame(() => { queued = 0; if (texture) texture.needsUpdate = true; m.triggerRepaint(); }); };
+          const made = mosaic(z, cx - half, cy - half, tiles, tiles, drew, alive);
+          made.ready.then(() => {
+            if (!alive()) return;
+            texture = new THREE.CanvasTexture(made.canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.anisotropy = 8;
+            const old = rings[k]?.texture;
+            rings[k] = { texture, box: made.box, key };
+            dressAll.current();
+            old?.dispose();
+          });
+        });
       };
       m.on("moveend", refreshPhoto);
 
@@ -1208,36 +1220,13 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
   }, []);
 
   useEffect(() => { syncHomes.current(); }, [buildings]);
-  // The theme repaints the map in place: reloading the style would drop every layer added to it.
-  useEffect(() => {
-    const m = map.current, tones = TONES[dark ? "dark" : "light"];
-    if (!m || !ready.current) return;
-    const style = mapStyle(dark);
-    for (const layer of style.layers) {
-      if (!m.getLayer(layer.id) || !("paint" in layer) || !layer.paint) continue;
-      for (const [key, value] of Object.entries(layer.paint)) if (key !== "fill-extrusion-opacity") (m as unknown as { setPaintProperty: (id: string, key: string, value: unknown) => void }).setPaintProperty(layer.id, key, value);
-    }
-    if (style.sky) m.setSky(style.sky);
-    if (style.light) m.setLight(style.light);
-    squares.current.forEach((_, name) => { if (m.getLayer(homesOf(name))) m.setPaintProperty(homesOf(name), "fill-extrusion-color", blockColour(dark)); tint(name); });
-    m.setPaintProperty(SITE, "fill-color", tones.ground);
-    m.setPaintProperty("outside", "fill-color", tones.land);
-    m.setPaintProperty("limit-text", "text-halo-color", tones.land);
-    edgeLook.current.color.set(tones.edge);
-    paintGhosts();
-    paintTiles();
-    m.triggerRepaint();
-  }, [dark]);
   // Roof photos load while the user is still picking, so nothing pops in during the move.
   const fetched = useRef(new Set<string>());
   useEffect(() => {
     for (const b of buildings) {
-      const photo = b.real && !fetched.current.has(b.id) ? photoOf(b) : null;
-      if (!photo) continue;
+      if (!b.real || fetched.current.has(b.id)) continue;
       fetched.current.add(b.id);
-      const image = new Image();
-      image.crossOrigin = "anonymous";
-      image.src = photo.url;
+      warmRoof(b);
     }
   }, [buildings]);
   // The search dot helps find the area; once buildings are chosen it only sits in the way.

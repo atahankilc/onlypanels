@@ -52,7 +52,7 @@ const useDesign = (r: Request, roof: Spot[]) => {
 let kept: Request[] = [];
 
 
-export default function Planner({ dark, handoffs, onProgress, loading = 0 }: { dark: boolean; handoffs: Handoff[]; onProgress?: (ref: string, p: Progress) => void; loading?: number }) {
+export default function Planner({ handoffs, onProgress, loading = 0 }: { handoffs: Handoff[]; onProgress?: (ref: string, p: Progress) => void; loading?: number }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [page, setPage] = useState<"requests" | "proof">("requests");
   const [requests, setRequests] = useState<Request[]>(() => kept);
@@ -66,7 +66,7 @@ export default function Planner({ dark, handoffs, onProgress, loading = 0 }: { d
   useEffect(() => { requests.forEach((r) => r.ref && onProgress?.(r.ref, { opened: !!r.opened, offer: r.status === "sent" ? r.offer ?? null : null })); }, [requests]);
   useEffect(() => { if (openId) update(openId, { opened: true }); }, [openId]);
   const open = requests.find((r) => r.id === openId);
-  if (open) return <Workspace key={open.id} dark={dark} r={open} update={update} back={() => setOpenId(null)} scores={scores} />;
+  if (open) return <Workspace key={open.id} r={open} update={update} back={() => setOpenId(null)} scores={scores} />;
   return <main className="inbox-page">
     <div className="pagehead"><h1>{page === "requests" ? "Requests" : "Proof"}</h1>
       <Segmented label="Page" value={page} onChange={setPage} options={[{ value: "requests", label: "Requests" }, { value: "proof", label: "Proof" }]} /></div>
@@ -125,7 +125,7 @@ const toConfirm = (r: Request, d: Design) => [...relevant(r, d).filter((k) => r.
   ...(d.heatpump.included && r.inputs.heat_kwh == null && !r.inputs.cert_kwh_m2 && !r.inputs.built && r.inputs.area_built && !r.sources.built && !d.review.some((n) => n.code === "model_area_large") ? ["built"] : [])];
 const SOURCE_LONG: Record<Source, string> = { customer: "from the customer", assumed: "assumed", planner: "confirmed by the planner" };
 
-function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null }) {
+function Workspace({ r, update, back, scores }: { r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null }) {
   const [tab, setTab] = useState<Tab>("design");
   const [step, setStep] = useState<"pick" | "review">("pick");
   const [roof] = useState(() => roofOf(r.buildings, r.installed));
@@ -168,7 +168,7 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
   const send = () => { update(r.id, { status: "sent", ...(d ? { offer: offerOf(d) } : {}) }); back(); };
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
-    <HomeMap dark={dark} buildings={r.buildings} installed={r.installed} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
+    <HomeMap buildings={r.buildings} installed={r.installed} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
       panels={tab === "home" && view.layer === "sun" ? {} : out?.panels} panelW={LEFT} turn={turnTo(roof)} onReady={() => setStep("review")} />
     <aside className="panel tall desk">
       <header className="deskhead">
