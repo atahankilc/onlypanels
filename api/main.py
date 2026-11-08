@@ -7,6 +7,7 @@ from functools import lru_cache
 from threading import Thread
 
 from fastapi import FastAPI, HTTPException, Path
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -17,6 +18,7 @@ from reonic_engine.refine import refine
 
 SQUARE = r"^\d{3}_\d{4}$"  # it becomes part of a download address
 app = FastAPI(title="Home energy design")
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)  # a square's measured roofs shrink from ~19 MB to ~2 MB
 builders = ProcessPoolExecutor(max_workers=3)  # reading a raw square takes seconds: never in the API's own process
 building_now: dict[str, asyncio.Future] = {}
 TYPICAL_USE_KWH = 4000  # stands in when nobody knows the yearly use, and the answer says so
@@ -194,6 +196,13 @@ async def site_home(home: str, name: str = Path(pattern=SQUARE)):
 async def site_edges(name: str = Path(pattern=SQUARE)):
     await built(name)
     return FileResponse(lod2.path(name, "edges"), media_type="application/octet-stream")
+
+
+@app.get("/api/site/solids/{name}")
+async def site_solids(name: str = Path(pattern=SQUARE)):
+    """Every building of a square with its measured roofs and walls, one per line: what the map draws once it has the blocks."""
+    await built(name)
+    return FileResponse(lod2.path(name, "solids"), media_type="text/plain")
 
 
 @app.get("/api/site/sun/{name}/{building}")

@@ -29,6 +29,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - Design shows what each catalog battery size does in this home (own-power share and saving); a click sets it
 - Price no longer moves the system size (D82); feed-in at the 2026 rate of 7.7 ct
 - Heat pump size from 2,250 kWh of heat per kW, a car sizes solar at 75% of its use, cars compared with past wallbox homes (D84). Homeowner to planner tested end to end in the browser: request arrives with sources, assumed facts block sending until confirmed, sent offers show in the list
+- Map picking step: blocks appear first, then each 2 km square's real LoD2 roofs replace them in the background (a web worker shapes them, nearest square first, two at a time). The blocks stay invisible underneath for clicks. The API now gzips its answers. Not yet checked in a browser
 
 ## Not done
 
