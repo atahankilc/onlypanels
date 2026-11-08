@@ -96,7 +96,7 @@ export function fromHomeowner(h: Handoff): Request {
       // A direction the customer was not sure of gives no direction: the engine keeps the typical yield rather than guess south.
       ...(!buildings.length && h.roof && (h.roof.facing === "flat" || h.roof.facing in COMPASS_DEG) ? { roof_tilt: h.roof.facing === "flat" ? 0 : h.roof.tilt, roof_azimuth: COMPASS_DEG[h.roof.facing] ?? 180 } : {}) },
     // Without a car the driving is a stand-in: hidden until a car is added, then the planner confirms it before an offer leaves.
-    sources: { demand_kwh: a.use_source === "exact" ? "customer" : "assumed", price_ct_kwh: a.price_known ? "customer" : "assumed", heating: source(a.heating), heat_kwh: a.heating === "Gas" && a.gas_eur ? "assumed" : source(a.heat_kwh), ev: source(a.ev), ev_km: car ? source(a.ev_km) : "assumed", has_solar: source(a.has_solar), has_storage: source(a.has_storage), ...(!buildings.length && h.roof ? { area_m2: "customer" as Source } : {}) },
+    sources: { demand_kwh: a.use_source === "exact" ? "customer" : "assumed", price_ct_kwh: a.price_known ? "customer" : "assumed", heating: source(a.heating), heat_kwh: a.heating === "Gas" && a.gas_eur ? "assumed" : source(a.heat_kwh), ev: source(a.ev), ev_km: car ? source(a.ev_km) : "assumed", has_solar: source(a.has_solar), has_storage: source(a.has_storage) }, // a shared roof's area shows as the offer's Roof row, not as a fact of its own
     overrides: a.wants_hp === false ? { heatpump: false } : a.wants_hp ? { heatpump: true } : {},
     // The homeowner's marked area is a priority, not a limit: no roof is taken out for them, modules fill their cells first.
     priority: drawnOf(buildings, choice), taken: Object.fromEntries(Object.entries(choice.panels).filter(([, v]) => v.length)),
