@@ -3,7 +3,7 @@
 Living document. Update it whenever the phase, blockers or next steps change.
 
 **Last updated:** 2026-11-08
-**Phase:** Feature work is wrapping up for the 15:00 deadline. Homeowner flow and planner desk work end to end in Munich, with or without the map. The homeowner only gives information and chooses what is sent (D62, D110). The planner opens the request, with every fact marked by source, checks it, can ask the advisor, and decides. Every decision in `docs/decisions.md` is agreed: none is left Proposed.
+**Phase:** Feature work is wrapping up for the 15:00 deadline. Homeowner flow and planner desk work end to end in Munich, with or without the map. The homeowner only gives information and chooses what is sent (D62, D110). The planner opens the request, with every fact marked by source, checks it, sees what it costs, what past projects support and what the rules mean, and decides. D118 and D120 to D123 in `docs/decisions.md` are still Proposed and wait for the user.
 **Deadline:** Sunday 8 November 2026, 15:00
 
 ## Done
@@ -62,7 +62,10 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - Homeowner and planner have their own addresses, `/homeowner` and `/planner`; an empty or unknown address opens the homeowner, and back and forward switch profiles. The DEV profile switch is always visible next to its DEV tag instead of folding into a button. Request lists: the planner's puts requests waiting for an offer first, the longest waiting on top, sent offers below; the homeowner's puts ready offers first, then the latest. Both say how long ago each was sent (exact time on hover). The planner's "to confirm" count shows only once the draft is in, so it no longer jumps. Checked in a headless browser
 - Demo requests replaced (8 November): three bigger homes around Sondermeierstraße 86 in Munich, all just sent and not yet opened (`web/src/demo.ts`). `docs/demo-script.md` still names the old four requests and must follow
 - Opened request: the battery tile says "None new, keeps its 5 kWh" when the home keeps its own battery, and the request line says the same; payback beyond the years looked at reads "Not in 20 years" in amber and the first year as "Saves in year 1"; the brief no longer repeats the system the tiles show, and the tiles are tighter. Modules sit on the drawn roof's own plane: the sun data's surface normal differs by about a degree, which on a 35 m roof put the far modules under the roof, so big roofs showed only a few. The camera turns to the pitched roof with most modules. Checked in a headless browser on the GPU
-- Final test-split run done once (`scripts/final_test.py`), results per installer in `docs/data/findings.md`. Test matches dev, so the dev work did not overfit
+- Planner reviewed end to end on 8 November (a browser walk of every tab and an independent code review): one money figure everywhere (offer, option cards, review and Cost tab show the same first year), a sent offer keeps its design and an edit reopens it as a draft, electric heating without a heat figure is priced right, every roof surface switched off means no module, low-cost variants start from the money choice, a price change refreshes the design, design and cost calls retry when the API is away
+- Battery model monotonic in yearly use (D126): more use never shrinks the battery. Dev battery error 2.73 to 2.75 kWh; test 2.72 to 2.66 kWh, exact 38% to 40%. `docs/data/findings.md` and the README carry the new numbers
+- The homeowner's offer page shows what they pay after grants, the first year's saving after upkeep and the payback, as the planner's Cost tab; a tried change is priced the same way. Homeowner flow walked in a headless browser: questions without the map skipped and fully answered, sent, offered by the planner, the offer seen and a smaller battery tried; map search and building pick
+- Final test-split run done twice (`scripts/final_test.py`): once for the final numbers, once more after D126 changed the battery model. Results per installer in `docs/data/findings.md`. Test matches dev, so the dev work did not overfit
 
 ## Not done
 
@@ -71,9 +74,9 @@ Living document. Update it whenever the phase, blockers or next steps change.
 
 ## Next steps
 
-1. Homeowner pages are done except the offer page (what the homeowner sees once the planner sends): the user wants to test it. Start page, map pick, sent page, request list and voice helper are accepted as they are. Next the user moves to the planner view
+1. Homeowner pages are done, the offer page included: it now carries price and payback and was walked in a browser on 8 November. The user still wants to see it themselves. Start page, map pick, sent page, request list and voice helper are accepted as they are
 2. Check the engine fixes in `reports/`: 2 m² per panel, price in sizing, roof area as limit. They change scored numbers
-3. Check the own-electricity share and saving before a planner quotes them
+3. Check the own-electricity share and saving before a planner quotes them. The Cost tab's first year is now the figure the offer quotes; the engine's electricity saving stays in Energy only
 4. Decide where expert comparison and results go
 5. Pitch deck and demo recording, following `docs/demo-script.md`. Feature freeze at 12:00
 
