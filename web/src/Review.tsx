@@ -14,6 +14,7 @@ const BY_PEOPLE = [["1", 2000], ["2", 2700], ["3", 3500], ["4", 3800], ["5+", 45
 // district heating gets none (the planner is told why).
 const HEATING = [["Heatpump", "Heat pump"], ["Gas", "Gas"], ["Oil", "Oil"], ["District", "District heating"], ["Electric", "Electric heating"], ["OtherRenewable", "Wood or pellets"], ["unknown", "Something else or not sure"]] as const;
 const SOLAR_KIND = [["pv", "Electricity"], ["thermal", "Hot water"], ["both", "Both"]] as const;
+const HOME_DAY = [["most", "Mostly"], ["some", "Sometimes"], ["rarely", "Rarely"]] as const;
 const OWNER = [["sole", "Only me or my family"], ["shared", "Shared with other owners"], ["tenant", "I rent it"]] as const;
 const BIG_USERS = [["pool", "Pool"], ["sauna", "Sauna"], ["ac", "Air conditioning"], ["water", "Electric water heater"]] as const;
 const BUILT = [["before1979", "Before 1979"], ["1979to1990", "1979 – 1990"], ["1991to2000", "1991 – 2000"], ["2001to2010", "2001 – 2010"], ["since2011", "2011 or later"]] as const;
@@ -114,7 +115,7 @@ export default function Review({ refId, progress, done, stage, setStage, answers
       ["Your roof", "roof", [["Priority area", `${Math.round(m2)} m²`]]],
       ["Solar already there", "solar", a.has_solar ? [["Solar", "Yes"], ["Makes", label(SOLAR_KIND, a.solar_kind)], ["Marked area", `${Math.round(panelM2)} m²`], ["Size", n(a.solar_kwp, "kWp")], ["Year", a.solar_year ? String(a.solar_year) : no]] : [["Solar", yes(a.has_solar)]]],
       ["Home battery", "battery", [["Battery", yes(a.has_storage)], ...(a.has_storage ? [["Size", n(a.battery_kwh, "kWh")] as [string, string]] : [])]],
-      ["Electricity", "use", [["Yearly use", use], ["Price", a.price_known ? `${a.price_ct_kwh} ct per kWh` : no]]],
+      ["Electricity", "use", [["Yearly use", use], ["Price", a.price_known ? `${a.price_ct_kwh} ct per kWh` : no], ["Home in the day", label(HOME_DAY, a.home_day)]]],
       ["Big electric users", "big", [["Has", a.big_users.length ? a.big_users.map((v) => label(BIG_USERS, v)).join(", ") : "None"]]],
       ["Your house", "house", [["Built", label(BUILT, a.built)], ["Living area", n(a.living_m2, "m²")], ["Energy certificate", n(a.cert_kwh_m2, "kWh per m²")], ["Owned by", label(OWNER, a.owner)]]],
       ["Heating", "heat", [["Heating", label(HEATING, a.heating)], ...(a.heating === "Heatpump" ? [["Its electricity", n(a.hp_kwh, "kWh a year")] as [string, string]] : []),
@@ -238,6 +239,13 @@ export default function Review({ refId, progress, done, stage, setStage, answers
             <button type="button" className="textlink" onClick={() => answer({ use_source: "unknown", demand_kwh: null, use_range: [null, null] })}>Skip</button>
           </div>
         </>}
+        <div className="more">
+          <h2>Is someone home during the day on weekdays?<span className="opt">Optional</span></h2>
+          <p className="small muted">Power used while the sun shines comes straight from the roof.</p>
+          <div className="answers">
+            {HOME_DAY.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.home_day === v} onClick={() => setAnswers({ ...a, home_day: a.home_day === v ? null : v })}>{label}</Button>)}
+          </div>
+        </div>
         <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={next}>{nextLabel}</Button></div>
       </>}
 

@@ -349,9 +349,9 @@ class Engine:
         old_mwh, old_battery = (ex["mwh"], ex["battery_kwh"]) if known else (0.0, 0.0)
         # The home as a whole, both systems and both batteries. The saving is only what the new system adds to the old one.
         heat_load = (hp_mwh + own_hp) * 1000
-        estimate = simulate(base * 1000, ev_mwh * 1000, heat_load, (production + old_mwh) * 1000, battery_kwh + old_battery, price, sun=sun, ev_day=bool(i.get("ev_day")))
+        estimate = simulate(base * 1000, ev_mwh * 1000, heat_load, (production + old_mwh) * 1000, battery_kwh + old_battery, price, sun=sun, ev_day=bool(i.get("ev_day")), home_day=i.get("home_day"))
         if known:
-            before = simulate(base * 1000, ev_mwh * 1000, heat_load, old_mwh * 1000, old_battery, price, sun=sun, ev_day=bool(i.get("ev_day")))
+            before = simulate(base * 1000, ev_mwh * 1000, heat_load, old_mwh * 1000, old_battery, price, sun=sun, ev_day=bool(i.get("ev_day")), home_day=i.get("home_day"))
             estimate["saving_eur"] = max(0, estimate["saving_eur"] - before["saving_eur"])
         reasons.append({"code": "balance", "production": round(production, 1), "ratio": round(production / total, 1)})
 
@@ -563,8 +563,10 @@ def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_
                   "how": "Added when there is an electric car, unless one is already on the wall.", "result": "Included." if wallbox else ("Not included: one is already there." if i.get("ev") and i.get("has_wallbox") else "Not included.")})
 
     steps.append({"id": "energy", "title": "Energy check", "kind": "physics",
-                  "inputs": [fact(None, "Production", f"{_num(production)} MWh"), fact("price_ct_kwh", "Price", f"{_num(i.get('price_ct_kwh', 32.0))} ct")],
-                  "how": f"One year hour by hour, with assumed household, car and heat profiles and {FEED_IN_CT_KWH} ct feed-in. An estimate, not a measurement.",
+                  "inputs": [fact(None, "Production", f"{_num(production)} MWh"), fact("price_ct_kwh", "Price", f"{_num(i.get('price_ct_kwh', 32.0))} ct"),
+                             fact("home_day", "Home in the day", {"most": "mostly", "some": "sometimes", "rarely": "rarely"}.get(i.get("home_day"), "not said"))],
+                  "how": f"One year hour by hour, with assumed household, car and heat profiles and {FEED_IN_CT_KWH} ct feed-in. An estimate, not a measurement." +
+                         {"most": " The household shape has someone home in the day on weekdays.", "rarely": " The household shape has everyone out in the day on weekdays."}.get(i.get("home_day"), ""),
                   "result": (f"The new system makes {_num(production)} MWh, with the old one {_num(production + ex['mwh'])} MWh: {_num((production + ex['mwh']) / total)} times the need. "
                              f"About {estimate['self_sufficiency_pct']}% of the need from own power. The new system adds about €{estimate['saving_eur']:,} a year."
                              if ex and ex["kwp"] else

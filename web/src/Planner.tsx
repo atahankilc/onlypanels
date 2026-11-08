@@ -18,10 +18,11 @@ const INSTALLERS: [string, string][] = [["2a8ba8e2", "Installer A"], ["23c108b7"
 const HEATS: [string, string][] = [["", "Unknown"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherNonRenewable", "Other fossil"], ["OtherRenewable", "Wood or pellets"], ["District", "District heating"], ["Electric", "Electric heating"], ["Heatpump", "Heat pump"]];
 const summary = (d: Design) => `${d.pv.kwp.toFixed(1)} kWp · ${d.battery.kwh ? `${d.battery.kwh} kWh` : "no battery"}${d.wallbox.included ? " · wallbox" : ""}${d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}`;
 const FACT: Record<string, string> = { demand_kwh: "Yearly electricity", price_ct_kwh: "Price", heating: "Heating", heat_kwh: "Yearly heat", ev: "Electric car", ev_km: "Driving", has_solar: "Existing solar", has_storage: "Existing battery", installer: "Catalog",
-  ev_kwh_month: "Car charged at home", ev_charge_home: "Charging at home", ev_day: "Car charges in daytime", has_wallbox: "Wallbox already there", hp_kwh: "Heat pump use now", monthly_eur: "Monthly payment",
+  ev_kwh_month: "Car charged at home", ev_charge_home: "Charging at home", ev_day: "Car charges in daytime", home_day: "Home in the day", has_wallbox: "Wallbox already there", hp_kwh: "Heat pump use now", monthly_eur: "Monthly payment",
   big_users: "Big users", living_m2: "Living area", cert_kwh_m2: "Energy certificate", built: "Built", goal: "Customer's priority" };
 const BUILT: [string, string][] = [["", "Not given"], ["before1979", "Before 1979"], ["1979to1990", "1979 – 1990"], ["1991to2000", "1991 – 2000"], ["2001to2010", "2001 – 2010"], ["since2011", "2011 or later"]];
 const HOME_SHARE: [string, string][] = [["", "Not given"], ["most", "Most"], ["half", "About half"], ["little", "Little"]];
+const HOME_DAY: [string, string][] = [["", "Not given"], ["most", "Mostly"], ["some", "Sometimes"], ["rarely", "Rarely"]];
 const GOAL: [string, string][] = [["", "Not given"], ["cost", "Lower cost"], ["independence", "Independence"], ["environment", "Environment"]];
 const USE_FROM: Record<string, string> = { bill: "from the bill", range: "from a range the customer picked", payment: "from the monthly payment", people: "from the household size", unknown: "not known" };
 const BIG: Record<string, string> = { pool: "pool", sauna: "sauna", ac: "air conditioning", water: "electric water heater" };
@@ -109,6 +110,7 @@ const fmt = (r: Request, k: string, d: Design): string => {
   if (k === "built") return v ? label(BUILT, v) : i.area_built ? `${label(BUILT, i.area_built)} (most common nearby, 2022 census: ${Math.round(Number(i.area_built_share ?? 0) * 100)}% of homes)` : "not given";
   if (k === "ev_charge_home") return label(HOME_SHARE, v);
   if (k === "goal") return label(GOAL, v);
+  if (k === "home_day") return label(HOME_DAY, v);
   if (k === "big_users") return (v as string[]).map((x) => BIG[x] ?? x).join(", ");
   if (k === "price_ct_kwh") return `${v} ct per kWh`;
   if (k === "ev_km") return `${Number(v).toLocaleString("en")} km a year`;
@@ -117,7 +119,7 @@ const fmt = (r: Request, k: string, d: Design): string => {
 };
 /** Facts that matter for this design and were not given by anyone: they must be confirmed before the offer leaves. */
 const relevant = (r: Request, d: Design) => Object.keys(r.sources).filter((k) => (k !== "heat_kwh" || d.heatpump.included) && (k !== "ev_km" || r.inputs.ev));
-const EXTRA = ["ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "hp_kwh", "big_users", "living_m2", "cert_kwh_m2", "built", "goal"];
+const EXTRA = ["home_day", "ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "hp_kwh", "big_users", "living_m2", "cert_kwh_m2", "built", "goal"];
 /** What the planner must confirm before the offer leaves: assumed facts this design uses, and a living area guessed
  * from the 3D model when a heat pump is sized from it. The request list counts the same. */
 const toConfirm = (r: Request, d: Design) => [...relevant(r, d).filter((k) => r.sources[k] === "assumed"),
@@ -344,6 +346,7 @@ function Facts({ r, d, setI }: { r: Request; d?: Design; setI: (c: Partial<Input
     <Tagged label="Catalog"><Select value={i.installer} onChange={(e) => setI({ installer: e.target.value })}>{INSTALLERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Tagged>
     {((i.demand_source && i.demand_source !== "bill") || !!i.big_users?.length) && <p className="small muted span">Yearly use {i.demand_source ? USE_FROM[i.demand_source] ?? i.demand_source : "not given"}{i.monthly_eur ? ` (€${i.monthly_eur} a month)` : ""}.{i.big_users?.length ? ` Big users: ${fmt(r, "big_users", d as Design)}${i.demand_source === "bill" ? ", already in the bill." : ", added on top by the engine."}` : ""}{i.demand_source !== "bill" ? " A bill would be better." : ""}</p>}
     <h3 className="span">More from the homeowner</h3>
+    <Tagged label="Someone home in the day" source={sourceOf(r, "home_day")}>{pick("home_day", HOME_DAY)}</Tagged>
     {i.ev && <>
       <Tagged label="Car charged at home (kWh a month)" source={sourceOf(r, "ev_kwh_month")}>{num("ev_kwh_month", 10)}</Tagged>
       <Tagged label="Charging at home" source={sourceOf(r, "ev_charge_home")}>{pick("ev_charge_home", HOME_SHARE)}</Tagged>

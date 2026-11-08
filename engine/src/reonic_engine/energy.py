@@ -41,6 +41,19 @@ def _year(day_shape, month_weight):
 
 SEASON = [1.2, 1.15, 1.05, 1, .9, .85, .85, .85, .95, 1, 1.1, 1.2]
 HOUSE = _year(HOUSE_DAY, [s * d for s, d in zip(SEASON, MONTH_DAYS)])
+# Who is home in the day on weekdays moves use towards or away from the sun. Assumed weekday shapes, not measured; weekends keep
+# the standard day, so each is mixed 5 to 2 with it. Same yearly total, only the hours differ. Unanswered: the standard day.
+HOUSE_DAY_HOME = [.5, .4, .4, .4, .4, .5, .9, 1.2, 1.3, 1.3, 1.3, 1.4, 1.5, 1.3, 1.2, 1.2, 1.3, 1.6, 1.9, 1.8, 1.5, 1.1, .8, .6]  # home office, retired
+HOUSE_DAY_AWAY = [.5, .4, .4, .4, .4, .6, 1.1, 1.3, .7, .5, .5, .5, .5, .5, .5, .6, .9, 1.6, 2.1, 2.1, 1.8, 1.3, .9, .6]  # everyone out at work or school
+
+
+def _week(weekday):
+    day, base = np.array(weekday) / sum(weekday), np.array(HOUSE_DAY) / sum(HOUSE_DAY)
+    return (5 * day + 2 * base).tolist()
+
+
+HOUSES = {None: HOUSE, "most": _year(_week(HOUSE_DAY_HOME), [s * d for s, d in zip(SEASON, MONTH_DAYS)]),
+          "rarely": _year(_week(HOUSE_DAY_AWAY), [s * d for s, d in zip(SEASON, MONTH_DAYS)])}
 EV = _year(EV_DAY, MONTH_DAYS)
 # A car that stands at home in the day charges while the sun shines. Assumed shape, not measured.
 EV_SUN_DAY = [0, 0, 0, 0, 0, 0, 0, 0, .3, .8, 1.3, 1.6, 1.7, 1.6, 1.3, .8, .4, .2, .1, 0, 0, 0, 0, 0]
@@ -110,19 +123,21 @@ def sun_shape(surfaces=None, placed=None):
     return weather()
 
 
-def simulate(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, sun=None, ev_day=False):
-    """One estimate, averaged over the weather years. sun: hourly shapes from sun_shape(); the fallback is the clear-ish model."""
+def simulate(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, sun=None, ev_day=False, home_day=None):
+    """One estimate, averaged over the weather years. sun: hourly shapes from sun_shape(); the fallback is the clear-ish model.
+    home_day: "most" or "rarely" when someone is home in the day on weekdays; anything else keeps the standard day."""
     years = sun if sun is not None else weather()
+    house = HOUSES.get(home_day, HOUSE)
     if years is None:
-        return _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, SOLAR, ev_day)
-    runs = [_year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, y, ev_day) for y in np.atleast_2d(years)]
+        return _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, SOLAR, ev_day, house)
+    runs = [_year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, y, ev_day, house) for y in np.atleast_2d(years)]
     return {"self_sufficiency_pct": round(np.mean([r["self_sufficiency_pct"] for r in runs])),
             "self_use_pct": round(np.mean([r["self_use_pct"] for r in runs])),
             "saving_eur": int(round(np.mean([r["saving_eur"] for r in runs]) / 10) * 10)}
 
 
-def _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, shape, ev_day=False):
-    load = (house_kwh * HOUSE + ev_kwh * (EV_SUN if ev_day else EV) + heat_kwh * HEAT).tolist()
+def _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, shape, ev_day=False, house=HOUSE):
+    load = (house_kwh * house + ev_kwh * (EV_SUN if ev_day else EV) + heat_kwh * HEAT).tolist()
     solar = (production_kwh * shape).tolist()
     capacity = battery_kwh * BATTERY_USABLE
     rate = battery_kwh * C_RATE

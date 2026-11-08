@@ -75,6 +75,7 @@ class Inputs(BaseModel):
     goal: str | None = None  # cost, independence, environment
     ev_charge_home: str | None = None  # most, half, little
     ev_day: bool | None = None
+    home_day: str | None = None  # someone home in the day on weekdays: most, some, rarely
     has_wallbox: bool | None = None
     surfaces: list[Surface] | None = None
     # Solar already on the building: size and year if the customer knows them, else the area they marked, and its sun.

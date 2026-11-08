@@ -13,6 +13,7 @@ def curve(i, d):
     sizes = sorted({0.0, *[c for c in d["battery"]["choices"] if c <= MAX_SHOWN_KWH], float(d["battery"]["kwh"])})
     rows = []
     for kwh in sizes:
-        r = simulate(e["base_mwh"] * 1000, e["ev_mwh"] * 1000, e["hp_mwh"] * 1000, production, kwh, i.get("price_ct_kwh", 32.0), sun=sun)
+        r = simulate(e["base_mwh"] * 1000, e["ev_mwh"] * 1000, e["hp_mwh"] * 1000, production, kwh, i.get("price_ct_kwh", 32.0), sun=sun,
+                     ev_day=bool(i.get("ev_day")), home_day=i.get("home_day"))
         rows.append({"kwh": kwh, "own_pct": r["self_sufficiency_pct"], "saving_eur": r["saving_eur"]})
     return rows

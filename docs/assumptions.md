@@ -41,6 +41,7 @@ Code locations: engine `engine/src/reonic_engine/` (design.py, energy.py, models
 | 100% at home | Share charged at home | Not answered | Behaviour before the question existed | `design.py` |
 | 75% | Share of the car's use that sizes the solar | Car | Calibrated to experts: homes with a wallbox get about 1 kWp more (`scripts/profile_hp_ev.py`) | `design.py` EV_SIZING |
 | Evening shape, or daytime shape | When the car charges in the hourly check | Daytime only when the car is often home in the day | Our assumption, both shapes | `energy.py` EV_DAY, EV_SUN_DAY |
+| Household day shape by who is home on weekdays | Own-power share and saving in the hourly check, and the battery size comparison | "Mostly": more use from 8 to 17 h; "Rarely": less midday use, more in the evening; weekdays mixed 5 to 2 with the standard day. "Sometimes" or unanswered keeps the standard day. At 4,500 kWh and 9.5 MWh made, no battery: 39% standard, 42% mostly, 32% rarely. A battery narrows it | Our assumption, both shapes | `energy.py` HOUSE_DAY_HOME, HOUSE_DAY_AWAY |
 
 ## Systems already there
 

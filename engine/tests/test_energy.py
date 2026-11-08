@@ -1,4 +1,6 @@
-from reonic_engine.energy import EV, HEAT, HOUSE, SOLAR, simulate
+import numpy as np
+
+from reonic_engine.energy import EV, HEAT, HOUSE, HOUSES, SOLAR, simulate
 
 
 def run(production=9000, battery=0):
@@ -6,7 +8,7 @@ def run(production=9000, battery=0):
 
 
 def test_profiles_sum_to_one_year():
-    for profile in (HOUSE, EV, HEAT, SOLAR):
+    for profile in (*HOUSES.values(), EV, HEAT, SOLAR):
         assert len(profile) == 8760 and abs(profile.sum() - 1) < 1e-9
 
 
@@ -24,3 +26,8 @@ def test_no_panels_means_no_saving():
 def test_reasonable_german_home():
     r = run(battery=10)
     assert 55 <= r["self_sufficiency_pct"] <= 90
+
+
+def test_someone_home_in_the_day_uses_more_of_the_sun():
+    share = {h: simulate(4500, 0, 0, 9500, 0, 32, sun=np.atleast_2d(SOLAR), home_day=h)["self_sufficiency_pct"] for h in ("rarely", None, "most")}
+    assert share["rarely"] < share[None] < share["most"]
