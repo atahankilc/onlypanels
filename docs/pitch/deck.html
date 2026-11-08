@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OnlyPanels: pitch</title>
+<!-- Build the PDF: see docs/pitch/README.md. Numbers come from scripts/profile_same_request.py, scripts/final_test.py and scripts/check_evidence.py -->
+<style>
+@font-face { font-family: "Geist"; src: url("../../web/node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Geist Mono"; src: url("../../web/node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+@page { size: 1920px 1080px; margin: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: #0e0f12; }
+body { font-family: "Geist", system-ui, sans-serif; color: #e9eaee; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.slide { width: 1920px; height: 1080px; position: relative; overflow: hidden; page-break-after: always; break-after: page;
+  background: radial-gradient(1200px 700px at 85% -10%, rgba(66,133,244,.14), transparent 60%), #111216; padding: 110px 130px; }
+.slide:last-child { page-break-after: auto; break-after: auto; }
+.brand { position: absolute; top: 48px; left: 130px; font-weight: 650; font-size: 26px; letter-spacing: -.01em; }
+.brand b { color: #36a3f7; font-weight: 650; }
+.num { position: absolute; top: 52px; right: 130px; font-family: "Geist Mono", monospace; font-size: 18px; color: #9095a4; }
+.kicker { font-family: "Geist Mono", monospace; font-size: 22px; letter-spacing: .16em; text-transform: uppercase; color: #8b90a0; margin-bottom: 28px; }
+h1 { font-size: 104px; line-height: 1.02; letter-spacing: -.035em; font-weight: 650; }
+h2 { font-size: 68px; line-height: 1.08; letter-spacing: -.03em; font-weight: 620; max-width: 1500px; }
+.accent { color: #5ee0b5; }
+.amber { color: #f7b23b; }
+.lead { font-size: 34px; line-height: 1.4; color: #b4b8c4; max-width: 1350px; margin-top: 36px; }
+.muted { color: #9fa3b2; }
+.src { position: absolute; bottom: 44px; left: 130px; right: 130px; font-size: 18px; color: #9095a4; font-family: "Geist Mono", monospace; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px; margin-top: 70px; }
+.stat { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 28px; padding: 44px 44px 40px; }
+.stat .v { font-size: 120px; font-weight: 650; letter-spacing: -.04em; line-height: 1; }
+.stat .l { font-size: 28px; line-height: 1.35; color: #b4b8c4; margin-top: 22px; }
+.split { display: grid; grid-template-columns: 640px 1fr; gap: 70px; align-items: center; height: 100%; }
+.split.wide { grid-template-columns: 560px 1fr; }
+.shot { border-radius: 22px; overflow: hidden; border: 1px solid rgba(255,255,255,.10); box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+.shot img { display: block; width: 100%; }
+ul.pts { list-style: none; margin-top: 40px; }
+ul.pts li { font-size: 30px; line-height: 1.35; color: #c9ccd6; padding: 16px 0 16px 34px; position: relative; }
+ul.pts li::before { content: ""; position: absolute; left: 0; top: 30px; width: 12px; height: 12px; border-radius: 50%; background: #4f8df7; }
+ul.pts li b { color: #fff; font-weight: 600; }
+.grid-src { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; margin-top: 56px; }
+.chip { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 20px; padding: 26px 28px; }
+.chip .t { font-size: 27px; font-weight: 600; }
+.chip .d { font-size: 21px; color: #9599a8; margin-top: 8px; line-height: 1.35; }
+.chip.ai { border-color: rgba(94,224,181,.35); }
+.chip.pl { border-color: rgba(247,178,59,.35); }
+.legend { margin-top: 30px; font-size: 22px; color: #8b90a0; }
+.legend span { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin: 0 10px 0 28px; vertical-align: -1px; }
+table { border-collapse: collapse; margin-top: 50px; font-size: 32px; width: 1400px; }
+th, td { text-align: left; padding: 22px 26px; border-bottom: 1px solid rgba(255,255,255,.08); }
+th { font-size: 22px; font-weight: 500; color: #8b90a0; text-transform: uppercase; letter-spacing: .08em; }
+td.e { color: #5ee0b5; font-weight: 600; }
+.stack { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px; margin-top: 60px; }
+.stack .chip .t { font-size: 30px; margin-bottom: 14px; }
+.stack .chip .d { font-size: 24px; line-height: 1.5; }
+.pill { display: inline-block; font-family: "Geist Mono", monospace; font-size: 20px; padding: 8px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); color: #b4b8c4; margin-right: 10px; }
+</style>
+</head>
+<body>
+
+<!-- 1 Title -->
+<section class="slide">
+  <div class="brand">Only<b>Panels</b></div>
+  <div class="num">thinc! München 2026 · Reonic case</div>
+  <div style="position:absolute; left:130px; right:130px; bottom:150px;">
+    <div class="kicker">PV · battery · wallbox · heat pump</div>
+    <h1>AI is smart enough.<br><span class="accent">What it lacks is context.</span></h1>
+    <p class="lead">OnlyPanels gathers every fact about a home it can find, with or without the owner's address, so the first design is one an expert would sign.</p>
+  </div>
+</section>
+
+<!-- 2 Discovery -->
+<section class="slide">
+  <div class="brand">Only<b>Panels</b></div><div class="num">01</div>
+  <div class="kicker">What we found in the data</div>
+  <h2>Same request, <span class="amber">different offer.</span></h2>
+  <div class="stats">
+    <div class="stat"><div class="v">59%</div><div class="l">of solar projects share their exact request with another customer: every field the same</div></div>
+    <div class="stat"><div class="v amber">99%</div><div class="l">of those identical requests still got different designs from the experts</div></div>
+    <div class="stat"><div class="v">6.3<span style="font-size:56px"> kWp</span></div><div class="l">average solar spread inside one identical request: a whole roof side</div></div>
+  </div>
+  <p class="lead" style="margin-top:56px">The experts are not random. They knew things the request did not say: the roof, the shade, the street. Half of the request fields are empty.</p>
+  <div class="src">1,306 solar projects, 2 installers · scripts/profile_same_request.py</div>
+</section>
+
+<!-- 3 Thesis -->
+<section class="slide">
+  <div class="brand">Only<b>Panels</b></div><div class="num">02</div>
+  <div class="kicker">The insight</div>
+  <h2>The model is not the bottleneck.<br><span class="accent">The data is.</span></h2>
+  <ul class="pts" style="max-width:1450px">
+    <li><b>Homeowners leave fields empty.</b> They don't know their roof slope, or don't want to share where they live. That is their right.</li>
+    <li><b>So a bigger model learns noise.</b> On past projects any model is only a little better than one design for every home.</li>
+    <li><b>We respect the choice and still do better:</b> extract everything we can from what is shared, and make every assumption visible.</li>
+  </ul>
+</section>
+
+<!-- 4 Fusion -->
+<section class="slide">
+  <div class="brand">Only<b>Panels</b></div><div class="num">03</div>
+  <div class="kicker">One click on a house</div>
+  <h2>Twelve sources, fused into one picture of the home.</h2>
+  <div class="grid-src">
+    <div class="chip"><div class="t">3D roofs</div><div class="d">Bavaria LoD2: every roof side, slope, direction, area</div></div>
+    <div class="chip"><div class="t">Aerial photo</div><div class="d">Bavaria DOP20, 20 cm, on ground and roofs</div></div>
+    <div class="chip"><div class="t">Sun per surface</div><div class="d">EU PVGIS, real hourly weather years</div></div>
+    <div class="chip"><div class="t">Tree shade</div><div class="d">Bavaria's single-tree map, lowers yield per side</div></div>
+    <div class="chip"><div class="t">Census 2022</div><div class="d">Building age and heating in the neighbourhood</div></div>
+    <div class="chip"><div class="t">Heat plan</div><div class="d">Munich: is district heating coming here?</div></div>
+    <div class="chip"><div class="t">Monument map</div><div class="d">Bavarian listed buildings: what is allowed</div></div>
+    <div class="chip"><div class="t">Address</div><div class="d">Photon / OpenStreetMap geocoding</div></div>
+    <div class="chip ai"><div class="t">Roof photo check</div><div class="d">Claude vision finds windows, chimneys, old panels</div></div>
+    <div class="chip pl"><div class="t">Price book</div><div class="d">The planner's own prices, parts and labour</div></div>
+    <div class="chip pl"><div class="t">Rules and money</div><div class="d">Local power price, feed-in, KfW and Munich grants, §14a</div></div>
+    <div class="chip"><div class="t">1,041 past projects</div><div class="d">How this installer sizes, learned per installer</div></div>
+  </div>
+  <div class="legend"><span style="background:#4f8df7;margin-left:0"></span>open public data<span style="background:#5ee0b5"></span>AI vision<span style="background:#f7b23b"></span>installer and law</div>
+</section>
+
+<!-- 5 Map visual -->
+<section class="slide" style="padding:0">
+  <img src="img/h_fly.jpg" style="width:100%;height:100%;object-fit:cover;display:block">
+  <div style="position:absolute;left:0;right:0;bottom:0;height:360px;background:linear-gradient(transparent,rgba(10,11,14,.95))"></div>
+  <div style="position:absolute;left:130px;bottom:90px">
+    <div class="kicker">The homeowner's map</div>
+    <h2>Munich in 3D, every roof measured,<br>on the real aerial photo.</h2>
+  </div>
+</section>
+
+<!-- 6 Privacy -->
+<section class="slide">
+  <div class="brand">Only<b>Panels</b></div><div class="num">04</div>
+  <div class="split">
+    <div>
+      <div class="kicker">Respect first</div>
+      <h2 style="font-size:58px">Share less, still get a real offer.</h2>
+      <ul class="pts">
+        <li><b>Every question optional.</b> Under each: what we know, what we assume if skipped, what the installer does.</li>
+        <li><b>Nothing leaves the browser before Send.</b> The home is worked out in the page.</li>
+        <li><b>The homeowner picks what goes.</b> No map? Words like "south roof, 40 m²" still size the system.</li>
+      </ul>
+    </div>
+    <div class="shot"><img src="img/h_q1.jpg"></div>
+  </div>
+</section>
+
+<!-- 7 Draft chain -->
+<section class="slide">
+  <div class="brand">Only<b>Panels</b></div><div class="num">05</div>
+  <div class="kicker">The planner's inbox</div>
+  <h2>A full draft is waiting before anyone opens the request.</h2>
+  <div class="shot" style="margin-top:44px;width:1380px"><img src="img/p_list.jpg"></div>
+  <p class="lead" style="margin-top:40px">Home loaded → trees checked → roof space → system sized → rules checked → priced. About a second, every step with what it found.</p>
+</section>
+
+<!-- 8 Planner desk -->
+<section class="slide">
+  <div class="brand">Only<b>Panels</b></div><div class="num">06</div>
+  <div class="split wide">
+    <div>
+      <div class="kicker">The planner's desk</div>
+      <h2 style="font-size:56px">Every fact has a source. Every number has an owner.</h2>
+      <ul class="pts">
+        <li><b>Facts tagged</b> customer, measured, found or assumed. Assumed facts block Send until a person confirms.</li>
+        <li><b>The engine decides the numbers,</b> never the language model.</li>
+        <li><b>The review reruns the engine</b> at the edges of each guess: "ask about the bill, not the car".</li>
+      </ul>
+    </div>
+    <div class="shot"><img src="img/p_open.jpg"></div>
+  </div>
+</section>
+
+<!-- 9 Sun -->
+<section class="slide">
+  <div class="brand">Only<b>Panels</b></div><div class="num">07</div>
+  <div class="split wide">
+    <div>
+      <div class="kicker">Sun, shade, obstacles</div>
+      <h2 style="font-size:56px">Panels go where the sun is, not where the windows are.</h2>
+      <ul class="pts">
+        <li><b>Yearly sun per roof side</b>, with tree shade taken off.</li>
+        <li><b>Roof windows and chimneys</b> found on the aerial photo; no module touches one.</li>
+        <li><b>A weaker roof gets more modules,</b> a stronger one fewer, as a planner would.</li>
+      </ul>
+    </div>
+    <div class="shot"><img src="img/p_sun.jpg"></div>
+  </div>
+</section>
+
+<!-- 10 Money -->
+<section class="slide">
+  <div class="brand">Only<b>Panels</b></div><div class="num">08</div>
+  <div class="split wide">
+    <div>
+      <div class="kicker">Money and law</div>
+      <h2 style="font-size:56px">A price the homeowner can act on.</h2>
+      <ul class="pts">
+        <li><b>Bill of materials</b> from the installer's own price book.</li>
+        <li><b>Grants and rules for this home:</b> KfW, Munich's heat pump grant, negative-price hours, smart meter, §14a.</li>
+        <li><b>Payback and 20 years,</b> the same figure for planner and homeowner.</li>
+      </ul>
+    </div>
+    <div class="shot"><img src="img/p_Cost.jpg"></div>
+  </div>
+</section>
+
+<!-- 11 Results -->
+<section class="slide">
+  <div class="brand">Only<b>Panels</b></div><div class="num">09</div>
+  <div class="kicker">Measured honestly</div>
+  <h2>On 276 projects the engine never saw</h2>
+  <table>
+    <tr><th></th><th>Engine</th><th>Same design for all</th><th>Rule of thumb</th></tr>
+    <tr><td>Solar, mean error</td><td class="e">2.65 kWp</td><td>3.06 kWp</td><td>4.02 kWp</td></tr>
+    <tr><td>Solar within 20% of the expert</td><td class="e">49%</td><td>44%</td><td>31%</td></tr>
+    <tr><td>Battery, mean error</td><td class="e">2.66 kWh</td><td>3.03 kWh</td><td>3.56 kWh</td></tr>
+  </table>
+  <p class="lead" style="margin-top:50px">Past projects have no roof, no address, no shade, so this is the engine at its weakest. The gap that remains is exactly the data OnlyPanels now collects. It behaves like a planner: a car never shrinks solar, more use never shrinks the battery, the roof limit always holds.</p>
+  <div class="src">Split by customer, results per installer in docs/data/findings.md · scripts/final_test.py</div>
+</section>
+
+<!-- 12 Stack -->
+<section class="slide">
+  <div class="brand">Only<b>Panels</b></div><div class="num">10</div>
+  <div class="kicker">How we built it</div>
+  <h2>Tech stack</h2>
+  <div class="stack">
+    <div class="chip"><div class="t">Engine and API</div><div class="d">Python, FastAPI, scikit-learn models per installer, hourly energy simulation on PVGIS weather years, rules for heat pump, grants and law</div></div>
+    <div class="chip"><div class="t">Web</div><div class="d">React 19, TypeScript, Vite, MapLibre GL, three.js for 3D roofs and modules, web workers for city-scale geometry</div></div>
+    <div class="chip ai"><div class="t">AI</div><div class="d">Claude (Anthropic) for roof photo vision, the planner's sentence box and voice agent via MCP tools. <b style="color:#fff">ElevenLabs</b> for speech in and out: the planner runs the desk by voice</div></div>
+  </div>
+  <div style="margin-top:50px">
+    <span class="pill">Bavaria LoD2</span><span class="pill">DOP20</span><span class="pill">Einzelbäume</span><span class="pill">PVGIS</span><span class="pill">Zensus 2022</span><span class="pill">Wärmeplan München</span><span class="pill">Denkmal</span><span class="pill">Photon / OSM</span>
+  </div>
+</section>
+
+<!-- 13 Close -->
+<section class="slide">
+  <div class="brand">Only<b>Panels</b></div>
+  <div style="position:absolute; left:130px; right:130px; bottom:150px;">
+    <h1 style="font-size:92px">Better facts,<br><span class="accent">not a bigger model.</span></h1>
+    <p class="lead">A first design and its price in minutes. The planner stays in control, the homeowner decides what is shared, and every number can be traced to where it came from.</p>
+    <p class="lead muted" style="font-size:26px;margin-top:40px">github.com/atahankilc/onlypanels</p>
+  </div>
+</section>
+
+</body>
+</html>

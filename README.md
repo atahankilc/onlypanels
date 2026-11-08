@@ -2,7 +2,22 @@
 
 OnlyPanels is our thinc! München 2026 hackathon entry for Reonic. A homeowner describes their home, and a planner gets a solar, battery, wallbox and heat pump design the way an expert would propose it, with every fact and number traceable.
 
-**Data is everything.** Past installer projects hold almost nothing about the home: no roof, no address, no shade. On that data a learned model is only a little better than giving every home the same design. So most of the work here goes into getting the facts. The map measures what the homeowner cannot know. The questions ask only what moves the design. The planner sees where each fact came from, and which missing fact would still change the offer.
+**Pitch slides:** [`OnlyPanels-pitch.pdf`](OnlyPanels-pitch.pdf)
+
+> **AI is smart enough. What it lacks is context.** OnlyPanels gathers every fact about a home it can find, with or without the owner's address, so the first design is one an expert would sign.
+
+## Why: same request, different offer
+
+We looked at the past projects before building anything. **59% of solar projects share their exact request with another customer**: every field the same. **In 99% of those identical requests the experts still designed differently**, by 6.3 kWp of solar on average. Half of the request fields are empty.
+
+The experts are not random. They knew things the request did not say: the roof, the shade, the street. Homeowners leave fields empty because they don't know the answer, or don't want to share where they live, and that is their right. So a bigger model only learns noise. On this data a learned model is only a little better than giving every home the same design.
+
+So most of the work here goes into getting the facts, while respecting what the homeowner chooses to share:
+- **The map fuses twelve sources** into one picture of the home: Bavaria's 3D roofs (LoD2), the 20 cm aerial photo (DOP20), sun per roof side from EU PVGIS on real weather years, Bavaria's single-tree map for shade, Census 2022 for building age and heating nearby, Munich's heat plan (is district heating coming?), the Bavarian monument map, address search, a vision model that finds roof windows, chimneys and old panels on the photo, the planner's own price book, local power price, feed-in and grants, and how this installer sized 1,041 past homes.
+- **Without the map, it still extracts.** A described roof ("south, 40 m²"), an address in words, a gas bill in euros: each becomes a design fact, and every gap gets a stated, sourced assumption (`docs/assumptions.md`).
+- **The planner and the homeowner both get the complete view:** the design, the sun and shade on each roof side, the price after grants, payback, and what is assumed.
+
+Reproduce the finding: `uv run python scripts/profile_same_request.py` (aggregates only).
 
 ## What it does
 
@@ -38,6 +53,13 @@ Scored once on 276 held-out test projects (`uv run python scripts/final_test.py`
 
 The test scores match the dev scores, so the work did not overfit. Experts disagree with themselves too: where one home has several options, a third differ in solar size, by 2.9 kWp on average. On 192 unseen homes the engine reacts like a planner: adding a car never shrinks solar or the battery, more use never shrinks the battery, and the roof limit always holds.
 
+## Tech stack
+
+- **Engine and API:** Python, FastAPI, pandas, scikit-learn (models per installer, split by customer), an hourly energy simulation on PVGIS weather years, rules for heat pump, wallbox, grants and German energy law. The language model never produces a design number: the engine does.
+- **Web:** React 19, TypeScript, Vite, MapLibre GL, three.js for 3D roofs and fitted modules, web workers that shape a city's roofs off the page.
+- **AI:** Claude (Anthropic) for the roof photo check, the planner's sentence box, and a voice agent that drives the planner's desk through MCP tools. **ElevenLabs** for speech in and out: the planner can open a request, change the design, ask what it costs and send by voice; the homeowner has a voice helper that explains questions and fills in answers.
+- **Open data:** Bayerische Vermessungsverwaltung (LoD2, DOP20, single trees), Bavarian monument map, Landeshauptstadt München heat plan, Destatis Census 2022, EU JRC PVGIS, Photon and OpenStreetMap.
+
 ## Setup
 
 Requires [uv](https://docs.astral.sh/uv/) and [pnpm](https://pnpm.io/).
@@ -71,6 +93,8 @@ Without keys, everything runs on rules. `ANTHROPIC_API_KEY` adds:
 - voice, which also needs `ELEVENLABS_API_KEY`
 
 Tests: `uv run pytest`.
+
+Pitch slides: `docs/pitch/deck.html` is the source; `OnlyPanels-pitch.pdf` is printed from it in headless Chrome at 1920 × 1080 (screenshots in `docs/pitch/img/` are of the seeded demo requests).
 
 ## Known limitations
 

@@ -144,3 +144,7 @@ So the installer's own options for one home can differ by about as much as the b
 
 With only what the past projects recorded, the spread of experts' offers for similar homes (10–90%, every option, each home one vote) held the final solar size of unseen dev projects 82% of the time at `2a8ba8e2` (7.7 kWp wide) and 79% at `23c108b7` (9.3 kWp wide), 5 folds grouped by customer (`scripts/check_evidence.py`). The final battery fell inside the battery range, or no battery was sold, 92% of the time. A range this wide is the honest answer for such a request; the roof and the bill are what narrow it.
 
+
+## Same request, different offer
+
+Measured 8 November with `scripts/profile_same_request.py`, all solar projects, both installers. A request is every input field the export has (yearly use, price, load profile, car and its driving, existing solar, battery and wallbox, heating and its demand, house size, build year, inhabitants), per installer. 773 of 1,306 solar projects (59%) share their exact request with at least one other customer, in 118 identical requests; the largest holds 86 projects. In 117 of the 118 (99%) the experts' designs differ (module count, battery size or wallbox), at both installers. Solar size inside one identical request spreads by 6.3 kWp on average. A project fills a median 7 of the 15 request fields. So the export cannot tell these homes apart, while the experts could: what separated them (roof, shade, place) is not in the data. This is the reason the app collects facts instead of chasing a better regressor.
