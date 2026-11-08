@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Answers, GAS_CT, PRICE_CT, Selected, modelM2, shrinkPhoto } from "./api";
 import { Face } from "./HomeMap";
 import { Handoff, Mine } from "./plan";
-import { Shared, forInstaller, readable } from "./share";
+import { Shared, forInstaller } from "./share";
+import SendView from "./SendView";
 import { Status, day, stepOf } from "./Requests";
 import { Button, Check, Field, Input } from "./ui";
 
@@ -144,7 +145,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
     ];
     if (!editable) groups.push(["Meter cabinet", "send", [["Photo", a.meter_photo ? "Added" : no]]]);
     const all = groups.flatMap(([, , rows]) => rows);
-    return { missing: all.filter(([, v]) => v === no).length, answered: all.filter(([, v]) => v !== no).length, view: <div className="overview">
+    return { missing: all.filter(([, v]) => v === no).length, answered: all.filter(([, v]) => v !== no).length, groups, view: <div className="overview">
       {groups.map(([title, to, rows]) => <section key={to}>
         <header><h2>{title}</h2>{editable && <button type="button" className="textlink" onClick={() => { setFromOverview(true); go(to); }}>Change</button>}</header>
         <dl>{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={v === no ? "none" : undefined}>{v}</dd></div>)}</dl>
@@ -177,7 +178,9 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   if (stage === "share") {
     const out = forInstaller(request, shared), home = buildings.length > 0, roof = request.roof;
     const set = (change: Partial<Shared>) => setShared({ ...shared, ...change });
-    const { answered } = summary(true); // the overview's rows that are not "Not given"
+    const { answered, groups } = summary(true); // the overview's rows that are not "Not given"
+    // The answers as they go, without the home and roof rows: SendView words those from what is actually sent.
+    const given = groups.filter(([, to]) => !["where", "roofq", "roof", "send"].includes(to)).flatMap(([title, , rows]) => rows.map(([k, v]) => [rows.length === 1 ? title : k, v] as [string, string])).filter(([, v]) => v !== "Not given"); // a lone row is named by its question
     return (
       <aside className="panel tall quiz" key="share" ref={panel}>
         <p className="count">Before sending</p>
@@ -195,7 +198,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
         {home && (shared.home
           ? <p className="share-note small">With your home, the installer also checks trees that shade the roof, monument rules and the city's heat plan, without asking you.</p>
           : <p className="share-note small">Without your home, the installer plans from your answers{out.roof ? " and the roof numbers" : ""}, and may need to ask more before an offer.</p>)}
-        <details className="share-raw"><summary>See exactly what is sent</summary><pre>{JSON.stringify(readable(out), null, 2)}</pre></details>
+        <SendView full={request} out={out} answers={given} markedM2={m2} />
         <div className="stick"><Button size="lg" onClick={() => go("send")}>Back</Button><Button variant="solid" size="lg" wide onClick={() => go("sent")}>Send to an installer</Button></div>
       </aside>
     );
