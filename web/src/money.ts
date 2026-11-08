@@ -31,6 +31,8 @@ export type Book = { items: PriceItem[]; rates: Record<string, Rate>; units: Rec
 
 export const moneyOf = (r: Request): Money => (r as Request & { money?: Money }).money ?? {};
 export const eur = (v: number) => `${v < 0 ? "−" : ""}€${Math.abs(Math.round(v)).toLocaleString("en")}`;
+/** Money after the years looked at, in words: never a negative "ahead". */
+export const standing = (v: number) => `${eur(Math.abs(v))} ${v >= 0 ? "ahead" : "behind"}`;
 export const years = (v: number | null) => (v == null ? "not within the years looked at" : `${v.toLocaleString("en", { maximumFractionDigits: 1 })} years`);
 
 // A price change anywhere makes every open money view ask again.

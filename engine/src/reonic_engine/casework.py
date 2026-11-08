@@ -9,6 +9,7 @@ Three passes over the engine, each a fixed rule, so the same request always give
    checked against what the engine says each battery size does here.
 Every number comes from an engine run in this review.
 """
+from .costs import standing
 from .derive import demand_edges
 
 TYPICAL_KM = 11300  # a car's km a year when none is given, as web/src/questions.ts TYPICAL_KM
@@ -118,19 +119,22 @@ def review(run, i, o, quick=None):
             up, here_m = money.get(round(bigger[0], 1)), money.get(round(now, 1))
             cost = f" It costs about €{up['cost_eur'] - (here_m['cost_eur'] if here_m else 0):,} more and adds about €{up['year1_eur'] - (here_m['year1_eur'] if here_m else 0):,} a year." if up else ""
             reasons.append(f"The customer puts independence first, and {bigger[0]:g} kWh raises own power from {own.get(round(now, 1), 0)}% to {own[bigger[0]]}%.{cost}")
-        elif goal == "cost":
-            # Low cost first: the engine has already chosen battery and modules by money (costs.best_for_money); say how.
-            pick = draft_d.get("money_pick")
-            if pick and not pick["kept"]:
-                reasons.append(f"The customer puts low cost first, so the engine chose by money among {pick['tried']} options experts use for similar homes, none dearer than its first draft: "
-                               f"€{pick['pays_eur']:,} and about €{pick['gain_eur']:,} ahead after 20 years, against €{pick['draft_pays_eur']:,} and €{pick['draft_gain_eur']:,}.")
-            elif pick:
-                reasons.append(f"The customer puts low cost first: the engine tried {pick['tried']} battery sizes and module counts, and the draft already leaves the customer most ahead (about €{pick['gain_eur']:,} after 20 years).")
         elif i.get("home_day") == "rarely" and not now and goal != "cost":
             sizes = sorted(k for k in own if k > 0)
             if sizes and own[sizes[0]] - own.get(0.0, 0) >= BATTERY_ADD_WORTH:
                 change = {"battery_kwh": sizes[0]}
                 reasons.append(f"Nobody is home in the day, so a {sizes[0]:g} kWh battery raises own power from {own.get(0.0, 0)}% to {own[sizes[0]]}%.")
+    if goal == "cost":  # also with a battery already there: the modules were still chosen by money
+        # Low cost first: the engine has already chosen battery and modules by money (costs.best_for_money); say how.
+        pick = draft_d.get("money_pick")
+        if pick and pick.get("none_pays"):
+            reasons.append(f"The customer puts low cost first, but none of the {pick['tried']} sizes the engine tried pays back within 20 years here; the "
+                           + ("chosen" if not pick["kept"] else "draft") + f" one is the least bad, {standing(pick['gain_eur'])}. Say so before offering.")
+        elif pick and not pick["kept"]:
+            reasons.append(f"The customer puts low cost first, so the engine chose by money among {pick['tried']} options experts use for similar homes, none dearer than its first draft: "
+                           f"€{pick['pays_eur']:,} and about {standing(pick['gain_eur'])} after 20 years, against €{pick['draft_pays_eur']:,} and {standing(pick['draft_gain_eur'])}.")
+        elif pick:
+            reasons.append(f"The customer puts low cost first: the engine tried {pick['tried']} battery sizes and module counts, and the draft already leaves the customer most ahead ({standing(pick['gain_eur'])} after 20 years).")
     after = None
     if change:
         _, after = go(fixed=change, why="Proposed")
@@ -146,5 +150,7 @@ def review(run, i, o, quick=None):
     asks.sort(key=lambda a: -abs(a["low"]["modules"] - a["high"]["modules"]) - (5 if a["low"]["battery_kwh"] != a["high"]["battery_kwh"] else 0))
     words = lambda c: ", ".join([f"{c['battery_kwh']:g} kWh battery" if c.get("battery_kwh") else "no battery"] if "battery_kwh" in c else [])
     headline = f"Send with {words(change)}" if change else ("Send the draft, after the questions below" if asks else "Send the draft as it is")
+    if goal == "cost" and (draft_d.get("money_pick") or {}).get("none_pays"):
+        headline = "No size pays back here: talk to the customer before sending"
     return {"headline": headline, "change": change, "after": after, "reasons": reasons, "asks": asks, "steady": steady,
             "conditions": conditions, "facts": facts, "draft": draft, "steps": steps, "source": "engine"}

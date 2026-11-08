@@ -1,7 +1,7 @@
 // The desk's Cost tab and the price book. What the homeowner pays, the KfW grant, the year's money before and after,
 // when it pays back and how. Every number is the API's (costs.py); the planner edits prices and ticks extras here.
 import { useEffect, useMemo, useState } from "react";
-import { Book, Costs, Money, PriceItem, addItem, eur, getBook, resetItem, resetRates, setItem, setRates, years } from "./money";
+import { Book, Costs, Money, PriceItem, addItem, eur, getBook, standing, resetItem, resetRates, setItem, setRates, years } from "./money";
 import { Button, Check, Field, Input, Select } from "./ui";
 import "./money.css";
 
@@ -23,7 +23,7 @@ export function CostTab({ c, failed, money, setMoney, use, prices, sent }: TabPr
     <dl className="money-head">
       <div className="lead"><dt>The homeowner pays</dt><dd>{eur(c.pays_eur)}</dd><small>{c.grant ? `${eur(c.gross_eur)} less ${eur(c.grant.eur)} ${c.grant.path === "fkg" ? "KfW and city" : "KfW"} grant` : c.vat_eur ? `${eur(c.net_eur)} + ${eur(c.vat_eur)} VAT` : "No VAT on solar and battery"}</small></div>
       <div><dt>Pays back in</dt><dd>{c.payback_years != null ? <>{c.payback_years.toLocaleString("en", { maximumFractionDigits: 1 })}<small> years</small></> : "–"}</dd><small>{c.payback_years == null ? `not within ${n} years` : c.draft_2027 ? `${c.draft_2027.payback_years != null ? `${c.draft_2027.payback_years} years` : "not"} if switched on in 2027 (draft law)` : "prices rising, panels ageing"}</small></div>
-      <div><dt>Gain over {n} years</dt><dd>{eur(c.gain_eur)}</dd><small>{c.irr_pct != null ? `${c.irr_pct}% a year return` : "after paying it off"}</small></div>
+      <div><dt>{c.gain_eur >= 0 ? "Gain" : "Loss"} over {n} years</dt><dd>{eur(Math.abs(c.gain_eur))}</dd><small>{c.irr_pct != null ? `${c.irr_pct}% a year return` : c.gain_eur >= 0 ? "after paying it off" : "the system costs more than it saves"}</small></div>
     </dl>
     {c.notes.map((x) => <div key={x.code} className={x.level === "warn" ? "money-note warn" : "money-note"}><p>{x.text}</p>{x.change && !sent && <Button onClick={() => use(x.change!, x.code === "money_battery" ? "Battery left out for the money" : "Battery size by money")}>Use</Button>}</div>)}
 
@@ -114,7 +114,7 @@ function Payback({ c }: { c: Costs }) {
   const shown = hot != null ? rows[hot] : null;
   return <figure className="payback">
     <figcaption><b>Money over {rows.length} years</b><small>{shown ? `Year ${shown.year}: ${shown.total < 0 ? `${eur(-shown.total)} still to pay back` : `${eur(shown.total)} ahead`}, ${eur(shown.eur)} that year` : "After paying for the system, what the homeowner is ahead or behind at the end of each year."}</small></figcaption>
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Pays back after ${years(c.payback_years)}; ${eur(c.gain_eur)} ahead after ${rows.length} years`} onMouseLeave={() => setHot(null)}>
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Pays back after ${years(c.payback_years)}; ${standing(c.gain_eur)} after ${rows.length} years`} onMouseLeave={() => setHot(null)}>
       <line x1={0} x2={W} y1={y(0)} y2={y(0)} className="zero" />
       {rows.map((r, k) => {
         const top = Math.min(y(0), y(r.total)), h = Math.max(1, Math.abs(y(r.total) - y(0)));

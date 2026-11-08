@@ -191,15 +191,20 @@ def decided(i, o):
         d["reasons"] = [r for r in d["reasons"] if r.get("code") not in ("pv_locked", "battery_locked")]
     d["money_pick"] = pick
     words = lambda m, kb: f"{m} modules, {'no battery' if not kb else f'{kb:g} kWh battery'}"
+    why = ": the system already on the roof covers much of the use" if i.get("existing_kwp") or i.get("has_solar") else ""
     if pick["kept"]:
-        how, result = "Tried the battery sizes and module counts experts use for similar homes, none dearer than the draft.", "The draft already leaves the customer most ahead."
+        how = f"Tried {pick['tried']} battery sizes and module counts experts use for similar homes, and the sizes where a weaker roof surface begins, none dearer than the draft."
+        result = (f"The draft is the least bad: {costs.standing(pick['gain_eur'])} after 20 years." if pick["none_pays"]
+                  else f"The draft already leaves the customer most ahead: {costs.standing(pick['gain_eur'])} after 20 years.")
     else:
         dr = pick["draft"]
-        how = (f"Tried {pick['tried']} battery sizes and module counts experts use for similar homes, none dearer than the draft, "
+        how = (f"Tried {pick['tried']} battery sizes and module counts experts use for similar homes, and the sizes where a weaker roof surface begins, none dearer than the draft, "
                f"priced with the price book and the same hourly estimate. Draft: {words(dr['modules'], dr['battery_kwh'])}, €{pick['draft_pays_eur']:,}, "
-               f"€{pick['draft_gain_eur']:,} ahead after 20 years.")
-        result = f"{words(d['pv']['modules'], d['battery']['kwh'])}: €{pick['pays_eur']:,}, about €{pick['gain_eur']:,} ahead after 20 years."
-        d["review"].append({"code": "money_pick", "level": "note", "on": "battery", "text": f"The customer puts low cost first, so the engine chose by money: {result} The draft was {words(dr['modules'], dr['battery_kwh'])}, €{pick['draft_gain_eur']:,} ahead."})
+               f"{costs.standing(pick['draft_gain_eur'])} after 20 years.")
+        result = f"{words(d['pv']['modules'], d['battery']['kwh'])}: €{pick['pays_eur']:,}, about {costs.standing(pick['gain_eur'])} after 20 years."
+        d["review"].append({"code": "money_pick", "level": "note", "on": "battery", "text": f"The customer puts low cost first, so the engine chose by money: {result} The draft was {words(dr['modules'], dr['battery_kwh'])}, {costs.standing(pick['draft_gain_eur'])}."})
+    if pick["none_pays"]:
+        d["review"].append({"code": "money_none_pays", "level": "warn", "on": "pv", "text": costs.NO_SIZE_PAYS.format(why=why)})
     d["trace"].append({"id": "money", "title": "Chosen by money", "kind": "rule", "inputs": [{"key": "goal", "label": "Customer's priority", "value": "low cost"}], "how": how, "result": result})
     return d
 
@@ -291,6 +296,23 @@ async def voice_turn(context: str = Form("{}"), history: str = Form("[]"), text:
         return costs.evaluate(i, design(req), pricebook.book(i.get("installer")), m.extras, m.qty, m.income, m.kids)
 
     return await voice.turn(run, ctx, past, money=money, audio=sound or None, filename=(audio.filename if audio else None) or "speech.webm",
+                            content_type=(audio.content_type if audio else None) or "audio/webm", text=text, voice=speak)
+
+
+@app.post("/api/guide/turn")
+async def guide_turn(context: str = Form("{}"), history: str = Form("[]"), text: str | None = Form(None), speak: bool = Form(True),
+                     audio: UploadFile | None = File(None)):
+    """One spoken (or typed) request from a homeowner who turned the voice helper on: heard by ElevenLabs, walked through
+    by Claude with the guide's MCP tools (guide.py), answered in speech. The page sends where they are and their answers,
+    never the home, the address or the meter photo; nothing is kept here. No engine, no result."""
+    sound = await audio.read() if audio else None
+    if sound is not None and len(sound) > 10_000_000:
+        raise HTTPException(413, "Recording too long")
+    try:
+        ctx, past = json.loads(context), json.loads(history)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "context and history must be JSON")
+    return await voice.turn(None, ctx, past, who="homeowner", audio=sound or None, filename=(audio.filename if audio else None) or "speech.webm",
                             content_type=(audio.content_type if audio else None) or "audio/webm", text=text, voice=speak)
 
 

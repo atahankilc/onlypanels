@@ -382,7 +382,17 @@ def _with_battery(i, d, kb):
     return {**d, "battery": {**d["battery"], "kwh": kb}, "energy": e}
 
 
-MONEY_WORTH_EUR = 300  # a change for money must gain at least this over the years looked at, or the draft stays
+def standing(eur):
+    """Money after the years looked at, in words: ahead or behind, never a negative "ahead"."""
+    return f"€{abs(round(eur)):,} {'ahead' if eur >= 0 else 'behind'}"
+
+
+NO_SIZE_PAYS = ("No size the engine tried pays back here within 20 years at these prices"
+                "{why}. Tell the customer before offering, or check the prices, the roof and the yearly use.")
+
+
+MONEY_WORTH_EUR = 300
+MIN_MODULES = 6  # below this a roof system rarely pays its fixed costs (scaffolding, inverter, grid registration)  # a change for money must gain at least this over the years looked at, or the draft stays
 
 
 def best_for_money(design_fn, i, o, b, extras=None, qty=None, income=None, kids=False, base=None):
@@ -429,15 +439,25 @@ def best_for_money(design_fn, i, o, b, extras=None, qty=None, income=None, kids=
         low, high = max(1, round(s["kwp_low"] / 0.45)), round(s["kwp_high"] / 0.45)
         if cap:
             high = min(high, cap)
-        counts = sorted({m for m in (m0 - 4, m0 - 2, m0, m0 + 2, m0 + 4) if low <= m <= high} | {m0})
+        step = max(2, (high - low) // 6)
+        near = {m for m in (m0 - 4, m0 - 2, m0 + 2, m0 + 4) if low <= m <= high} | set(range(low, high + 1, step))
+        # Where one roof surface ends and a weaker one begins: modules fill the best first, so these are natural sizes.
+        # Kept even below the experts' range, since a weak second surface can make the first one alone the best buy.
+        edge, ends = 0, set()
+        for sf in i.get("surfaces") or []:
+            edge += sf["max_modules"]
+            if MIN_MODULES <= edge < m0:
+                ends.add(edge)
+        counts = sorted(near | ends | {m0})
     for m in counts:  # every pair: a cheaper battery can leave room in the budget for more modules
         for kb in sorted(set(sizes) | {kb0}):
             if (m, kb) != (m0, kb0):
                 consider(m, kb)
     gain, _, m, kb, money = best
     if (m, kb) == (m0, kb0) or gain - first["gain_eur"] < MONEY_WORTH_EUR:
-        return {"overrides": {}, "tried": tried, "gain_eur": first["gain_eur"], "pays_eur": first["pays_eur"], "draft_gain_eur": first["gain_eur"], "draft_pays_eur": first["pays_eur"], "kept": True}
+        return {"overrides": {}, "tried": tried, "gain_eur": first["gain_eur"], "pays_eur": first["pays_eur"], "draft_gain_eur": first["gain_eur"], "draft_pays_eur": first["pays_eur"],
+                "kept": True, "none_pays": first["gain_eur"] < 0}
     change = {k: v for k, v in (("modules", m), ("battery_kwh", kb)) if (k == "modules" and m != m0) or (k == "battery_kwh" and kb != kb0)}
     return {"overrides": change, "tried": tried, "gain_eur": gain, "pays_eur": money["pays_eur"], "payback_years": money["payback_years"],
             "draft_gain_eur": first["gain_eur"], "draft_pays_eur": first["pays_eur"], "draft_payback_years": first["payback_years"],
-            "draft": {"modules": m0, "battery_kwh": kb0}, "kept": False}
+            "draft": {"modules": m0, "battery_kwh": kb0}, "kept": False, "none_pays": gain < 0}
