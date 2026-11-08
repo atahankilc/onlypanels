@@ -76,15 +76,29 @@ const SEEDS: Seed[] = [
 export type Sent = Handoff & { ref: string; sentAt: number };
 
 export const DEMO_COUNT = SEEDS.length;
+// A service that is briefly away (the API restarting, a slow square) must not leave the demo without its requests: each is tried
+// again after these pauses, about a minute and a half in all, and keeps its loading row meanwhile.
+const RETRY_MS = [2000, 4000, 8000, 15000, 30000, 30000];
+
 /** Loads the homes and builds what each homeowner sent, handing each over as soon as it is ready, so the list fills as it loads.
- *  An offered one gets the engine's design for it, as the planner sent it. `settled` runs once per request, ready or failed. */
+ *  An offered one gets the engine's design for it, as the planner sent it. `settled` runs once per request, ready or given up. */
 export function loadDemo(ready: (h: Sent) => void, settled: () => void) {
-  SEEDS.forEach((seed) => build(seed).then((h) => h && ready(h)).finally(settled));
+  SEEDS.forEach(async (seed) => {
+    for (let attempt = 0; ; attempt++) {
+      const h = await build(seed);
+      if (h) { ready(h); break; }
+      if (attempt >= RETRY_MS.length) { console.warn(`Demo request ${seed.ref} could not be built; giving up`); break; }
+      console.warn(`Demo request ${seed.ref} could not be built; trying again in ${RETRY_MS[attempt] / 1000} s`);
+      await new Promise((r) => setTimeout(r, RETRY_MS[attempt]));
+    }
+    settled();
+  });
 }
 
 async function build(seed: Seed): Promise<Sent | null> {
   try {
     const buildings = (await Promise.all(seed.homes.map(([square, home]) => loadHome(square, home)))).flat();
+    if (!buildings.length || buildings.some((b) => !b.sun)) return null; // a home without its parts or sun is not a request yet
     const at = buildings[0].origin, area = await areaAt(at[1], at[0]).catch(() => null);
     const choice: Choice = { ...NO_CHOICE, cells: {}, panels: {} };
     for (const b of buildings) for (const s of b.sun?.surfaces ?? []) {
