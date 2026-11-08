@@ -157,7 +157,7 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
   if (stage === "heat") {
     const h = a.heating;
     if (a.area?.heating && !h) add(known, <>Most homes nearby: <b>{lower(label(HEATING, a.area.heating))}</b></>, "Census 2022");
-    if (!h || h === "unknown") add(assumed, "Heating not known: no heat pump in the offer until your installer knows it");
+    if (!h || h === "unknown") add(assumed, "Heating not known: no heat pump in the offer");
     else add(known, <>Heated with <b>{h === "Electric" ? "electricity" : lower(label(HEATING, h))}</b></>, YOU);
     if (h === "Heatpump") {
       if (a.hp_kwh) add(known, <>Its own meter: <b>{k(a.hp_kwh)} kWh</b> a year, for the new solar to cover too</>, YOU);
@@ -167,7 +167,7 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
     if (h && REPLACEABLE.includes(h)) {
       if (a.wants_hp === true) add(known, "A heat pump is wanted, sized from your heat use", YOU);
       else if (a.wants_hp === false) add(known, "No heat pump in the offer", YOU);
-      else add(assumed, "A heat pump is left to your installer, as an option");
+      else add(assumed, "Heat pump not chosen: the offer comes without one");
       if (h === "Oil" && a.oil_l) add(known, <>{k(a.oil_l)} litres: about <b>{r100(a.oil_l * KWH_PER_LITRE_OIL)} kWh</b> of fuel a year, at {KWH_PER_LITRE_OIL} kWh a litre</>, MATH);
       else if (h === "Gas" && a.gas_eur && a.heat_kwh) add(known, <>€{k(a.gas_eur)} a year: about <b>{k(a.heat_kwh)} kWh</b> at {GAS_CT} ct, all in</>, MATH);
       else if (a.heat_kwh) add(known, <><b>{k(a.heat_kwh)} kWh</b> of {h === "Electric" ? "electricity" : "fuel"} a year for heating</>, YOU);
@@ -181,7 +181,7 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
       else if (a.heat_dist === "radiators" && newer) add(known, "Radiators in a newer house: usually fine for a heat pump", YOU);
       else if (a.heat_dist === "radiators") add(known, `Radiators in ${a.built ? "an older house" : "a house of unknown age"}: a heat pump uses more power, and some radiators may need to be larger`, YOU);
       else if (a.heat_dist === "both") add(known, newer ? "Both, in a newer house: the radiators set the water temperature, usually fine" : `Both, in ${a.built ? "an older house" : "a house of unknown age"}: the radiators set the water temperature, so a heat pump uses more power`, YOU);
-      else if (a.wants_hp !== false) add(assumed, "Not known: an average heat pump efficiency until a visit");
+      else if (a.wants_hp !== false) add(assumed, "Rooms not known: an average heat pump efficiency");
       if (FOSSIL.includes(h)) {
         const age = a.boiler_age;
         const owns = a.owner !== "tenant", forWho = a.owner === "sole" ? "" : ", for owners who live in the home";
@@ -195,7 +195,7 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
       if (h === "Electric") {
         if (a.electric_heat_meter === "own") add(known, "On its own meter: not inside your household use", YOU);
         else if (a.electric_heat_meter === "house") add(known, "On the house meter: if a heat pump replaces it, its share comes out of your household use", YOU);
-        else add(assumed, "Meter not known: your installer checks it doesn't count twice");
+        else add(assumed, "Meter not known: your household use stays as you gave it");
       }
       if (h === "Electric" && a.owner !== "tenant") add(later, `Checks the grant bonus for replacing night-storage heating${a.owner === "sole" ? "" : ", for owners who live in the home"}`);
     }

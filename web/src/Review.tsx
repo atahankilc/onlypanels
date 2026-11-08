@@ -353,7 +353,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
       </div>, a.heating === "Heatpump" ? <>
         {numberField(optional("Its electricity a year (kWh)"), a.hp_kwh, (hp_kwh) => setAnswers({ ...a, hp_kwh }), "From its own meter or bill", SPAN.hp_kwh)}
         <p className="small muted">The new solar can cover it too.</p>
-      </> : a.heating === "District" ? <p className="small muted">Your installer checks whether anything else makes sense with it.</p> : fossil && <>
+      </> : a.heating === "District" ? <p className="small muted">No heat pump with district heating; solar and a battery still fit.</p> : fossil && <>
         <h2>Interested in a heat pump instead?</h2>
         <div className="pair">
           <Button size="lg" wide aria-pressed={a.wants_hp === true} onClick={() => setAnswers({ ...a, wants_hp: true })}>Yes</Button>
@@ -373,12 +373,12 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
               </div>
               {numberField(optional("Its electricity a year (kWh)"), a.heat_kwh, (heat_kwh) => setAnswers({ ...a, heat_kwh }), "From its own meter or bill", SPAN.heat_kwh)}
             </>
-            : gasWay === "eur" ? <>
-              {numberField(optional("Gas a year (€), all in"), a.gas_eur, (gas_eur) => setAnswers({ ...a, gas_eur, heat_kwh: gas_eur ? Math.round(gas_eur / (GAS_CT / 100) / 100) * 100 : null }), undefined, SPAN.gas_eur)}
-              <button type="button" className="textlink lone" onClick={() => { setGasWay("kwh"); setAnswers({ ...a, gas_eur: null, heat_kwh: null }); }}>I know the kWh</button>
-            </> : <>
-              {numberField(optional("Gas a year (kWh), from your bill"), a.heat_kwh, (heat_kwh) => setAnswers({ ...a, heat_kwh, gas_eur: null }), undefined, SPAN.heat_kwh)}
-              <button type="button" className="textlink lone" onClick={() => { setGasWay("eur"); setAnswers({ ...a, heat_kwh: null }); }}>I only know what I pay a year</button>
+            : <>
+              <Segmented wide label="How you know your gas" value={gasWay} onChange={(w) => { setGasWay(w); setAnswers({ ...a, gas_eur: null, heat_kwh: null }); }}
+                options={[{ value: "kwh", label: "kWh from the bill" }, { value: "eur", label: "What I pay" }]} />
+              {gasWay === "eur"
+                ? numberField(optional("Gas a year (€), all in"), a.gas_eur, (gas_eur) => setAnswers({ ...a, gas_eur, heat_kwh: gas_eur ? Math.round(gas_eur / (GAS_CT / 100) / 100) * 100 : null }), undefined, SPAN.gas_eur)
+                : numberField(optional("Gas a year (kWh)"), a.heat_kwh, (heat_kwh) => setAnswers({ ...a, heat_kwh, gas_eur: null }), undefined, SPAN.heat_kwh)}
             </>}
           {a.wants_hp !== false && !a.heat_kwh && a.heating !== "Electric" && numberField(optional("Or, from an energy certificate (kWh per m² a year)"), a.cert_kwh_m2, (cert_kwh_m2) => setAnswers({ ...a, cert_kwh_m2 }), "If you have one", SPAN.cert_kwh_m2)}
           {FOSSIL.includes(a.heating ?? "") && <>
