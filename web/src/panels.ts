@@ -22,10 +22,23 @@ const gap = (p: V, a: V, b: V) => {
 };
 const clear = (p: V, ring: V[]) => ring.every((a, i) => gap(p, a, ring[(i + 1) % ring.length]) >= EDGE);
 
+/** The direction of the ring's longest edge, laid flat into the surface. */
+const longest = (ring: P3[], up: P3): P3 => {
+  let best: P3 = [1, 0, 0], length = 0;
+  ring.forEach((a, i) => {
+    const b = ring[(i + 1) % ring.length], d: P3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], k = dot(d, up);
+    const flat: P3 = [d[0] - k * up[0], d[1] - k * up[1], d[2] - k * up[2]], l = Math.hypot(...flat);
+    if (l > length) { length = l; best = unit(flat); }
+  });
+  return best;
+};
+
 /** Every module that fits, lowest rows first, each as four corners in the model's metres. */
 export function fit(poly: Poly, n: P3): P3[][] {
   const up = unit(n);
-  const u = Math.abs(up[2]) > 0.99 ? ([1, 0, 0] as P3) : unit(cross([0, 0, 1], up));
+  // Rows run along the eave on a pitched roof. A flat roof has no eave, so rows follow its longest edge: lined up with the
+  // building's walls, not with the map's east, which on a turned building set modules in steps against the edge.
+  const u = Math.abs(up[2]) > 0.99 ? longest(poly.ring, up) : unit(cross([0, 0, 1], up));
   const v = cross(up, u), o = poly.ring[0];
   const flat = (p: P3): V => { const d: P3 = [p[0] - o[0], p[1] - o[1], p[2] - o[2]]; return [dot(d, u), dot(d, v)]; };
   const ring = poly.ring.map(flat), holes = poly.holes.map((h) => h.map(flat));
