@@ -45,7 +45,7 @@ def brief(i, d):
     """What the advisor sees: this home and the engine's options for it. No past-project figures."""
     home = {k: i.get(k) for k in ("demand_kwh", "demand_source", "price_ct_kwh", "heating", "heat_kwh", "living_m2", "built",
                                   "ev", "ev_km", "ev_charge_home", "ev_day", "has_wallbox", "home_day", "goal", "big_users",
-                                  "has_solar", "has_storage", "trees", "roof_renovation", "area_m2", "roof_tilt", "roof_azimuth") if i.get(k) not in (None, [], "")}
+                                  "has_solar", "has_storage", "trees", "roof_renovation", "area_m2", "roof_tilt", "roof_azimuth", "existing_kwp", "existing_year", "existing_battery_kwh") if i.get(k) not in (None, [], "")}
     if not i.get("ev"):
         home = {k: v for k, v in home.items() if not k.startswith("ev_")}  # the form's default driving is not a car
     if i.get("surfaces"):

@@ -232,3 +232,11 @@ def test_no_extra_modules_onto_a_poor_surface(engine):
     plain = engine.design({**home, "surfaces": [{**good, "max_modules": 60, "kwh_per_kwp": 950}]})["pv"]["modules"]
     mixed = engine.design({**home, "surfaces": [good, north]})["pv"]["modules"]
     assert mixed <= plain  # the blend is weak, but the extra modules would all go north
+
+
+def test_battery_table_matches_the_design_with_a_heat_pump_on_its_own_meter(engine):
+    from reonic_engine.battery import curve
+    home = {"installer": "2a8ba8e2", "demand_kwh": 5000, "price_ct_kwh": 32, "heating": "Heatpump", "hp_kwh": 4000}
+    d = engine.design(home, {"battery_kwh": 0})
+    row = next(r for r in curve(home, d) if r["kwh"] == 0)
+    assert abs(row["own_pct"] - d["energy"]["self_sufficiency_pct"]) <= 1 and abs(row["saving_eur"] - d["energy"]["saving_eur"]) <= 10

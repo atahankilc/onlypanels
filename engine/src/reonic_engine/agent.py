@@ -28,6 +28,8 @@ How to work:
 - What-ifs on facts (demand_kwh, ev, ev_km) are for questions only: never propose changing a customer fact. Your
   proposed change may only set modules, battery_kwh, heatpump or wallbox, and only to a variant you tested.
 - When the planner asks you something, answer it in `answer`, testing with the tools when numbers are involved.
+- battery_kwh and modules are the NEW system only. Solar and a battery already in the home (existing_kwp,
+  existing_battery_kwh) are already counted in own power and saving, and the saving is only what the new system adds.
 - End by calling finish exactly once. Keep reasons to two to four short, concrete sentences."""
 
 DESIGN_FIELDS = {
@@ -76,6 +78,7 @@ def summary(d):
         "modules": d["pv"]["modules"], "kwp": d["pv"]["kwp"], "max_modules": d["pv"]["max_modules"],
         "battery_kwh": d["battery"]["kwh"], "heatpump_kw": d["heatpump"]["kw"] if d["heatpump"]["included"] else 0,
         "wallbox": d["wallbox"]["included"], "need_mwh": e["total_mwh"], "production_mwh": e["production_mwh"],
+        "existing_solar_mwh": e.get("existing_mwh") or 0,
         "own_power_pct": e["self_sufficiency_pct"], "solar_used_at_home_pct": e["self_use_pct"], "saving_eur_year": e["saving_eur"],
         "notes": [n["text"] for n in d.get("review") or [] if n.get("code") not in FROM_PAST and n.get("text")],
     }
