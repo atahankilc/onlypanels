@@ -10,12 +10,17 @@ const BANDS = [["Under 3,000", 2500], ["3,000 – 4,000", 3500], ["4,000 – 5,0
 const BY_PEOPLE = [["1", 2000], ["2", 2700], ["3", 3500], ["4", 3800], ["5+", 4500]] as const;
 // Past projects hold almost only heat pump, gas and oil (scripts/profile_heating.py); anything else the engine treats as unknown.
 // What the customer can tell us beyond that is asked, never required: a heat pump's own meter, the gas or oil a year.
-const HEATING = [["Heatpump", "Heat pump"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherRenewable", "Wood or pellets"], ["unknown", "Something else or not sure"]] as const;
+// District and electric heating are what the census can name as common here, so they can be picked too. Electric heating can take a heat pump;
+// district heating gets none (the planner is told why).
+const HEATING = [["Heatpump", "Heat pump"], ["Gas", "Gas"], ["Oil", "Oil"], ["District", "District heating"], ["Electric", "Electric heating"], ["OtherRenewable", "Wood or pellets"], ["unknown", "Something else or not sure"]] as const;
+const SOLAR_KIND = [["pv", "Electricity"], ["thermal", "Hot water"], ["both", "Both"]] as const;
+const OWNER = [["sole", "Only me or my family"], ["shared", "Shared with other owners"], ["tenant", "I rent it"]] as const;
 const BIG_USERS = [["pool", "Pool"], ["sauna", "Sauna"], ["ac", "Air conditioning"], ["water", "Electric water heater"]] as const;
 const BUILT = [["before1979", "Before 1979"], ["1979to1990", "1979 – 1990"], ["1991to2000", "1991 – 2000"], ["2001to2010", "2001 – 2010"], ["since2011", "2011 or later"]] as const;
 const GOALS = [["cost", "Low cost", "A smaller system, a lower price"], ["independence", "Independence", "As much of my own power as I can"], ["environment", "The environment", "As much clean power as the roof gives"]] as const;
 const KWH_PER_LITRE_OIL = 10; // heating oil, about 10 kWh of heat per litre
 const FOSSIL = ["Gas", "Oil", "OtherNonRenewable"];
+const REPLACEABLE = [...FOSSIL, "Electric"]; // heating a heat pump can replace
 const number = (v: string) => (v === "" ? null : Number(v));
 
 export type Stage = "roof" | "solar" | "battery" | "use" | "big" | "house" | "heat" | "car" | "charge" | "goal" | "send" | "sent";
@@ -107,17 +112,17 @@ export default function Review({ refId, progress, done, stage, setStage, answers
     const car = a.ev === false ? "No" : a.ev ? (a.ev_planned ? `Coming ${a.ev_when === "soon" ? "within a year" : a.ev_when === "later" ? "later" : "soon"}` : "Yes") : no;
     const groups: [string, Stage, [string, string][]][] = [
       ["Your roof", "roof", [["Priority area", `${Math.round(m2)} m²`]]],
-      ["Solar already there", "solar", a.has_solar ? [["Solar", "Yes"], ["Marked area", `${Math.round(panelM2)} m²`], ["Size", n(a.solar_kwp, "kWp")], ["Year", a.solar_year ? String(a.solar_year) : no]] : [["Solar", yes(a.has_solar)]]],
+      ["Solar already there", "solar", a.has_solar ? [["Solar", "Yes"], ["Makes", label(SOLAR_KIND, a.solar_kind)], ["Marked area", `${Math.round(panelM2)} m²`], ["Size", n(a.solar_kwp, "kWp")], ["Year", a.solar_year ? String(a.solar_year) : no]] : [["Solar", yes(a.has_solar)]]],
       ["Home battery", "battery", [["Battery", yes(a.has_storage)], ...(a.has_storage ? [["Size", n(a.battery_kwh, "kWh")] as [string, string]] : [])]],
       ["Electricity", "use", [["Yearly use", use], ["Price", a.price_known ? `${a.price_ct_kwh} ct per kWh` : no]]],
       ["Big electric users", "big", [["Has", a.big_users.length ? a.big_users.map((v) => label(BIG_USERS, v)).join(", ") : "None"]]],
-      ["Your house", "house", [["Built", label(BUILT, a.built)], ["Living area", n(a.living_m2, "m²")], ["Energy certificate", n(a.cert_kwh_m2, "kWh per m²")]]],
+      ["Your house", "house", [["Built", label(BUILT, a.built)], ["Living area", n(a.living_m2, "m²")], ["Energy certificate", n(a.cert_kwh_m2, "kWh per m²")], ["Owned by", label(OWNER, a.owner)]]],
       ["Heating", "heat", [["Heating", label(HEATING, a.heating)], ...(a.heating === "Heatpump" ? [["Its electricity", n(a.hp_kwh, "kWh a year")] as [string, string]] : []),
-        ...(FOSSIL.includes(a.heating ?? "") ? [["Heat pump", yes(a.wants_hp, "Interested", "Not interested")], [a.heating === "Oil" ? "Oil" : "Gas", a.heating === "Oil" ? n(a.oil_l, "litres a year") : n(a.heat_kwh, "kWh a year")]] as [string, string][] : [])]],
+        ...(REPLACEABLE.includes(a.heating ?? "") ? [["Heat pump", yes(a.wants_hp, "Interested", "Not interested")], [a.heating === "Oil" ? "Oil" : a.heating === "Electric" ? "Its electricity" : "Gas", a.heating === "Oil" ? n(a.oil_l, "litres a year") : n(a.heat_kwh, "kWh a year")]] as [string, string][] : [])]],
       ["Electric car", "car", a.ev ? [["Car", car], ["How many", a.ev_count ? String(a.ev_count) : no], ["Charged at home", n(a.ev_kwh_month, "kWh a month")], ["Driving", n(a.ev_km, "km a year")]] : [["Car", car]]],
       ...(a.ev ? [["Charging", "charge", [["Where", a.ev_charge_home === "most" ? "Mostly at home" : a.ev_charge_home === "half" ? "Half and half" : a.ev_charge_home === "little" ? "Mostly elsewhere" : no],
         ["Home in the day", yes(a.ev_day, "Often", "Rarely")], ["Wallbox", yes(a.has_wallbox, "Already there", "Not yet")]]] as [string, Stage, [string, string][]]] : []),
-      ["What matters most", "goal", [["Priority", GOALS.find((x) => x[0] === a.goal)?.[1] ?? no]]],
+      ["What matters most", "goal", [["Priority", GOALS.find((x) => x[0] === a.goal)?.[1] ?? no], ["Power in an outage", yes(a.backup, "Wanted", "Not needed")]]],
     ];
     return { missing: groups.flatMap(([, , rows]) => rows).filter(([, v]) => v === no).length, view: <div className="overview">
       {groups.map(([title, to, rows]) => <section key={to}>
@@ -156,18 +161,22 @@ export default function Review({ refId, progress, done, stage, setStage, answers
     );
   }
 
-  const fossil = FOSSIL.includes(a.heating ?? "");
+  const fossil = REPLACEABLE.includes(a.heating ?? "");
   return (
     <aside className="panel tall quiz" key={stage} ref={panel} onKeyDown={enter}>
-      {stage === "solar" && page("Is there solar here already?", null, yesNo("has_solar", { solar_kwp: null, solar_year: null }), a.has_solar && <>
+      {stage === "solar" && page("Is there solar here already?", null, yesNo("has_solar", { solar_kind: null, solar_kwp: null, solar_year: null }), a.has_solar && <>
+        <h2>What do the panels make?</h2>
+        <div className="answers">
+          {SOLAR_KIND.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.solar_kind === v} onClick={() => setAnswers({ ...a, solar_kind: v, ...(v === "thermal" ? { solar_kwp: null, solar_year: null } : {}) })}>{label}</Button>)}
+        </div>
         <h2>Where are the panels?<span className="opt">Optional</span></h2>
         <p className="small muted">Mark them on the map with <b>Whole surface</b> or <b>Draw</b>. We leave that area out of your new system.</p>
         <p className="marked"><b>{Math.round(panelM2)} m²</b> with panels</p>
-        <p className="small muted">Size and year help, but you can skip them: we then work from the area you marked.</p>
+        {a.solar_kind !== "thermal" && <><p className="small muted">Size and year help, but you can skip them: we then work from the area you marked.</p>
         <div className="pair">
           <Field label={optional("Size (kWp)")}><Input type="number" min={0} step={0.1} value={a.solar_kwp ?? ""} onChange={(e) => setAnswers({ ...a, solar_kwp: number(e.target.value) })} /></Field>
           <Field label={optional("Year")}><Input type="number" min={1990} max={2026} value={a.solar_year ?? ""} onChange={(e) => setAnswers({ ...a, solar_year: number(e.target.value) })} /></Field>
-        </div>
+        </div></>}
 
       </>)}
 
@@ -244,16 +253,20 @@ export default function Review({ refId, progress, done, stage, setStage, answers
         {a.area?.built && <p className="small muted">"Common here": {Math.round((a.area.built_share ?? 0) * 100)}% of homes nearby, Census 2022.</p>}
         {numberField(optional("Living area (m²)"), a.living_m2, (living_m2) => setAnswers({ ...a, living_m2 }), modelM2(buildings) ? `About ${modelM2(buildings)} from the 3D model` : undefined)}
         {numberField(optional("Energy certificate (kWh per m² a year)"), a.cert_kwh_m2, (cert_kwh_m2) => setAnswers({ ...a, cert_kwh_m2 }), "If you have one")}
+        <h2>Who owns the home?<span className="opt">Optional</span></h2>
+        <div className="answers">
+          {OWNER.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.owner === v} onClick={() => setAnswers({ ...a, owner: a.owner === v ? null : v })}>{label}</Button>)}
+        </div>
       </div>)}
 
       {stage === "heat" && page("How do you heat your home?", null, <div className="answers grid2">
         {HEATING.map(([value, label]) => <Button key={value} size="lg" wide aria-pressed={a.heating === value}
-          onClick={() => answer({ heating: value, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null }, !(FOSSIL.includes(value) || value === "Heatpump"))}>{label}{a.area?.heating === value && <span className="common">Common here</span>}</Button>)}
+          onClick={() => answer({ heating: value, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null }, !(REPLACEABLE.includes(value) || value === "Heatpump"))}>{label}{a.area?.heating === value && <span className="common">Common here</span>}</Button>)}
         {a.area?.heating && <p className="small muted span2">{a.area.heating === "District" ? "Most homes nearby use district heating" : a.area.heating === "Electric" ? "Most homes nearby heat with electricity" : `"Common here": ${Math.round((a.area.heating_share ?? 0) * 100)}% of homes nearby`}, Census 2022.</p>}
       </div>, a.heating === "Heatpump" ? <>
         {numberField(optional("Its electricity a year (kWh)"), a.hp_kwh, (hp_kwh) => setAnswers({ ...a, hp_kwh }), "From its own meter or bill")}
         <p className="small muted">The new solar can cover it too.</p>
-      </> : fossil && <>
+      </> : a.heating === "District" ? <p className="small muted">Your installer checks whether anything else makes sense with it.</p> : fossil && <>
         <h2>Interested in a heat pump instead?</h2>
         <div className="pair">
           <Button size="lg" wide aria-pressed={a.wants_hp === true} onClick={() => setAnswers({ ...a, wants_hp: true })}>Yes</Button>
@@ -263,6 +276,8 @@ export default function Review({ refId, progress, done, stage, setStage, answers
           <p className="small muted">{a.wants_hp ? "Your yearly use sizes the heat pump." : "We may still show you a heat pump option. Your yearly use sizes it."}</p>
           {a.heating === "Oil"
             ? numberField(optional("Oil a year (litres)"), a.oil_l, (oil_l) => setAnswers({ ...a, oil_l, heat_kwh: oil_l ? oil_l * KWH_PER_LITRE_OIL : null }))
+            : a.heating === "Electric"
+            ? numberField(optional("Its electricity a year (kWh)"), a.heat_kwh, (heat_kwh) => setAnswers({ ...a, heat_kwh }), "From its own meter or bill")
             : numberField(optional("Gas a year (kWh), from your bill"), a.heat_kwh, (heat_kwh) => setAnswers({ ...a, heat_kwh }))}
         </>}
       </>)}
@@ -304,7 +319,14 @@ export default function Review({ refId, progress, done, stage, setStage, answers
 
       {stage === "goal" && page("What matters most to you?", "We size the system with this in mind.", <div className="answers">
         {GOALS.map(([v, label, line]) => <Button key={v} size="lg" wide className="choice" aria-pressed={a.goal === v} onClick={() => setAnswers({ ...a, goal: v })}><b>{label}</b><small>{line}</small></Button>)}
-      </div>)}
+      </div>, <>
+        <h2>Power during an outage?<span className="opt">Optional</span></h2>
+        <p className="small muted">Some systems keep the house running when the grid is down.</p>
+        <div className="pair">
+          <Button size="lg" wide aria-pressed={a.backup === true} onClick={() => setAnswers({ ...a, backup: a.backup === true ? null : true })}>I want that</Button>
+          <Button size="lg" wide aria-pressed={a.backup === false} onClick={() => setAnswers({ ...a, backup: a.backup === false ? null : false })}>Not needed</Button>
+        </div>
+      </>)}
     </aside>
   );
 }

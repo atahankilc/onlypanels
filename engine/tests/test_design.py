@@ -179,3 +179,14 @@ def test_a_model_area_beyond_one_home_does_not_size_the_heat_pump(engine):
     assert "model_area_large" in {n["code"] for n in d["review"]}
     given = engine.design({**gas, "living_from_model": False}, {"heatpump": True})
     assert given["energy"]["hp_mwh"] > d["energy"]["hp_mwh"]
+
+
+def test_electric_heating_is_offered_a_heat_pump_and_district_heating_is_not(engine):
+    roof = {"surfaces": [{"kind": "roof", "max_modules": 40, "kwh_per_kwp": 1000}]}
+    electric = {**HOME, **roof, "heating": "Electric", "heat_kwh": 12000}
+    assert "heatpump" in {a["id"] for a in engine.alternatives(electric, {}, engine.design(electric))}
+    assert engine.design(electric, {"heatpump": True})["heatpump"]["kw"] > 0
+    district = {**HOME, **roof, "heating": "District"}
+    d = engine.design(district)
+    assert "heatpump" not in {a["id"] for a in engine.alternatives(district, {}, d)}
+    assert "district_heat" in {n["code"] for n in d["review"]}

@@ -44,6 +44,9 @@ MOUNTS = {
     "facade": {"m2_per_module": 2.0, "yield": 0.7},
 }
 FOSSIL = ["Gas", "Oil", "OtherNonRenewable"]
+# Heating a heat pump can replace: fossil, and direct or storage electric heating (its yearly electricity is its heat).
+# District heating is not among them: where it runs, a heat pump rarely pays.
+REPLACEABLE = FOSSIL + ["Electric"]
 COLS = ["demand_mwh", "existing_hp", "fossil_heat", "has_solar", "has_storage", "installer_b"]
 MIN_SIMILAR = 30
 UNSURE_BATTERY = 0.8  # below this, tell the planner the battery decision is open
@@ -181,7 +184,7 @@ class Engine:
             elif not kwh and self.habit.get(i["installer"]):
                 usual = self.habit[i["installer"]]
                 picks.append(("battery_add", "With battery", f"{_num(usual)} kWh, the size this installer sells most.", {**locks, "battery_kwh": usual}))
-        if i.get("heating") in FOSSIL and not d["heatpump"]["included"] and o.get("heatpump") is not False:
+        if i.get("heating") in REPLACEABLE and not d["heatpump"]["included"] and o.get("heatpump") is not False:
             picks.append(("heatpump", "With heat pump", "Replaces the " + i["heating"].lower().replace("othernonrenewable", "fossil") + " heating. Solar and battery re-size around it. Saving counts electricity only, not the fuel no longer bought.", {"heatpump": True}))
         # Larger solar, as large as experts go for similar homes (9 in 10 chose less), within what the roof holds.
         largest = int(d["similar"]["kwp_high"] // ASSUMED_KWP_PER_MODULE)
@@ -229,7 +232,7 @@ class Engine:
             reasons.append({"code": "hp_existing"})
         elif hp_wanted:
             reasons.append({"code": "hp_asked", "heat_mwh": round(heat_mwh or 15.0, 1)})
-        elif heat_type in FOSSIL:
+        elif heat_type in REPLACEABLE:
             reasons.append({"code": "hp_offer"})
         if hp_wanted:
             need = (heat_mwh or 15.0) * 1000 / HP_KWH_PER_KW
@@ -362,7 +365,9 @@ class Engine:
             review.append({"code": "roof_renovation", "level": "warn", "on": "pv", "text": "The customer plans to renew the roof soon" + (" or is not sure" if i["roof_renovation"] == "unsure" else "") + ". Renew it before the panels go on."})
         if heat_from_house and hp_wanted:
             review.append({"code": "heat_from_house", "level": "note", "on": "heatpump", "text": f"Heat use estimated from the house: {_num(i['living_m2'], 0)} m²" + (" (from the 3D model)" if i.get("living_from_model") else "") + f", {heat_from_house}. Ask for the gas or oil bill."})
-        if model_too_big and (hp_wanted or heat_type in FOSSIL):
+        if heat_type == "District":
+            review.append({"code": "district_heat", "level": "note", "on": "heatpump", "text": "The home has district heating, so no heat pump is offered. Check the city's heat plan before suggesting one."})
+        if model_too_big and (hp_wanted or heat_type in REPLACEABLE):
             review.append({"code": "model_area_large", "level": "warn", "on": "heatpump", "text": f"The 3D model gives about {_num(i_in.get('living_m2') or 0, 0)} m², more than one home usually has, so it was not used for the heat. Ask the customer for the living area or the gas or oil bill."})
         if big:
             review.append({"code": "big_users", "level": "note", "on": "pv", "text": f"{_num(big)} MWh added for what the customer runs on electricity ({', '.join(i['big_users'])}), since the yearly use is not from the bill."})
@@ -542,8 +547,10 @@ def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_
         hp_res = "The home already has one."
     elif hp_wanted:
         hp_res = f"{_num(hp_kw)} kW, from {_num((heat_mwh or 15.0) * 1000, 0)} kWh of heat at {HP_KWH_PER_KW:,} kWh per kW, as in the heat pumps sold here and the usual rule of thumb." + ("" if heat_mwh else " Heat use is a stand-in.")
-    elif heat_type in FOSSIL:
+    elif heat_type in REPLACEABLE:
         hp_res = "Not in the design: nobody asked for one. Offered as an alternative."
+    elif heat_type == "District":
+        hp_res = "Not in the design: the home has district heating."
     else:
         hp_res = "Not in the design."
     steps.append({"id": "heatpump", "title": "Heat pump", "kind": "rule", "by": "planner" if o.get("heatpump") is not None else "engine",

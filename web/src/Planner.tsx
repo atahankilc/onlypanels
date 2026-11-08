@@ -15,7 +15,7 @@ const LEFT = 620;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const SOURCE: Record<Source, string> = { customer: "Customer", assumed: "Assumed", planner: "You" };
 const INSTALLERS: [string, string][] = [["2a8ba8e2", "Installer A"], ["23c108b7", "Installer B"]];
-const HEATS: [string, string][] = [["", "Unknown"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherNonRenewable", "Other fossil"], ["OtherRenewable", "Wood or pellets"], ["Heatpump", "Heat pump"]];
+const HEATS: [string, string][] = [["", "Unknown"], ["Gas", "Gas"], ["Oil", "Oil"], ["OtherNonRenewable", "Other fossil"], ["OtherRenewable", "Wood or pellets"], ["District", "District heating"], ["Electric", "Electric heating"], ["Heatpump", "Heat pump"]];
 const summary = (d: Design) => `${d.pv.kwp.toFixed(1)} kWp · ${d.battery.kwh ? `${d.battery.kwh} kWh` : "no battery"}${d.wallbox.included ? " · wallbox" : ""}${d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}`;
 const FACT: Record<string, string> = { demand_kwh: "Yearly electricity", price_ct_kwh: "Price", heating: "Heating", heat_kwh: "Yearly heat", ev: "Electric car", ev_km: "Driving", has_solar: "Existing solar", has_storage: "Existing battery", installer: "Catalog",
   ev_kwh_month: "Car charged at home", ev_charge_home: "Charging at home", ev_day: "Car charges in daytime", has_wallbox: "Wallbox already there", hp_kwh: "Heat pump use now", monthly_eur: "Monthly payment",
@@ -229,7 +229,13 @@ function checkList(r: Request, d: Design) {
   if (blind) list.unshift({ id: "sun", title: `Sun data is missing for ${blind} ${blind === 1 ? "surface" : "surfaces"}`, why: "PVGIS did not answer. A typical yield stands in, so production is less certain. Reopen the request to try again." });
   list.push({ id: "roof", title: "Check the roof for obstacles", why: "Roof windows, chimneys and dormers are not in the measured model. See the photo in Roof." });
   list.push({ id: "state", title: "Check the roof's condition", why: "Age and load-bearing are not in our data." });
-  list.push({ id: "who", title: "Who decides, and who owns the home?", why: "Not asked yet." });
+  const i = r.inputs;
+  list.push(i.owner === "shared" ? { id: "who", title: "Owners' association must agree", why: "The customer shares the home with other owners. Solar on a shared roof needs their decision first." }
+    : i.owner === "tenant" ? { id: "who", title: "The landlord must agree", why: "The customer rents the home. Talk to the owner before planning further." }
+    : i.owner === "sole" ? { id: "who", title: "Confirm who signs", why: "The customer says they or their family own the home alone." }
+    : { id: "who", title: "Who decides, and who owns the home?", why: "The customer did not say." });
+  if (i.solar_thermal) list.push({ id: "thermal", title: "Hot water collectors on the roof", why: "The customer has solar collectors for hot water. Their area is left out; check where they sit and whether they stay." + (i.has_solar ? " The marked area also holds solar panels, so a size from the area is too high." : "") });
+  if (i.backup) list.push({ id: "backup", title: "Backup power wanted", why: "Pick an inverter and battery that can run the home in an outage, with a backup box. About 1 in 7 past projects had one." });
   list.push({ id: "monument", title: "Check monument status", why: "Not in our data." });
   list.push({ id: "grid", title: "Check the grid connection and meter cabinet", why: "Not in our data." });
   list.push({ id: "grants", title: "Check grants", why: "They depend on the customer. Not in our data." });
