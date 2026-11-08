@@ -178,7 +178,7 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
       </header>
       {d && <dl className="kpis">
         <div><dt>Solar</dt><dd>{d.pv.kwp.toFixed(1)}<small> kWp</small></dd></div><div><dt>Modules</dt><dd>{d.pv.modules}</dd></div>
-        <div><dt>Battery</dt><dd>{d.battery.kwh || "–"}{d.battery.kwh ? <small> kWh</small> : null}</dd></div>
+        <div><dt>Battery</dt><dd>{d.battery.kwh || (r.inputs.has_storage && r.existing.battery_kwh ? r.existing.battery_kwh : "–")}{d.battery.kwh || (r.inputs.has_storage && r.existing.battery_kwh) ? <small> kWh{!d.battery.kwh ? " there" : ""}</small> : null}</dd></div>
         <div><dt>Need</dt><dd>{d.energy.total_mwh.toFixed(1)}<small> MWh</small></dd></div><div><dt>Makes</dt><dd>{d.energy.production_mwh.toFixed(1)}<small> MWh</small></dd></div>
       </dl>}
       <div className="desktabs"><Segmented wide label="Sections" value={tab} onChange={setTab} options={[{ value: "home", label: "Home" }, { value: "design", label: "Design" }, { value: "checks", label: left ? `Checks ${left}` : "Checks" }, { value: "offer", label: "Offer" }]} /></div>
@@ -211,7 +211,7 @@ function Brief({ r, d, assumed, points, site, open }: { r: Request; d: Design; a
   const s = d.similar, why: string[] = [];
   why.push(d.pv.locked ? `Solar is fixed by you at ${d.pv.modules} modules.` : d.pv.capped ? `The roof limits solar to ${d.pv.modules} modules; the engine wanted more.` : `Solar sized for ${d.energy.total_mwh.toFixed(1)} MWh a year. In ${s.n} similar homes, experts chose ${s.kwp_low}–${s.kwp_high} kWp.`);
   if (d.pv.max_modules) why.push(`${d.pv.modules} of ${d.pv.max_modules} modules that fit on the measured roof, best sun first. Makes about ${d.energy.production_mwh.toFixed(1)} MWh a year.`);
-  why.push(d.battery.locked ? (d.battery.kwh ? `Battery set by you at ${d.battery.kwh} kWh.` : "No battery, your choice.") : d.battery.kwh ? `${d.battery.kwh} kWh battery: ${s.battery_rate}% of similar homes bought one${d.battery.unsure ? ", but this call is open" : ""}.` : `No battery proposed, though ${s.battery_rate}% of similar homes bought one.`);
+  why.push(d.battery.locked ? (d.battery.kwh ? `Battery set by you at ${d.battery.kwh} kWh.` : "No battery, your choice.") : d.battery.kwh ? `${d.battery.kwh} kWh battery: ${s.battery_rate}% of similar homes bought one${d.battery.unsure ? ", but this call is open" : ""}.` : r.inputs.has_storage ? `The home already has a battery${r.existing.battery_kwh ? ` of ${r.existing.battery_kwh} kWh` : ""}, so none is added; the new system charges it too.` : `No battery proposed, though ${s.battery_rate}% of similar homes bought one.`);
   if (r.inputs.goal) why.push(`The customer puts ${label(GOAL, r.inputs.goal).toLowerCase()} first; the engine leans on it.`);
   const items = [assumed && `${assumed} assumed ${assumed === 1 ? "fact" : "facts"} to confirm`, points && `${points} review ${points === 1 ? "point" : "points"}`, site && `${site} site ${site === 1 ? "check" : "checks"}`].filter(Boolean);
   return <section className="brief">
