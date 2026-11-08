@@ -58,3 +58,21 @@ export function mosaic(z: number, x0: number, y0: number, nx: number, ny: number
   }
   return { canvas, box, ready: Promise.all(first), done: Promise.all(all) };
 }
+
+/**
+ * The same tiles as `mosaic`, handed over one by one as images instead of drawn into one canvas, so a caller can put each
+ * straight into its part of a GPU texture. Images come upside down, as a texture's rows run from the bottom; (i, j) counts
+ * from the top left tile. Tiles already here are handed over before `ready` resolves. The caller closes each image.
+ */
+export function tileImages(z: number, x0: number, y0: number, nx: number, ny: number, got: (i: number, j: number, image: ImageBitmap) => void, alive: () => boolean) {
+  const s = sideOf(z), box = [-HALF + x0 * s, HALF - (y0 + ny) * s, -HALF + (x0 + nx) * s, HALF - y0 * s];
+  const first: Promise<unknown>[] = [];
+  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+    const here = ready(z, x0 + i, y0 + j);
+    const job = tile(z, x0 + i, y0 + j).then((blob) => createImageBitmap(blob, { imageOrientation: "flipY" })).then((image) => {
+      if (alive()) got(i, j, image); else image.close();
+    }).catch(() => undefined);
+    if (here) first.push(job);
+  }
+  return { box, ready: Promise.all(first) };
+}

@@ -12,7 +12,7 @@ import SunLight from "./SunLight";
 import { MUNICH, REGION_EDGE, REGION_OUTSIDE, VIEW_LIMIT, inRegion } from "./region";
 import { Button, IconButton } from "./ui";
 import type { Detail } from "./solids.worker";
-import { GROUND_TILES, TILE_PX, WORLD_M, mosaic, tile, tileAt } from "./photoTiles";
+import { GROUND_TILES, TILE_PX, WORLD_M, mosaic, tile, tileAt, tileImages } from "./photoTiles";
 
 const BLOCKS = "buildings-3d"; // the base map's blocks: a rough picture from afar, never selected
 const homesOf = (square: string) => `homes-${square}`; // measured buildings, one feature each: what people select. A source and layer per square
@@ -33,6 +33,7 @@ const EDGE_OPACITY = 0.8;
 // The roofs' photo on the picking step, in three rings around the view's centre: sharp in the middle, a level finer than the ground;
 // coarser further out, the widest reaching past every square drawn. A roof takes the sharpest ring that covers it.
 const ROOF_LEVELS = [{ dz: 1, tiles: 5 }, { dz: -1, tiles: 6 }, { dz: -3, tiles: 6 }];
+const TILES_PER_FRAME = 6; // photo tiles sent to the GPU in one frame: a ring of tiles already here lands over a few frames, not in one long one
 const ROOF_TILE_ZOOM = { min: 12, max: 19 }; // 19 is about 10 cm a pixel here, finer than the photo itself
 const NEIGHBOUR_TILE_ZOOM = 19, NEIGHBOUR_TILES_MAX = 6; // across, for the roofs on the chosen home's step
 const MAX_DETAIL_LOADS = 2; // real roofs come after the blocks, a square or two at a time, nearest first
@@ -470,8 +471,9 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
   const [bearing, setBearing] = useState(0);
   const spot = useRef<maplibregl.Marker | null>(null);
   const pins = useRef<maplibregl.Marker[]>([]);
-  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken, blocked, obstacles, hotObstacle });
-  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken, blocked, obstacles, hotObstacle };
+  const sunOn = view.layer === "sun" && !!view.moment;
+  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken, blocked, obstacles, hotObstacle, sunOn });
+  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken, blocked, obstacles, hotObstacle, sunOn };
   const clearDraft = useRef(() => {});
   const drawing = () => live.current.step === "review" && live.current.editing && !!live.current.onPaint && !!live.current.tool;
 
@@ -519,8 +521,15 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         out[v * 3] = Math.min(255, c.r * s); out[v * 3 + 1] = Math.min(255, c.g * s); out[v * 3 + 2] = Math.min(255, c.b * s);
       }
     };
-    if (only === undefined) real.ids.forEach((_, k) => one(k));
-    else { const k = real.index.get(only); if (k === undefined) return; one(k); }
+    if (only === undefined) { real.ids.forEach((_, k) => one(k)); colour.clearUpdateRanges(); marks.clearUpdateRanges(); } // all of it
+    else {
+      const k = real.index.get(only);
+      if (k === undefined) return;
+      one(k);
+      // Only this building's part goes to the GPU again: a whole square's colours are megabytes, and hovering changes one house.
+      const from = real.starts[k], count = real.starts[k + 1] - from;
+      colour.addUpdateRange(from * 3, count * 3); marks.addUpdateRange(from, count);
+    }
     colour.needsUpdate = true; marks.needsUpdate = true;
     map.current?.triggerRepaint();
   };
@@ -776,13 +785,13 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       pins.current.forEach((x) => x.setOffset([0, -Number(x.getElement().dataset.z) * px]));
     };
     m.on("move", () => liftPins.current());
-    m.on("rotate", () => { if (needle.current) needle.current.style.rotate = `${-m.getBearing()}deg`; setBearing(m.getBearing()); });
+    m.on("rotate", () => { if (needle.current) needle.current.style.rotate = `${-m.getBearing()}deg`; if (live.current.sunOn) setBearing(m.getBearing()); }); // only the sunlight needs it: otherwise turning would draw the page again every frame
 
     // No location is asked by itself: the browser's prompt would come before the homeowner chose how to start. The locate button asks.
     let renderer: THREE.WebGLRenderer;
     const camera = new THREE.Camera();
     const shaper = new Worker(new URL("./solids.worker.ts", import.meta.url), { type: "module" });
-    let pulse = 0;
+    let pulse = 0, sendTiles = () => {};
     m.on("load", () => {
       // The blocks get a source of their own: their filter changes as squares arrive, and that must not make the map read roads and labels again.
       {
@@ -802,6 +811,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         render(_gl, args) {
           renderer.resetState();
           renderer.setViewport(0, 0, m.getCanvas().width, m.getCanvas().height);
+          sendTiles();
           // Each around its own origin, near what it draws: the GPU's numbers run out of digits far from it.
           const draw = (what: THREE.Scene, at: P2 | null, up = 1) => {
             what.userData.seen = null;
@@ -828,6 +838,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
               material.uniforms.siteT.value = siteRef.current ? siteT : 0;
               material.uniforms.hideOn.value = siteT > 0.5 ? 1 : 0;
             }
+            square.scene.children[0].visible = edgeLook.current.opacity > 0; // faded-out lines are millions of segments nobody sees
             draw(square.scene, square.at, siteT > 0 ? 1 : up);
           });
           if (shown.current > 0) models.current.forEach(({ scene, at }) => draw(scene, at));
@@ -931,7 +942,8 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       };
       // The roofs' photo: for each ring, tiles around the view's centre drawn into one image. Tiles the ground already has are on the
       // roofs at once; the rest fill in as they arrive. A ring is made again once the centre moves to another of its tiles or the zoom changes.
-      const rings: ({ texture: THREE.Texture; box: number[]; key: string } | null)[] = ROOF_LEVELS.map(() => null), asked = ROOF_LEVELS.map(() => "");
+      type Ring = { texture: THREE.DataTexture; box: number[]; key: string; tiles: number; waiting: { i: number; j: number; image: ImageBitmap }[]; ready: boolean };
+      const rings: (Ring | null)[] = ROOF_LEVELS.map(() => null), coming: (Ring | null)[] = ROOF_LEVELS.map(() => null), asked = ROOF_LEVELS.map(() => "");
       const dress = (square: OnMap) => {
         const material = square.real?.mesh.material as THREE.ShaderMaterial | undefined;
         if (!material) return;
@@ -958,21 +970,56 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
           const key = `${z}/${cx}/${cy}`;
           if (asked[k] === key) return;
           asked[k] = key;
-          const alive = () => asked[k] === key && ready.current, half = Math.floor(tiles / 2);
-          let texture: THREE.CanvasTexture | null = null, queued = 0;
-          const drew = () => { if (texture && !queued) queued = requestAnimationFrame(() => { queued = 0; if (texture) texture.needsUpdate = true; m.triggerRepaint(); }); };
-          const made = mosaic(z, cx - half, cy - half, tiles, tiles, drew, alive);
-          made.ready.then(() => {
-            if (!alive()) return;
-            texture = new THREE.CanvasTexture(made.canvas);
-            texture.colorSpace = THREE.SRGBColorSpace;
-            texture.anisotropy = 8;
-            const old = rings[k]?.texture;
-            rings[k] = { texture, box: made.box, key };
-            dressAll.current();
-            old?.dispose();
-          });
+          const alive = () => asked[k] === key && ready.current, half = Math.floor(tiles / 2), side = tiles * TILE_PX;
+          // The texture is made on the GPU at its full size, see-through, and each tile goes straight into its part as it arrives:
+          // sending the whole image again for every tile stalled the map for a moment after each move.
+          const texture = new THREE.DataTexture(null, side, side);
+          texture.source.dataReady = false; // room only: the tiles fill it
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.flipY = false; // the tiles arrive upside down already
+          texture.magFilter = THREE.LinearFilter; texture.minFilter = THREE.LinearMipmapLinearFilter; texture.generateMipmaps = true;
+          texture.anisotropy = 8;
+          texture.needsUpdate = true;
+          const next: Ring = { texture, box: [], key, tiles, waiting: [], ready: false };
+          const made = tileImages(z, cx - half, cy - half, tiles, tiles, (i, j, image) => { next.waiting.push({ i, j, image }); m.triggerRepaint(); }, alive);
+          next.box = made.box;
+          coming[k]?.waiting.forEach((w) => w.image.close());
+          if (coming[k] && coming[k] !== rings[k]) coming[k]!.texture.dispose();
+          coming[k] = next;
+          made.ready.then(() => { if (alive()) { next.ready = true; m.triggerRepaint(); } });
         });
+      };
+      // Runs inside the map's frame, where the GL state belongs to three: a few tiles a frame into their textures, then a ring
+      // whose tiles already here are all in takes the place of the old one.
+      sendTiles = () => {
+        let budget = TILES_PER_FRAME, more = false;
+        ROOF_LEVELS.forEach((_, k) => {
+          for (const r of new Set([rings[k], coming[k]])) {
+            if (!r) continue;
+            const batch = r.waiting.splice(0, budget);
+            budget -= batch.length;
+            if (batch.length) {
+              // Straight to GL rather than three's copyTextureToTexture, which reads GL state back for every tile and so waits for the GPU.
+              const gl = renderer.getContext() as WebGL2RenderingContext, state = renderer.state;
+              renderer.initTexture(r.texture); // makes room on the GPU the first time, see-through
+              state.bindTexture(gl.TEXTURE_2D, (renderer.properties.get(r.texture) as { __webglTexture: WebGLTexture }).__webglTexture);
+              state.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); state.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+              for (const w of batch) { gl.texSubImage2D(gl.TEXTURE_2D, 0, w.i * TILE_PX, (r.tiles - 1 - w.j) * TILE_PX, gl.RGBA, gl.UNSIGNED_BYTE, w.image); w.image.close(); }
+              gl.generateMipmap(gl.TEXTURE_2D); // the smaller copies once a batch, not once a tile
+              state.unbindTexture();
+            }
+            if (r.waiting.length) more = true;
+          }
+          const c = coming[k];
+          if (c && c !== rings[k] && c.ready && !c.waiting.length) {
+            const old = rings[k];
+            rings[k] = c;
+            squares.current.forEach(dress);
+            old?.waiting.forEach((w) => w.image.close());
+            old?.texture.dispose();
+          }
+        });
+        if (more) m.triggerRepaint();
       };
       m.on("moveend", refreshPhoto);
 
@@ -998,12 +1045,17 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         g.setAttribute("hide", new THREE.BufferAttribute(new Uint8Array(data.roof.length), 1)); // 0 or 1 as it is, like roof
         g.setIndex(new THREE.BufferAttribute(data.index, 1));
         const mesh = new THREE.Mesh(g, roofMaterial());
-        mesh.frustumCulled = false;
+        // A square out of view is skipped: its bounds come from the worker, so nothing reads the points here. A little room
+        // above, as the roofs rise out of the ground.
+        const [x0, y0, z0, x1, y1, z1] = data.bounds, sphere = Number.isFinite(x0) ? new THREE.Box3(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1 + 10)).getBoundingSphere(new THREE.Sphere()) : null;
+        if (sphere) g.boundingSphere = sphere;
+        mesh.frustumCulled = !!sphere;
         square.scene.add(mesh);
         // The lines now follow the real roofs instead of the blocks' tops, and draw after them.
         const line = square.scene.children[0] as THREE.LineSegments;
         line.geometry.dispose();
         line.geometry = new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(data.lines, 3));
+        if (sphere) { line.geometry.boundingSphere = sphere.clone(); line.frustumCulled = true; }
         line.renderOrder = 1;
         square.real = { mesh, ids: data.ids, starts: data.starts, shade: data.shade, roof: data.roof, index: new Map(data.ids.map((id, k) => [id, k])) };
         tint(data.name);
@@ -1177,7 +1229,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     m.getCanvasContainer().appendChild(svg);
     const drawDraft = () => {
       const on = drawing() && live.current.tool === "draw";
-      if (!on || (!draft.length && !hoverAt)) { svg.innerHTML = ""; return; }
+      if (!on || (!draft.length && !hoverAt)) { if (svg.firstChild) svg.innerHTML = ""; return; } // runs every frame: touch the page only when something was drawn
       const pts = draft.map((d) => onScreen(d.id, d.at)).filter((x): x is P2 => !!x), next = hoverAt ? pointAt(hoverAt) : null;
       const tip = next ? onScreen(next.id, next.at) : hoverAt ? [hoverAt.x, hoverAt.y] as P2 : null;
       let out = "";
@@ -1282,7 +1334,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       if (hit) { heights.current.set(hit.id, hit.height); pick(hit); }
     });
     // Show what a click would pick: the block itself changes colour, nothing is drawn on top of it.
-    let frame = 0, lit: Spot[] = [];
+    let frame = 0, lit: Spot[] = [], lastFace: Face | null = null;
     const hover = (spots: Spot[]) => {
       if (spots[0]?.id === lit[0]?.id) return;
       lit.forEach((b) => mark(b, "hover", false));
@@ -1298,12 +1350,14 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         if (live.current.step === "review") {
           const draw = drawing() && live.current.tool === "draw", found = live.current.editing && !draw ? faceAt(e.point) : null;
           m.getCanvas().style.cursor = draw ? "crosshair" : found ? "pointer" : "";
-          live.current.onFace(found);
+          // Only a change goes up: the page draws the whole roof again for every new face, and the pointer moves every frame.
+          if (found?.building !== lastFace?.building || found?.poly !== lastFace?.poly) { lastFace = found; live.current.onFace(found); }
           return;
         }
         if (!live.current.onPick) { hover([]); m.getCanvas().style.cursor = ""; return; }
         const hit = under(e.point);
         m.getCanvas().style.cursor = hit ? "pointer" : "";
+        if (hit && hit.id === lit[0]?.id) return; // the same building: its parts are lit already
         // A home can be several parts: all of them light up together.
         hover(hit ? [hit, ...m.querySourceFeatures(homesOf(hit.square), { filter: ["==", ["get", "home"], hit.home] }).map((f) => ({ id: String(f.id), square: hit.square })).filter((f, i, all) => f.id !== hit.id && all.findIndex((x) => x.id === f.id) === i)] : []);
       });
@@ -1314,6 +1368,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
   }, []);
 
   useEffect(() => { syncHomes.current(); }, [buildings]);
+  useEffect(() => { if (sunOn && map.current) setBearing(map.current.getBearing()); }, [sunOn]);
   // Roof photos load while the user is still picking, so nothing pops in during the move.
   const fetched = useRef(new Set<string>());
   useEffect(() => {

@@ -9,6 +9,7 @@ export type Ask = { name: string; at: [number, number] };
 export type Detail = {
   name: string; ids: string[]; starts: Uint32Array; // building k owns vertices starts[k] .. starts[k + 1]
   positions: Float32Array; shade: Float32Array; roof: Uint8Array; index: Uint32Array; lines: Float32Array;
+  bounds: number[]; // x0, y0, z0, x1, y1, z1 of every point, so the page can skip a square out of view without reading them
 };
 
 const EARTH_RADIUS_M = 6371008.8; // the map's own value, as on the server
@@ -37,6 +38,8 @@ self.onmessage = async ({ data }: MessageEvent<Ask>) => {
       if (tab < 0) continue;
       ids.push(row.slice(0, tab));
       starts.push(positions.length / 3);
+    const bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < positions.length; i++) { const d = i % 3; if (positions[i] < bounds[d]) bounds[d] = positions[i]; if (positions[i] > bounds[d + 3]) bounds[d + 3] = positions[i]; }
       const solid = JSON.parse(row.slice(tab + 1)) as { roofs: Poly[]; walls: Poly[] };
       for (const [list, isRoof] of [[solid.walls, 0], [solid.roofs, 1]] as const) for (const poly of list) {
         const ring = local(poly.ring), holes = poly.holes.map(local);
@@ -52,9 +55,11 @@ self.onmessage = async ({ data }: MessageEvent<Ask>) => {
       }
     }
     starts.push(positions.length / 3);
+    const bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < positions.length; i++) { const d = i % 3; if (positions[i] < bounds[d]) bounds[d] = positions[i]; if (positions[i] > bounds[d + 3]) bounds[d + 3] = positions[i]; }
     const out: Detail = {
       name, ids, starts: new Uint32Array(starts), positions: new Float32Array(positions), shade: new Float32Array(shade),
-      roof: new Uint8Array(roof), index: new Uint32Array(index), lines: new Float32Array(lines),
+      roof: new Uint8Array(roof), index: new Uint32Array(index), lines: new Float32Array(lines), bounds,
     };
     (self as DedicatedWorkerGlobalScope).postMessage(out, [out.starts.buffer, out.positions.buffer, out.shade.buffer, out.roof.buffer, out.index.buffer, out.lines.buffer]);
   } catch {
