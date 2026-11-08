@@ -40,6 +40,7 @@ const REVIEW_PITCH = 75; // around one site there is no horizon to drag, and wal
 const PAN = { maxSpeed: 500, deceleration: 4000 }; // less fling after a drag
 const SITE = "site-fade"; // around the chosen buildings the map fades into plain ground
 const SITE_FROM_M = 45, SITE_RING_M = 10, SITE_RINGS = [0.2, 0.25, 0.3, 0.4, 0.6, 1];
+const SITE_DIM = 0.6; // how far the city's roofs around a chosen site are toned toward the ground, before the rings. Mixed in linear light: 0.6 reads as about a third darker (measured on screenshots)
 const FADE_MS = 900; // from the map's blocks to the measured buildings, and back
 const COLORS = { roof: "#3A6FA8", edge: "#8A95A8", hover: "#2F5E94", pendingDim: "#2A2C34", pendingBright: "#6F93BF", face: "#FF9F0A", otherRoof: "#3A3D47", otherWall: "#23252C", limit: "#FFD60A", land: "#0F1013" };
 // One light from the south, so the sides of a roof read apart.
@@ -55,14 +56,23 @@ function roofMaterial() {
       photo1: { value: null }, fit1: { value: new THREE.Vector4() }, has1: { value: 0 },
       photo2: { value: null }, fit2: { value: new THREE.Vector4() }, has2: { value: 0 },
       opacity: { value: 1 },
+      // Around a chosen site the city fades into the ground with the same rings as the ground photo, and the chosen buildings
+      // themselves give way to their measured models. siteT runs 0 to 1 with the step; the box is in the square's metres.
+      siteT: { value: 0 }, siteO: { value: new THREE.Vector2() }, siteWH: { value: new THREE.Vector2() }, ground: { value: new THREE.Color(TONE.ground) }, hideOn: { value: 0 },
     },
-    vertexShader: `attribute float roof; attribute float mark; varying vec3 vColor; varying float vRoof; varying float vMark; varying vec2 vXY;
-      void main() { vColor = color; vRoof = roof; vMark = mark; vXY = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute float roof; attribute float mark; attribute float hide; varying vec3 vColor; varying float vRoof; varying float vMark; varying float vHide; varying vec2 vXY;
+      void main() { vColor = color; vRoof = roof; vMark = mark; vHide = hide; vXY = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: `uniform sampler2D photo0; uniform vec4 fit0; uniform float has0;
       uniform sampler2D photo1; uniform vec4 fit1; uniform float has1;
       uniform sampler2D photo2; uniform vec4 fit2; uniform float has2;
-      uniform float opacity;
-      varying vec3 vColor; varying float vRoof; varying float vMark; varying vec2 vXY;
+      uniform float opacity; uniform float siteT; uniform vec2 siteO; uniform vec2 siteWH; uniform vec3 ground; uniform float hideOn;
+      varying vec3 vColor; varying float vRoof; varying float vMark; varying float vHide; varying vec2 vXY;
+      // How much the site's rings cover this point: each ring covers what lies beyond its edge, and they lie on top of each other.
+      float cover() {
+        float r = length(max(abs(vXY - siteO) - siteWH, 0.0)), open = 1.0;
+        ${SITE_RINGS.map((o, i) => `if (r >= ${(SITE_FROM_M + i * SITE_RING_M).toFixed(1)}) open *= 1.0 - ${o.toFixed(3)} * siteT;`).join(" ")}
+        return 1.0 - open;
+      }
       // A tile still on its way is see-through, so the next ring, or the roof's colour, shows meanwhile.
       vec4 look(sampler2D photo, vec4 fit, float has) {
         vec2 uv = vec2(vXY.x * fit.x + fit.y, vXY.y * fit.z + fit.w);
@@ -70,6 +80,7 @@ function roofMaterial() {
         return texture2D(photo, uv);
       }
       void main() {
+        if (vHide > 0.5 && hideOn > 0.5) discard;
         vec3 c = vColor;
         if (vRoof > 0.5) {
           vec4 t = look(photo0, fit0, has0);
@@ -77,6 +88,8 @@ function roofMaterial() {
           if (t.a < 0.5) t = look(photo2, fit2, has2);
           if (t.a > 0.5) c = mix(t.rgb, vColor, vMark * 0.55);
         }
+        // Around a chosen site the other buildings sit a little back, so the eye goes to the chosen one; further out the rings take over.
+        if (siteT > 0.0) c = mix(c, ground, 1.0 - (1.0 - cover()) * (1.0 - ${SITE_DIM.toFixed(2)} * siteT));
         gl_FragColor = vec4(c, opacity);
         #include <colorspace_fragment>
       }`,
@@ -248,7 +261,6 @@ function skinOf(s: SunSurface, poly: Poly, step: number) {
 // Roads and rails bound a street block. Service roads, paths and tracks run inside blocks, so they do not.
 const BLOCK_ROADS = new Set(["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "busway", "rail", "transit"]);
 const ROADS_WITHIN_M = 250;
-const GHOST_ALPHA = 0.92; // the plain blocks around the site, before the fade rings cover them
 
 /** The map's roads and rails near a point, as segments in metres around it. Empty while the map has no tiles there. */
 function roadsNear(m: maplibregl.Map, o: P2) {
@@ -300,39 +312,6 @@ function siteBox(list: Selected[], extra: P2[] = []): SiteBox {
   const local = corners.map((p) => toLocal(o, p));
   return { o, w: Math.max(...local.map((p) => Math.abs(p[0]))), h: Math.max(...local.map((p) => Math.abs(p[1]))) };
 }
-/** How much the fade rings cover a point, 0 to 1: the rings lie on top of each other, each covering what is beyond its edge. */
-function coverAt(box: SiteBox, at: P2) {
-  const p = toLocal(box.o, at), r = Math.hypot(Math.max(0, Math.abs(p[0]) - box.w), Math.max(0, Math.abs(p[1]) - box.h));
-  return 1 - SITE_RINGS.reduce((open, o, i) => (r >= SITE_FROM_M + i * SITE_RING_M ? open * (1 - o) : open), 1);
-}
-
-/** The buildings around one that are not drawn as measured, as plain blocks out to the site's edge, so the home stands in its
- *  street and not alone. Each fades exactly as the rings over the ground do, so nothing stands in the dark beyond them. */
-function ghostsOf(b: Selected, skip: Set<string>, box: SiteBox) {
-  const points: P3[] = [], alpha: number[] = [], faces: number[] = [];
-  const add = (p: P3, a: number) => { points.push(p); alpha.push(1, 1, 1, a); return points.length - 1; };
-  for (const near of b.sun?.around ?? []) {
-    if (skip.has(near.id)) continue;
-    const ring = near.ring.map((p) => toLocal(b.origin, [p[0], p[1]]));
-    const fade = near.ring.map((p) => GHOST_ALPHA * (1 - coverAt(box, [p[0], p[1]])));
-    if (!fade.some((a) => a > 0)) continue;
-    ring.forEach((p, i) => {
-      const j = (i + 1) % ring.length, q = ring[j];
-      const k = [add([p[0], p[1], 0], fade[i]), add([q[0], q[1], 0], fade[j]), add([q[0], q[1], near.h], fade[j]), add([p[0], p[1], near.h], fade[i])];
-      faces.push(k[0], k[1], k[2], k[0], k[2], k[3]);
-    });
-    const top = ring.map((p, i) => add([p[0], p[1], near.h], fade[i]));
-    for (const t of THREE.ShapeUtils.triangulateShape(ring.map((p) => new THREE.Vector2(p[0], p[1])), [])) faces.push(top[t[0]], top[t[1]], top[t[2]]);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(points.flat(), 3));
-  g.setAttribute("color", new THREE.Float32BufferAttribute(alpha, 4));
-  g.setIndex(faces);
-  const material = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, side: THREE.DoubleSide, depthWrite: false });
-  material.userData.alpha = true;
-  return new THREE.Mesh(g, material);
-}
-
 /** The buildings on the same street block, as they are measured, in plain tones: a flat block beside a real roof looks wrong. */
 function neighboursOf(b: Selected, skip: Set<string>, block: Set<string>) {
   const g = new THREE.Group();
@@ -505,6 +484,18 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
   const hidden = useRef(new Map<string, unknown>()); // the map layers the review step switched off, and how they were
   const camera = useRef<{ center: maplibregl.LngLat; zoom: number; bearing: number; pitch: number } | null>(null); // where picking stopped
   const dressAll = useRef(() => {}); // the roofs' photo, again on every real square
+  const siteRef = useRef<SiteBox | null>(null); // the chosen site's box, which the city's rings fade around
+  const hidden3d = useRef(new Set<string>()); // the chosen buildings: drawn as measured models, so left out of the city's roofs
+  const loadSite = useRef(() => {});
+  /** Marks the chosen buildings in a square's real roofs, so they give way to their measured models. */
+  const hideChosen = (square: OnMap) => {
+    const real = square.real;
+    if (!real) return;
+    const attr = real.mesh.geometry.getAttribute("hide") as THREE.BufferAttribute, out = attr.array as Uint8Array;
+    out.fill(0);
+    hidden3d.current.forEach((id) => { const k = real.index.get(id); if (k !== undefined) out.fill(1, real.starts[k], real.starts[k + 1]); });
+    attr.needsUpdate = true;
+  };
   const flags = useRef(new Map<string, Set<string>>()); // what each building is marked as, for the real roofs: the blocks keep theirs as feature state
   /** Colours a square's real roofs, or one building of it, from its marks and the theme. */
   const tint = (name: string, only?: string) => {
@@ -572,8 +563,12 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     clearModels();
     const list = live.current.buildings, drawn = new Set(list.map((x) => x.id));
     const o = list[0]?.origin ?? [0, 0], block = map.current && list.length ? blockOf(list, roadsNear(map.current, o), o) : new Set<string>();
-    const around = blockPoints(list, block), solid = new Set([...drawn, ...block]);
+    const around = blockPoints(list, block);
     site.current = around;
+    siteRef.current = list.length ? siteBox(list, around) : null;
+    hidden3d.current = drawn;
+    squares.current.forEach((s) => hideChosen(s));
+    dressAll.current();
     models.current = list.map((b) => {
       const { roofs, walls } = b.real ?? { roofs: [], walls: [] };
       const g = new THREE.Group(), scene = new THREE.Scene();
@@ -587,12 +582,8 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       const skins = (b.sun?.surfaces ?? []).map((x) => skinOf(x, [...roofs, ...walls][polyOf(b, x)], b.sun?.step ?? 1));
       skins.forEach((k) => g.add(k.skin, k.cover, k.plate));
       roofPhoto(b, roofMeshes, () => map.current?.triggerRepaint());
-      const ghosts = ghostsOf(b, solid, siteBox(list, around));
-      ghosts.renderOrder = -1;
-      g.add(ghosts);
-      const neighbours = neighboursOf(b, drawn, block);
-      g.add(neighbours);
-      drapePhoto(b.origin, neighbours.children.filter((o) => o.userData.part === "roof") as THREE.Mesh[], () => map.current?.triggerRepaint());
+      // The street around is the map's own real roofs, with their photo, out to the site's rings: nothing extra is drawn here.
+      const ghosts = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
       scene.add(g);
       return { scene, at: b.origin, id: b.id, polys: [...roofs, ...walls], surfaces: (b.sun?.surfaces ?? []).map((x) => ({ s: x, poly: polyOf(b, x) })), skins, ghosts };
     });
@@ -775,15 +766,18 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
             what.userData.seen = camera.projectionMatrix.clone();
             renderer.render(what, camera);
           };
-          // Real roofs fade with the blocks they replace.
-          const roofsT = solid.current.visibility === "visible" ? 1 - shown.current : 0;
-          if (roofsT > 0) around.current.forEach(({ name }) => {
+          // Real roofs stay as the city around a chosen site, fading into the ground with its rings; the chosen buildings give way
+          // to their measured models halfway through. While picking, real roofs show wherever the blocks would.
+          const siteT = shown.current, city = solid.current.visibility === "visible" || siteT > 0;
+          if (city) around.current.forEach(({ name }) => {
             const square = squares.current.get(name);
-            if (!square?.done || (!square.real && edgeFade(m.getZoom()) === 0)) return;
+            if (!square?.done || (!square.real && (siteT > 0 || edgeFade(m.getZoom()) === 0))) return;
             if (square.real) {
               const material = square.real.mesh.material as THREE.ShaderMaterial;
-              square.real.mesh.visible = roofsT > 0;
-              material.uniforms.opacity.value = roofsT; material.transparent = roofsT < 1; material.depthWrite = roofsT >= 1;
+              square.real.mesh.visible = true;
+              material.uniforms.opacity.value = 1; material.transparent = false; material.depthWrite = true;
+              material.uniforms.siteT.value = siteRef.current ? siteT : 0;
+              material.uniforms.hideOn.value = siteT > 0.5 ? 1 : 0;
             }
             draw(square.scene, square.at);
           });
@@ -823,6 +817,8 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       const missing = () => around.current.filter((s) => !squares.current.get(s.name)?.done && !failed.has(s.name));
       let blinking = "";
       const showMissing = () => {
+        // Around a chosen site the city loads quietly: no blinking blocks, no note, as the map shows only the site.
+        if (live.current.step === "review") { setLoading(0); if (blinking) { blinking = ""; m.setLayoutProperty(PENDING, "visibility", "none"); } return; }
         const list = missing(), now = list.map((s) => s.name).sort().join();
         setLoading(list.length);
         if (now === blinking) return;
@@ -877,6 +873,13 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       const dress = (square: OnMap) => {
         const material = square.real?.mesh.material as THREE.ShaderMaterial | undefined;
         if (!material) return;
+        const box = siteRef.current;
+        if (box) {
+          // The site's box in this square's metres, as the worker places points: the map's projection around the square's corner.
+          const [ox, oy] = mercator(square.at[0], square.at[1]), [mx, my] = mercator(box.o[0], box.o[1]), unit = 1 / (2 * Math.PI * 6371008.8 * Math.cos((square.at[1] * Math.PI) / 180));
+          material.uniforms.siteO.value.set((mx - ox) / unit, (oy - my) / unit);
+          material.uniforms.siteWH.value.set(box.w, box.h);
+        }
         rings.forEach((r, k) => {
           material.uniforms[`photo${k}`].value = r?.texture ?? null;
           material.uniforms[`has${k}`].value = r ? 1 : 0;
@@ -885,8 +888,9 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       };
       dressAll.current = () => { squares.current.forEach(dress); m.triggerRepaint(); };
       const refreshPhoto = () => {
-        if (live.current.step !== "pick" || m.getZoom() < HOMES_FROM_ZOOM) return;
-        const c = m.getCenter(), X = ((c.lng + 180) / 360 - 0.5) * WORLD_M, Y = (0.5 - mercator(c.lng, c.lat)[1]) * WORLD_M;
+        if (m.getZoom() < HOMES_FROM_ZOOM) return;
+        // Picking: around the view's centre. Around a chosen site: around the site, wherever the camera turns.
+        const o = live.current.step === "review" ? siteRef.current?.o : null, c = o ? { lng: o[0], lat: o[1] } : m.getCenter(), X = ((c.lng + 180) / 360 - 0.5) * WORLD_M, Y = (0.5 - mercator(c.lng, c.lat)[1]) * WORLD_M;
         ROOF_LEVELS.forEach(({ dz, tiles }, k) => {
           const z = Math.min(ROOF_TILE_ZOOM.max, Math.max(ROOF_TILE_ZOOM.min, Math.round(m.getZoom()) + dz)), [cx, cy] = tileAt(z, X, Y);
           const key = `${z}/${cx}/${cy}`;
@@ -929,6 +933,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         g.setAttribute("color", new THREE.BufferAttribute(new Uint8Array(data.positions.length), 3, true));
         g.setAttribute("roof", new THREE.BufferAttribute(data.roof, 1)); // 0 or 1 as it is: normalised, 1 would arrive as 1/255
         g.setAttribute("mark", new THREE.BufferAttribute(new Uint8Array(data.roof.length), 1, true));
+        g.setAttribute("hide", new THREE.BufferAttribute(new Uint8Array(data.roof.length), 1)); // 0 or 1 as it is, like roof
         g.setIndex(new THREE.BufferAttribute(data.index, 1));
         const mesh = new THREE.Mesh(g, roofMaterial());
         mesh.frustumCulled = false;
@@ -940,6 +945,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         line.renderOrder = 1;
         square.real = { mesh, ids: data.ids, starts: data.starts, shade: data.shade, roof: data.roof, index: new Map(data.ids.map((id, k) => [id, k])) };
         tint(data.name);
+        hideChosen(square);
         dress(square);
         refreshPhoto(); // the map may not have moved since it loaded
         m.setPaintProperty(homesOf(data.name), "fill-extrusion-opacity", 0); // still there to be clicked
@@ -990,6 +996,18 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         }).catch(() => undefined);
       };
       refreshSquares.current = refresh;
+      // Around a chosen site, the squares under it and its rings are loaded and shaped, wherever the request was opened from.
+      loadSite.current = () => {
+        const box = siteRef.current;
+        if (!box || !ready.current) return;
+        const reach = SITE_FROM_M + SITE_RINGS.length * SITE_RING_M, [w, s] = toLngLat(box.o, [-box.w - reach, -box.h - reach]), [e, n] = toLngLat(box.o, [box.w + reach, box.h + reach]);
+        squaresIn(w, s, e, n).then((list) => {
+          if (live.current.step !== "review" || !ready.current) return;
+          around.current = list;
+          pump(); pumpReal(); refreshPhoto(); dressAll.current();
+          m.triggerRepaint();
+        }).catch(() => undefined);
+      };
       m.on("move", () => { if (!timer) timer = window.setTimeout(() => { timer = 0; refresh(); }, MOVE_CHECK_MS); });
       m.on("moveend", () => { failed.clear(); refresh(); });
       ready.current = true;
@@ -1304,7 +1322,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     const flight = to ? travelTime() : MOVE_MS, wait = flight - MOVE_MS;
     if (to) {
       camera.current = { center: m.getCenter(), zoom: m.getZoom(), bearing: m.getBearing(), pitch: m.getPitch() };
-      buildModels(); setShown(0); placePins(); frame(flight);
+      buildModels(); setShown(0); placePins(); frame(flight); loadSite.current();
       (m.getSource(SITE) as maplibregl.GeoJSONSource).setData(fadeAround(live.current.buildings, site.current));
       m.setLayoutProperty(SITE, "visibility", "visible");
       m.setMaxPitch(REVIEW_PITCH);
@@ -1341,7 +1359,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       fadeLines.current();
       if (t < 1) { frameId = requestAnimationFrame(tick); return; }
       if (to) {
-        setSolid({ visibility: "none" });
+        // The blocks stay on, unseen: a hidden layer's buildings are never fetched, and the city around the site is drawn from them.
         // Nothing is drawn that nobody sees: labels, blocks and the region's edge all rest until the user goes back.
         for (const l of m.getStyle().layers) if (l.type === "symbol" || [BLOCKS, PENDING, "outside", "limit-line"].includes(l.id)) {
           hidden.current.set(l.id, m.getLayoutProperty(l.id, "visibility") ?? "visible");
