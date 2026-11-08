@@ -227,8 +227,8 @@
 
 /* The advisor: a second opinion on the engine's options, asked on demand. */
 .advisor { display: flex; flex-direction: column; gap: 10px; padding: 14px 0; border-block: 1px solid var(--hud-line); font-size: 13px; line-height: 1.5; }
-.advisor-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; } .advisor-head b { font-size: 14px; font-weight: 600; }
-.advisor-tag { flex: none; color: var(--hud-route); font-size: 12px; }
+.advisor-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; } .advisor-head b { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; }
+.advisor-tag { flex: none; white-space: nowrap; padding-right: 2px; color: var(--hud-route); font-size: 12px; }
 .advisor small { color: var(--hud-ink-2); }
 .advisor ul, .advisor ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .advisor h4 { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--hud-ink-2); }
