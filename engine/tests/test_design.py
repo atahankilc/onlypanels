@@ -170,3 +170,12 @@ def test_census_build_period_stands_in_only_when_the_customer_gives_none(engine)
     own = engine.design({**gas, "built": "since2011"}, {"heatpump": True})
     assert area["energy"]["hp_mwh"] > own["energy"]["hp_mwh"]
     assert any("2022 census" in n["text"] for n in area["review"])
+
+
+def test_a_model_area_beyond_one_home_does_not_size_the_heat_pump(engine):
+    gas = {**HOME, "heating": "Gas", "living_m2": 285, "living_from_model": True, "area_built": "before1979"}
+    d = engine.design(gas, {"heatpump": True})
+    assert d["energy"]["hp_mwh"] == round(15.0 / 3.5, 2)
+    assert "model_area_large" in {n["code"] for n in d["review"]}
+    given = engine.design({**gas, "living_from_model": False}, {"heatpump": True})
+    assert given["energy"]["hp_mwh"] > d["energy"]["hp_mwh"]

@@ -21,6 +21,7 @@ BIG_USERS_KWH = {"pool": 1500, "sauna": 1000, "ac": 600, "water": 2000}  # a yea
 # Heat a year per m² by build period, in the 2022 census classes, so the census can stand in for an unknown period.
 HEAT_KWH_PER_M2 = {"before1979": 180, "1979to1990": 140, "1991to2000": 120, "2001to2010": 90, "since2011": 60}
 BUILT_LABEL = {"before1979": "before 1979", "1979to1990": "1979–1990", "1991to2000": "1991–2000", "2001to2010": "2001–2010", "since2011": "2011 or later"}
+MODEL_M2_MAX = 250  # above this the 3D model's area likely spans more than one home, so it does not size a heat pump
 GOAL_LABEL = {"cost": "low cost", "independence": "independence", "environment": "the environment"}
 GOAL_BATTERY = {"cost": 0.7, "independence": 0.3}  # how sure the engine must be to add a battery, by the customer's priority
 GOAL_PV = {"environment": 1.2}  # more solar, within the roof, when the environment comes first
@@ -198,6 +199,7 @@ class Engine:
         return out
 
     def design(self, i, overrides=None):
+        i_in = i  # as given, before any stand-in is set aside
         o = overrides or {}
         reasons, warnings = [], []
         mount = MOUNTS[i.get("mount", "roof")]
@@ -205,6 +207,10 @@ class Engine:
         heat_mwh = i.get("heat_kwh") and i["heat_kwh"] / 1000
         # No gas or oil figure: the energy certificate's value per m², else the build period's, times the living area.
         heat_from_house = None
+        # The 3D model's area is only a hint. Far above a single-family home it likely covers several homes: then it sizes nothing.
+        model_too_big = bool(i.get("living_from_model") and (i.get("living_m2") or 0) > MODEL_M2_MAX)
+        if model_too_big:
+            i = {**i, "living_m2": None}
         if not heat_mwh and i.get("living_m2") and i.get("cert_kwh_m2"):
             heat_mwh, heat_from_house = i["living_m2"] * i["cert_kwh_m2"] / 1000, f"its energy certificate, {_num(i['cert_kwh_m2'], 0)} kWh per m²"
         elif not heat_mwh and i.get("living_m2") and i.get("built") in HEAT_KWH_PER_M2:
@@ -356,6 +362,8 @@ class Engine:
             review.append({"code": "roof_renovation", "level": "warn", "on": "pv", "text": "The customer plans to renew the roof soon" + (" or is not sure" if i["roof_renovation"] == "unsure" else "") + ". Renew it before the panels go on."})
         if heat_from_house and hp_wanted:
             review.append({"code": "heat_from_house", "level": "note", "on": "heatpump", "text": f"Heat use estimated from the house: {_num(i['living_m2'], 0)} m²" + (" (from the 3D model)" if i.get("living_from_model") else "") + f", {heat_from_house}. Ask for the gas or oil bill."})
+        if model_too_big and (hp_wanted or heat_type in FOSSIL):
+            review.append({"code": "model_area_large", "level": "warn", "on": "heatpump", "text": f"The 3D model gives about {_num(i_in.get('living_m2') or 0, 0)} m², more than one home usually has, so it was not used for the heat. Ask the customer for the living area or the gas or oil bill."})
         if big:
             review.append({"code": "big_users", "level": "note", "on": "pv", "text": f"{_num(big)} MWh added for what the customer runs on electricity ({', '.join(i['big_users'])}), since the yearly use is not from the bill."})
         if goal in GOAL_LABEL:
