@@ -1,4 +1,7 @@
-"""Local API: finding a home in Munich, and the design engine behind the planner."""
+"""Local API: whole squares of Bavarian building data for the map, and the design engine behind the planner.
+
+A chosen home, a clicked point or a typed address never reaches this server before the homeowner sends: the page works
+them out itself (web/src/places.ts, site.worker.ts)."""
 import asyncio
 import json
 from pathlib import Path as FilePath
@@ -11,7 +14,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from reonic_engine import battery as batteries, lod2, site, sun, zensus
+from reonic_engine import battery as batteries, lod2, sun
 from reonic_engine.data import load_dataset
 from reonic_engine.design import Engine, use_from_payment
 from reonic_engine.refine import refine
@@ -153,44 +156,10 @@ async def built(name: str):
         raise HTTPException(502, "Building data is not reachable")
 
 
-@app.get("/api/site/search")
-def site_search(q: str):
-    try:
-        return site.suggest(q)
-    except OSError:
-        raise HTTPException(502, "Address search is not reachable")
-
-
-@app.get("/api/site/area")
-def site_area(lat: float, lon: float):
-    """What the 2022 census says about the homes around a point: most common build period and heating. Empty without the data."""
-    return zensus.around(lon, lat) or {}
-
-
-@app.get("/api/site/reverse")
-def site_reverse(lat: float, lon: float):
-    try:
-        return site.reverse(lat, lon)
-    except (OSError, KeyError, ValueError):
-        raise HTTPException(502, "Address search is not reachable")
-
-
-@app.get("/api/site/squares")
-def site_squares(west: float, south: float, east: float, north: float):
-    return [{"name": n, "ring": lod2.outline(n)} for n in lod2.squares(west, south, east, north)]
-
-
 @app.get("/api/site/homes/{name}")
 async def site_homes(name: str = Path(pattern=SQUARE)):
     await built(name)
     return FileResponse(lod2.path(name, "homes"), media_type="application/geo+json")
-
-
-@app.get("/api/site/home/{name}/{home}")
-async def site_home(home: str, name: str = Path(pattern=SQUARE)):
-    """Every building of one home."""
-    await built(name)
-    return lod2.parts(name, home)
 
 
 @app.get("/api/site/edges/{name}")
@@ -204,21 +173,3 @@ async def site_solids(name: str = Path(pattern=SQUARE)):
     """Every building of a square with its measured roofs and walls, one per line: what the map draws once it has the blocks."""
     await built(name)
     return FileResponse(lod2.path(name, "solids"), media_type="text/plain")
-
-
-@app.get("/api/site/sun/{name}/{building}")
-async def site_sun(building: str, name: str = Path(pattern=SQUARE)):
-    await built(name)
-    found = await asyncio.to_thread(sun.surfaces, name, building)
-    if found is None:
-        raise HTTPException(404, "No such building")
-    return found
-
-
-@app.get("/api/site/square/{name}/{building}")
-async def site_building(building: str, name: str = Path(pattern=SQUARE)):
-    await built(name)
-    found = await asyncio.to_thread(lod2.building, name, building)
-    if found is None:
-        raise HTTPException(404, "No such building")
-    return found

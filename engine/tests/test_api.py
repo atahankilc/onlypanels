@@ -8,5 +8,7 @@ def test_api_loads_with_its_routes():
     main = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(main)
     routes = {r.path for r in main.app.routes}
-    assert {"/api/design", "/api/refine", "/api/scores", "/api/site/home/{name}/{home}"} <= routes
+    assert {"/api/design", "/api/refine", "/api/scores", "/api/site/homes/{name}", "/api/site/solids/{name}"} <= routes
+    # A chosen home, a point or a typed address never reaches this server: the page works them out itself.
+    assert not any(r.endswith(("/search", "/reverse", "/area", "/squares")) or "/sun/" in r or "/home/" in r or "/square/" in r for r in routes)
     assert "/api/draft" not in routes
