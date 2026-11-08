@@ -20,7 +20,7 @@ export type Design = {
   battery: { kwh: number; probability: number; choices: number[]; unsure: boolean; locked: boolean };
   wallbox: { included: boolean; locked: boolean }; heatpump: { included: boolean; kw: number; blocked: boolean; locked: boolean };
   trace: TraceStep[]; review: Note[];
-  energy: { base_mwh: number; ev_mwh: number; hp_mwh: number; heat_mwh?: number | null; total_mwh: number; production_mwh: number; self_sufficiency_pct: number; self_use_pct: number; saving_eur: number };
+  energy: { base_mwh: number; ev_mwh: number; hp_mwh: number; heat_mwh?: number | null; total_mwh: number; existing_mwh?: number; existing_kwp?: number | null; production_mwh: number; self_sufficiency_pct: number; self_use_pct: number; saving_eur: number };
   similar: { n: number; kwp_low: number; kwp_high: number; battery_rate: number; battery_common: number[]; wallbox_rate: number; battery_low: number | null; battery_high: number | null; learned_from: number };
   reasons: ({ code: string } & Record<string, unknown>)[]; warnings: ({ code: string } & Record<string, unknown>)[]; assumed: string[];
 };
