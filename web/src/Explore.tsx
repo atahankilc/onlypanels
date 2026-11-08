@@ -2,7 +2,9 @@
 // The numbers are the engine's; the sentence around them is a template.
 import { useEffect, useMemo, useState } from "react";
 import { Design, Mine, Overrides, design, roofOf } from "./plan";
-import { Button, Slider } from "./ui";
+import { Button, Input, Slider } from "./ui";
+import { ask, describeChange, useAsks } from "./asks";
+import "./asks.css";
 
 type Variant = { battery_kwh?: number; wallbox?: boolean; modules?: number };
 const eur = (v: number) => `€${v.toLocaleString("en")}`;
@@ -13,6 +15,8 @@ export default function Explore({ m, onPanels }: { m: Mine; onPanels?: (p: Recor
   const [v, setV] = useState<Variant>({});
   const [out, setOut] = useState<{ d: Design; panels: Record<string, number> } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState(""), [asking, setAsking] = useState(false);
+  const asked = useAsks(m.ref);
   useEffect(() => {
     let live = true;
     setBusy(true);
@@ -42,8 +46,7 @@ export default function Explore({ m, onPanels }: { m: Mine; onPanels?: (p: Recor
   /** One plain sentence: what the change does to own power and the saving, against the offer. */
   const sentence = () => {
     if (!d) return "";
-    const what = [v.battery_kwh !== undefined && (v.battery_kwh ? `a ${v.battery_kwh} kWh battery` : "no battery"), v.wallbox !== undefined && (v.wallbox ? "a wallbox" : "no wallbox"),
-      v.modules !== undefined && `${v.modules} modules`].filter(Boolean).join(" and ");
+    const what = describeChange(v);
     const own = d.energy.self_sufficiency_pct, save = d.energy.saving_eur;
     return `With ${what}, about ${own}% of your use would come from your own power (offer: ${o.self_sufficiency_pct}%), and you would save about ${eur(save)} a year (offer: ${eur(o.saving_eur)}).`;
   };
@@ -83,7 +86,22 @@ export default function Explore({ m, onPanels }: { m: Mine; onPanels?: (p: Recor
       </table>
       {d && <p>{sentence()}</p>}
       <p className="small muted">An estimate to compare, within what your installer allows. The offer stays as sent until you agree a change with them.</p>
-      <button type="button" className="textlink" onClick={() => setV({})}>Back to the offer</button>
+      {d && !asking && <div className="ask-row">
+        <Button onClick={() => setAsking(true)}>Ask my installer about this</Button>
+        <button type="button" className="textlink" onClick={() => setV({})}>Back to the offer</button>
+      </div>}
+      {d && asking && <div className="ask-form">
+        <Input value={note} maxLength={240} placeholder="Anything to add? (optional)" aria-label="A line for your installer" onChange={(e) => setNote(e.target.value)} />
+        <div className="ask-row">
+          <Button variant="solid" onClick={() => { ask({ ref: m.ref, change: v, own: d.energy.self_sufficiency_pct, saving: d.energy.saving_eur, offerOwn: o.self_sufficiency_pct, offerSaving: o.saving_eur, note: note.trim() }); setAsking(false); setNote(""); setV({}); }}>Send the question</Button>
+          <button type="button" className="textlink" onClick={() => setAsking(false)}>Cancel</button>
+        </div>
+      </div>}
+      {!d && <button type="button" className="textlink" onClick={() => setV({})}>Back to the offer</button>}
     </div>}
+    {asked.length > 0 && <ul className="asked" aria-label="Your questions">{asked.map((x) => <li key={x.id}>
+      <span><b>{describeChange(x.change).replace(/^./, (c) => c.toUpperCase())}</b>{x.note && <small>“{x.note}”</small>}</span>
+      <em className={x.answered ? "is-answered" : ""}>{x.answered ? "Answered: see the offer" : "Sent to your installer"}</em>
+    </li>)}</ul>}
   </section>;
 }

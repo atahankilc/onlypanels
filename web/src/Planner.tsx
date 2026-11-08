@@ -12,6 +12,8 @@ import ProofPage from "./Proof";
 import Offer from "./Offer";
 import Obstacles from "./Obstacles";
 import Validate from "./Validate";
+import { Ask, answer, describeChange, useAsks } from "./asks";
+import "./asks.css";
 import { KIND, blockedOf, mergeCells } from "./roofObstacles";
 import { Options } from "./Options";
 import { Advisor } from "./Advisor";
@@ -116,9 +118,10 @@ function Line({ r, open }: { r: Request; open: () => void }) {
   // The same count Checks shows: only facts this design uses.
   const assumed = out ? toConfirm(r, out.d).length : Object.values(r.sources).filter((s) => s === "assumed").length;
   const [street, town] = splitLabel(r.label), sent = r.status === "sent";
+  const asking = useAsks(r.ref ?? "-").filter((x) => !x.answered).length;
   return <li>
     <button type="button" className="reqrow" onClick={open}>
-      <span className="reqrow-home"><b>{street}</b><small>{[town, r.from, r.ref].filter(Boolean).join(" · ")}</small></span>
+      <span className="reqrow-home"><b>{street}{asking > 0 && <span className="reqrow-ask">{asking === 1 ? "Question" : `${asking} questions`}</span>}</b><small>{[town, r.from, r.ref].filter(Boolean).join(" · ")}</small></span>
       <span className="reqrow-draft">{out ? summary(out.d) : <span className="muted">Drafting…</span>}</span>
       <span className={`reqrow-todo${!sent && assumed ? " open" : ""}`}>{sent ? "" : assumed ? `${assumed} to confirm` : "Ready to send"}</span>
       <span className={`reqstate ${sent ? "is-sent" : r.opened ? "is-open" : "is-new"}`}>{sent ? "Offer sent" : r.opened ? "In progress" : "New"}</span>
@@ -212,7 +215,9 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const warns = d ? d.review.filter((n) => n.level === "warn") : [];
   const left = confirm.length + checks.filter((c) => !done.includes(c.id)).length;
   const allowed = (r as Req).allowed ?? DEFAULT_ALLOWED; // the same default the sent offer carries
-  const send = () => { update(r.id, { status: "sent", ...(d ? { offer: offerOf(d, r) } : {}) }); back(); };
+  const send = () => { update(r.id, { status: "sent", ...(d ? { offer: offerOf(d, r) } : {}) }); answer(r.ref ?? "-"); back(); }; // a new offer answers what the customer asked
+  const asks = useAsks(r.ref ?? "-").filter((x) => !x.answered);
+  const tryAsk = (x: Ask) => { setO(x.change as Overrides, `Tried the customer's question: ${describeChange(x.change)}`); if (r.status === "sent") update(r.id, { status: "draft" }); setTab("design"); };
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
     {home ? <HomeMap buildings={r.shaded ?? r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} blocked={blockedOf(r.shaded ?? r.buildings, r.obstacles)} obstacles={r.obstacles} hotObstacle={hotObs} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
@@ -232,6 +237,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
       <div className="desktabs"><Segmented wide label="Sections" value={tab} onChange={setTab} options={[{ value: "home", label: "Home" }, { value: "design", label: "Design" }, { value: "checks", label: left ? `Checks ${left}` : "Checks" }, { value: "offer", label: "Offer" }]} /></div>
       <div className="deskbody">
         {!d && <p className="muted">The engine is working…</p>}
+        {asks.map((x) => <AskCard key={x.id} x={x} tried={() => tryAsk(x)} done={() => answer(r.ref ?? "-", x.id)} />)}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
         {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><Advisor key={JSON.stringify([r.inputs, r.overrides, r.off, r.strict])} d={d} ask={() => advise(r.inputs, r.overrides, roof, r.off, r.existing, r.strict)} use={(o, label) => setO(o, label)} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} measured={home} /></>}
         {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, { obstacles }); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
@@ -525,4 +531,16 @@ function Energy({ d, inputs, measured }: { d: Design; inputs: Inputs; measured: 
     <p className="small muted">Estimates: real weather years for Munich, this roof's directions, an assumed household day, battery losses. Checked against HTW Berlin reference values (scripts/check_energy.py).{d.heatpump.included ? " The saving counts electricity only, not the fuel no longer bought." : ""}</p>
     <p className="small muted">Production uses {measured ? "this roof's measured sun and shade" : inputs.roof_azimuth != null ? "PVGIS's yield for the roof's direction and slope, without shade, since the home was not shared" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}. There are no prices in our data, so no system cost or payback.</p>
   </>;
+}
+
+/** What the customer asked about their offer, with the engine's numbers they saw; the planner tries it or closes it. */
+function AskCard({ x, tried, done }: { x: Ask; tried: () => void; done: () => void }) {
+  const eur = (v: number) => `€${v.toLocaleString("en")}`;
+  return <section className="askcard" aria-label="Question from the customer">
+    <header><b>The customer asks about {describeChange(x.change)}</b><small>{new Date(x.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</small></header>
+    <p className="small">They saw {x.own}% own power (offer {x.offerOwn}%) and {eur(x.saving)} saved a year (offer {eur(x.offerSaving)}).</p>
+    {x.note && <blockquote>{x.note}</blockquote>}
+    <div className="ask-row"><Button variant="solid" onClick={tried}>Try it in the design</Button><button type="button" className="textlink" onClick={done}>Mark answered</button></div>
+    <p className="small muted">Sending an updated offer answers it.</p>
+  </section>;
 }
