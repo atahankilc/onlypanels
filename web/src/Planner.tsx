@@ -442,7 +442,7 @@ function Workspace({ r, update, back, scores, veiled = false, leaving = false, o
       {/* The one main action, always in reach. The way back is the arrow at the top left only: a second "Requests" button here read as a new request. */}
       <div className="stick">
         {r.status === "sent" ? <Button variant="solid" size="lg" wide disabled>Offer sent</Button>
-          : confirm.length ? <Button variant="solid" size="lg" wide disabled={!d} onClick={() => setTab("overview")}>Confirm {confirm.length} {confirm.length === 1 ? "fact" : "facts"} to send</Button>
+          : confirm.length ? <Button variant="fill" size="lg" wide disabled={!d} onClick={() => setTab("overview")}>Confirm {confirm.length} {confirm.length === 1 ? "fact" : "facts"} to send</Button> /* facts still assumed: a quiet button, so the solid one means the offer can go */
           : home && photo === "looking" ? <Button variant="solid" size="lg" wide disabled><span className="spinner" aria-hidden="true" />Checking the roof photo</Button>
           : <Button variant="solid" size="lg" wide disabled={!d} onClick={send}>Send offer</Button>}
       </div>
