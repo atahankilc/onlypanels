@@ -6,7 +6,7 @@ import { Place, searchPlace } from "./places";
 import { Shade, withTrees } from "./treeShade";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
-import { advise, Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
+import { Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
 import { Change, ChangeCard, Trace, touched } from "./Trace";
 import "./planner.css";
 import ProofPage from "./Proof";
@@ -17,7 +17,7 @@ import { Ask, answer, describeChange, useAsks } from "./asks";
 import "./asks.css";
 import { KIND, blockedOf, mergeCells } from "./roofObstacles";
 import { Options } from "./Options";
-import { Advisor } from "./Advisor";
+import { AgentPanel } from "./Agent";
 import type { RoofNumbers } from "./share";
 import { BatteryCurve } from "./BatteryCurve";
 import { Button, Check, Field, IconButton, Input, Segmented, Select, Slider } from "./ui";
@@ -248,7 +248,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         {!d && <p className="muted">The engine is working…</p>}
         {asks.map((x) => <AskCard key={x.id} x={x} tried={() => tryAsk(x)} done={() => answer(r.ref ?? "-", x.id)} />)}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
-        {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><Advisor key={JSON.stringify([r.inputs, r.overrides, r.off, r.strict])} d={d} ask={() => advise(r.inputs, r.overrides, roof, r.off, r.existing, r.strict)} use={(o, label) => setO(o, label)} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} measured={home} /></>}
+        {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} measured={home} /></>}
         {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, { obstacles }); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "checks" && <>
           <h3>Confirm before sending</h3>

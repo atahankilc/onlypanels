@@ -11,9 +11,15 @@ def curve(i, d):
     sun = sun_shape(i.get("surfaces") or None, d["pv"].get("placed"))
     production = (e["production_mwh"] + (e.get("existing_mwh") or 0)) * 1000
     sizes = sorted({0.0, *[c for c in d["battery"]["choices"] if c <= MAX_SHOWN_KWH], float(d["battery"]["kwh"])})
+    # As the design does: a system already there, of known size, keeps its battery working, and the saving is only what
+    # the new system adds to it. Without this the table and the design disagreed for the same home.
+    known = e.get("existing_kwp") is not None
+    old_battery = float(i.get("existing_battery_kwh") or 0) if known else 0.0
+    run = lambda solar_wh, battery: simulate(e["base_mwh"] * 1000, e["ev_mwh"] * 1000, e["hp_mwh"] * 1000, solar_wh, battery, i.get("price_ct_kwh", 32.0),
+                                             sun=sun, ev_day=bool(i.get("ev_day")), home_day=i.get("home_day"))
+    before = run((e.get("existing_mwh") or 0) * 1000, old_battery)["saving_eur"] if known else 0
     rows = []
     for kwh in sizes:
-        r = simulate(e["base_mwh"] * 1000, e["ev_mwh"] * 1000, e["hp_mwh"] * 1000, production, kwh, i.get("price_ct_kwh", 32.0), sun=sun,
-                     ev_day=bool(i.get("ev_day")), home_day=i.get("home_day"))
-        rows.append({"kwh": kwh, "own_pct": r["self_sufficiency_pct"], "saving_eur": r["saving_eur"]})
+        r = run(production, kwh + old_battery)
+        rows.append({"kwh": kwh, "own_pct": r["self_sufficiency_pct"], "saving_eur": max(0, r["saving_eur"] - before)})
     return rows

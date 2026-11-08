@@ -262,3 +262,18 @@
 .verdict { margin-top: 2px; font-size: 12px; color: var(--hud-ink-2); }
 .verdict.warn { color: var(--hud-warn); } .verdict.ok { color: var(--hud-live); }
 .validate-out .rows dd small { margin-left: 6px; color: var(--hud-ink-3); font-weight: 400; }
+
+/* The planning agent: its engine runs as they happen, then its proposal and a box to ask it. */
+.agent { display: flex; flex-direction: column; gap: 10px; padding: 14px 0; border-block: 1px solid var(--hud-line); font-size: 13px; line-height: 1.5; }
+.agent-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; } .agent-head b { font-size: 14px; font-weight: 600; }
+.agent-tag { flex: none; white-space: nowrap; color: var(--hud-route); font-size: 12px; }
+.agent-turn { display: flex; flex-direction: column; gap: 8px; }
+.agent-asked { margin: 0; align-self: flex-end; max-width: 85%; padding: 6px 10px; border-radius: 12px; background: var(--hud-line); }
+.agent-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; font: 12px/1.6 var(--font-mono); color: var(--hud-ink-2); font-variant-numeric: tabular-nums; }
+.agent-wait { display: flex; align-items: center; gap: 8px; margin: 0; }
+.agent-answer { margin: 0; white-space: pre-line; }
+.agent-headline { margin: 0; font-weight: 600; }
+.agent ul, .agent ol:not(.agent-steps) { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.agent h4 { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--hud-ink-2); }
+.agent-change { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--hud-route); }
+.agent-change > div { display: flex; flex-direction: column; } .agent-change small { color: var(--hud-ink-2); font-variant-numeric: tabular-nums; }

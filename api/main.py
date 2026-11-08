@@ -12,13 +12,14 @@ from threading import Thread
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Path
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from reonic_engine import battery as batteries, lod2, sun
 from reonic_engine.data import load_dataset
 from reonic_engine.design import Engine, use_from_payment
 from reonic_engine.advise import advise
+from reonic_engine.agent import agent_events, run_agent
 from reonic_engine import obstacles
 from reonic_engine.refine import refine
 
@@ -155,6 +156,27 @@ def advise_design(req: DesignRequest):
     """The advisor on the planner's current design: a pick among the engine's options, why, and what to ask first."""
     d = design(req)
     return advise({**req.inputs.model_dump(), "demand_kwh": req.inputs.demand_kwh or d["energy"]["base_mwh"] * 1000}, d)
+
+
+class AgentRequest(DesignRequest):
+    message: str | None = None  # the planner's question or instruction; none for the first review
+    history: list[dict] = []  # earlier exchanges as {role: "planner" | "agent", text}
+
+
+@app.post("/api/agent")
+def agent(req: AgentRequest):
+    """The planner's agent: runs the engine on the variants that matter, then proposes a change, with every number from the engine."""
+    run = lambda inputs, overrides: design(DesignRequest(inputs=Inputs(**inputs), overrides=Overrides(**overrides)))
+    return run_agent(run, req.inputs.model_dump(), req.overrides.model_dump(), req.message, req.history[-12:])
+
+
+@app.post("/api/agent/stream")
+def agent_stream(req: AgentRequest):
+    """The same run as server-sent events: one "step" per engine run as it happens, then "done" with the answer."""
+    run = lambda inputs, overrides: design(DesignRequest(inputs=Inputs(**inputs), overrides=Overrides(**overrides)))
+    events = agent_events(run, req.inputs.model_dump(), req.overrides.model_dump(), req.message, req.history[-12:])
+    body = (f"event: {kind}\ndata: {json.dumps(value, ensure_ascii=False)}\n\n" for kind, value in events)
+    return StreamingResponse(body, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/api/scores")

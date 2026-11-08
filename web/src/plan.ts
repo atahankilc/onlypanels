@@ -137,7 +137,7 @@ export const design = (i: Inputs, o: Overrides, roof: Spot[], off: string[], ex?
 /** The advisor's reading of the same design: a pick among the engine's options, why, and what to ask. It writes, the engine counts. */
 export type Advice = { pick: string; headline: string; reasons: string[]; questions: string[]; risk: string | null; battery_kwh: number | null; source: string };
 export const advise = (i: Inputs, o: Overrides, roof: Spot[], off: string[], ex?: Existing, strict?: boolean) => post<Advice>("/api/advise", designBody(i, o, roof, off, ex, strict).body);
-const designBody = (i: Inputs, o: Overrides, roof: Spot[], off: string[], ex?: Existing, strict?: boolean) => {
+export const designBody = (i: Inputs, o: Overrides, roof: Spot[], off: string[], ex?: Existing, strict?: boolean) => {
   const use = roof.filter((r) => r.fits > 0 && !off.includes(r.key));
   // Beyond the customer's area only good surfaces take modules: a planner does not fill a north roof to reach a size.
   const best = Math.max(0, ...use.map((r) => r.yield_)), good = (r: Spot) => r.yield_ >= OVERFLOW_SHARE * best;

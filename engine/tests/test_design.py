@@ -214,3 +214,12 @@ def test_roof_sun_moves_the_module_count(engine):
     typical, east, north = count(950), count(800), count(450)
     assert east > typical > north
     assert north <= typical * 0.55
+
+
+def test_battery_table_matches_the_design_with_an_old_system(engine):
+    from reonic_engine.battery import curve
+    home = {"installer": "2a8ba8e2", "demand_kwh": 6000, "price_ct_kwh": 32, "has_solar": True, "existing_kwp": 4.0,
+            "existing_year": 2006, "has_storage": True, "existing_battery_kwh": 5.0}
+    d = engine.design(home, {"battery_kwh": 0})
+    row = next(r for r in curve(home, d) if r["kwh"] == 0)
+    assert row["own_pct"] == d["energy"]["self_sufficiency_pct"] and row["saving_eur"] == d["energy"]["saving_eur"]
