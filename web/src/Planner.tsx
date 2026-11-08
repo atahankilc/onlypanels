@@ -254,14 +254,14 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   }, [d]);
   useEffect(() => { if (!lit.length) return; const t = setTimeout(() => setLit([]), 2600); return () => clearTimeout(t); }, [lit]);
   const mark = (label: string) => { pending.current = { label, was: { inputs: r.inputs, overrides: r.overrides, sources: r.sources, off: r.off, existing: r.existing, obstacles: r.obstacles } }; };
-  // Neither a size nor an area for old panels, and the customer did not rule them out: the photo is checked as the request
-  // opens, once, so old panels count without a question to the customer. Its other finds land in the obstacle list as a click would.
+  // No marked area for old panels, and the customer did not rule them out: the photo is checked as the request opens, once,
+  // so old panels count, and keep their cells, without a question to the customer. Its other finds land in the obstacle list as a click would.
   const roofReady = (r.shaded ?? r.buildings).some((b) => b.sun?.surfaces?.length);
   const found = useRef<(o: Obstacle[]) => void>(() => undefined); // the photo answers after a while: apply it to the request as it is then
   found.current = (obstacles) => { mark(obstacles.some((o) => o.on && o.kind === "solar") ? "Old panels found on the photo" : "Photo checked"); update(r.id, withPhotoSolar(r, obstacles)); };
   useEffect(() => {
     const saidNo = r.sources.has_solar === "customer" && !r.inputs.has_solar;
-    if (!home || !roofReady || r.obstacles || r.existing.kwp || r.existing.m2 || saidNo) return;
+    if (!home || !roofReady || r.obstacles || r.existing.m2 || saidNo) return; // with a size but no area, the photo still finds where they sit
     let live = true;
     findObstacles(r.shaded ?? r.buildings).then((x) => {
       if (live && x.source !== "unavailable" && x.source !== "failed") found.current(x.obstacles);

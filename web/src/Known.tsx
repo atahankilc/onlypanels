@@ -74,12 +74,12 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
       add(known, a.solar_kind ? <>Panels for <b>{a.solar_kind === "pv" ? "electricity" : thermal ? "hot water" : "electricity and hot water"}</b></> : "Solar is there", YOU);
       if (c.mapped) {
         if (c.panelM2 > 0) add(known, <><b>{k(c.panelM2)} m²</b> with panels, kept free for the new ones</>, YOU);
-        else add(assumed, "Not marked: your installer asks where they sit");
+        else add(assumed, "Not marked: we find them on the aerial photo");
       }
       if (!thermal) {
         if (a.solar_kwp) add(known, <>Size <b>{a.solar_kwp} kWp</b></>, YOU);
         else if (c.panelM2 > 0) add(assumed, <>About <b>{(c.panelM2 * KWP_PER_M2).toFixed(1)} kWp</b> (peak power), from the area you marked</>);
-        else add(assumed, "Size not known: your installer asks");
+        else add(assumed, c.mapped ? "Size not known: we work it out from the panels' area" : "Size not known: the new system covers all your use");
         if (a.solar_year) {
           // Paid for 20 full years after the year it started (EEG), so to the end of that year + 20.
           const end = a.solar_year + FEED_IN_YEARS, now = new Date().getFullYear();
@@ -87,7 +87,7 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
         } else add(assumed, "No year: the old panels count as new");
         add(later, "Sees when the feed-in payment ends, and using its power yourself pays more");
       }
-      add(later, "Checks with you whether the old panels stay");
+      add(later, "Plans the new panels around the old ones");
     }
   }
 
@@ -97,7 +97,7 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
     else {
       add(known, "A battery is there: no second one is offered", YOU);
       if (a.battery_kwh != null) add(known, <>Size <b>{a.battery_kwh} kWh</b></>, YOU);
-      else add(assumed, "Size not known: your installer asks");
+      else add(assumed, "Size not known: we use the size installers fit most often");
     }
     add(later, "Sees what is already in the house beside the new system");
   }
@@ -149,7 +149,7 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
     if (a.owner === "sole") add(known, "You or your family own it, so you can sign", YOU);
     else if (a.owner === "shared") add(known, "Shared with other owners: they must agree first", YOU);
     else if (a.owner === "tenant") add(known, "Rented: the landlord must agree first", YOU);
-    else add(assumed, "Who owns it: your installer asks");
+    else add(assumed, "Not given: we plan as if you own it");
     add(later, "Checks who must agree before planning further");
     add(later, "Sizes a heat pump from the heat need, if one is wanted");
   }
@@ -189,7 +189,7 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
         else if (h === "Gas" && age === "over20" && owns) add(later, <>Checks the <b>KfW speed bonus</b>, which can apply to a boiler over 20 years{forWho}</>);
         else if (h === "Gas" && age === "under10") add(known, "Under 10 years: no speed bonus yet", YOU);
         else if (h === "Gas" && age === "10to20") add(known, "10 to 20 years: no speed bonus yet", YOU);
-        else if (h === "Gas" && !age) add(assumed, "Boiler age not known: your installer asks for its type plate");
+        else if (h === "Gas" && !age) add(assumed, "Boiler age not known: the grant's speed bonus is not counted");
         if (age === "over20" || age === "10to20") add(known, "A boiler over 10 years: a heat pump is shown first", YOU);
       }
       if (h === "Electric") {
