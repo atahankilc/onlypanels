@@ -15,7 +15,10 @@ function placeRows(full: Handoff, out: Handoff, markedM2: number): { sent: Row[]
   const put = (has: boolean, had: boolean, row: Row) => (has ? sent.push(row) : had && kept.push(row));
   put(home, hadHome, ["Address", full.buildings[0]?.label ?? "Your home"]);
   put(home, hadHome, ["Building shape", `${full.buildings.length} measured ${full.buildings.length === 1 ? "part" : "parts"}, from Bavaria's open building models`]);
-  put(Object.keys(out.choice.cells).length > 0, Object.keys(full.choice.cells).length > 0, ["Areas you marked", `${Math.round(markedM2)} m² of roof`]);
+  const drew = Object.keys(full.choice.cells).length > 0;
+  if (drew) put(Object.keys(out.choice.cells).length > 0, true, ["Areas you marked", `${Math.round(markedM2)} m² of roof`]);
+  // Nothing drawn means the whole roof counts: say so, rather than leave the line out.
+  else put(home, hadHome, ["Areas you marked", `Whole roof, ${Math.round(markedM2)} m². Nothing marked`]);
   put(!!out.answers.area, !!full.answers.area, ["Area around the home", "Census 2022: how old homes nearby are and how they heat"]);
   put(!!out.answers.address, !!full.answers.address, ["Address", full.answers.address ?? ""]);
   const roof = full.roof;
