@@ -32,3 +32,10 @@ export const Tick = path("M5 12.5l4.5 4.5L19 7.5");
 export const Ahead = path("M5 12h14M13 6l6 6-6 6");
 export const Layers = path("M3 8l9-4.5L21 8l-9 4.5zM3 13l9 4.5 9-4.5");
 export const Pencil = path("M4 20l4.2-1L19 8.2 15.8 5 5 15.8zM13.8 7l3.2 3.2");
+// The voice dock's (after Steward's Guide, drawn like lucide's)
+export const Keyboard = path("M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8");
+export const Sliders = path("M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4");
+export const ArrowUp = path("M12 19V5M5 12l7-7 7 7");
+export const Restart = path("M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5");
+export const ChevronDown = path("M6 9l6 6 6-6");
+export const ChevronRight = path("M9 6l6 6-6 6");

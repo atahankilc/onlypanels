@@ -1,38 +1,110 @@
-/* The voice, after Steward's Guide: a column at the bottom left (of the map, beside a side panel), the bubble above
-   the talk ball. The map's With/Without switch sits at the bottom right, beside the map's buttons. Tokens from styles.css. */
-.voicedock { position: fixed; left: 12px; bottom: 16px; z-index: 40; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 360px; pointer-events: none; }
-/* Beside a side panel the ball sits at the bottom left of the map, and the map's hint moves right of it. */
-body:has(.stage.review:not(.bare)) .voicedock.homeowner { left: calc(424px + 16px); }
-body:has(main.plan) .voicedock.planner { left: calc(548px + 16px); }
-body:has(.inbox-page) .voicedock.planner { left: 24px; }
-body:has(.voicedock) .maphint { left: calc(var(--left, 424px) + 104px); }
-.voicedock > * { pointer-events: auto; }
+/* The voice, ported from Steward's Guide (frontend/src/building/hud.css): a column floating at the bottom left with
+   room around it (of the map, beside a side panel). Only the bubble, the chips and the dock's buttons have glass of
+   their own. The map's With/Without switch sits at the bottom right, beside the map's buttons. Tokens from styles.css. */
+.guide { --btn-sm: 32px; position: fixed; z-index: 40; left: 32px; bottom: 28px; width: 360px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; pointer-events: none; animation: guide-in 0.32s var(--ease); }
+.guide > * { pointer-events: auto; max-width: 360px; }
+.guide.homeowner { z-index: 60; } /* also over the start dialog, so it can help choose how to begin */
+body:has(.stage.review:not(.bare)) .guide.homeowner { left: calc(424px + 32px); }
+body:has(main.plan) .guide.planner { left: calc(548px + 32px); }
+body:has(.inbox-page) .guide.planner { left: 40px; }
+/* the map's hint moves right of the dock */
+body:has(.guide) .maphint { left: calc(var(--left, 424px) + 32px + 248px + 20px); }
+@keyframes guide-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes hud-in { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes hud-blink { 50% { opacity: 0.25; } }
 
-.voicebubble { width: fit-content; min-width: 240px; max-width: 100%; display: grid; gap: 6px; padding: 11px 15px 13px; border: 1px solid var(--hud-line); border-radius: 20px; background: var(--hud-glass-2); -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4); box-shadow: var(--hud-shadow); animation: rise 0.2s var(--ease); }
-.voicebubble p { margin: 0; }
-.voicebubble .who { display: flex; align-items: center; gap: 8px; color: var(--hud-ink-3); font: 500 10.5px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }
-.voicebubble .who::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.voicebubble .who.live { color: var(--hud-live); }
-.voicebubble .who.live::before { animation: voiceblink 1.2s infinite; }
-.voicebubble .who.speaking { color: var(--hud-route); }
-.thinking .voicebubble .who { color: var(--hud-warn); }
-.thinking .voicebubble .who::before { animation: voiceblink 0.9s infinite; }
-.voicehide { margin-left: auto; padding: 0 2px; border: 0; background: none; color: var(--hud-ink-3); font: 400 16px/1 var(--font-ui); cursor: pointer; }
-.voicehide:hover { color: var(--hud-ink); }
-.voicebubble .asked { font-size: 13px; line-height: 1.35; color: var(--hud-ink-2); }
-.voicebubble .said { font-size: 15px; line-height: 1.42; letter-spacing: -0.005em; color: var(--hud-ink); }
-.voicebubble .said.hint { font-size: 13px; color: var(--hud-ink-2); }
-.voiceacts { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 0; padding: 0; list-style: none; }
-.voiceacts li { padding: 3px 9px; border-radius: 999px; background: var(--hud-fill); font: 500 11px var(--font-mono); color: var(--hud-live); }
-.voiceerr { color: var(--hud-bad); font-size: 13px; }
-.voicebubble form { margin-top: 4px; }
-.voicechoice { display: flex; gap: 8px; margin-top: 4px; }
-/* The homeowner's helper also sits over the start dialog, so it can help choose how to begin. */
-.voicedock.homeowner { z-index: 60; }
-.voiceshow { padding: 0; border: 0; background: none; color: var(--hud-ink-3); font: 500 10.5px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; }
+.guide-bubble { width: fit-content; max-width: min(100%, 360px); padding: 11px 15px; border: 1px solid var(--hud-line); border-radius: 20px; background: var(--hud-glass-2); -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4); box-shadow: var(--hud-shadow); animation: hud-in 0.2s var(--ease); }
+.guide-bubble.past { border-style: dashed; }
+.caption p { margin: 0; }
+.guide .who { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; color: var(--hud-ink-3); font: 500 10.5px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }
+.guide .who::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.guide .who.live { color: var(--hud-live); }
+.guide .who.live::before { animation: hud-blink 1.2s infinite; }
+.guide .who.speaking { color: var(--hud-route); }
+.guide .asked { margin: 0 0 6px; font: 500 13px/1.35 var(--font-ui); color: var(--hud-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.guide .said { color: var(--hud-ink); font-size: 15px; line-height: 1.42; font-weight: 500; letter-spacing: -0.005em; text-wrap: pretty; }
+.guide .said em { font-style: normal; color: var(--hud-ink-3); }
+.guide .said.warn { color: var(--hud-warn); font-size: 14px; }
+.guide .caption.big .said { font-size: 16.5px; line-height: 1.35; letter-spacing: -0.01em; }
+.guide .fine { margin-top: 8px !important; font-size: 12.5px; line-height: 1.45; color: var(--hud-ink-2); }
+.guide .consent { display: flex; gap: 8px; margin-top: 12px; }
+.guide .consent button { height: var(--btn-md); padding: 0 16px; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-fill); color: var(--hud-ink); font: 500 13px var(--font-ui); cursor: pointer; }
+.guide .consent button.solid { border-color: transparent; background: var(--hud-solid); color: var(--hud-solid-ink); font-weight: 600; }
 
-/* The talk ball (Steward's hud.css): a canvas painted by VoiceCore.tsx over the same palette as a CSS gradient, shown until WebGL draws */
-.core { position: relative; flex: none; display: grid; place-items: center; width: 76px; height: 76px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45)); }
+.reply { position: relative; max-height: 7.2em; overflow: hidden; cursor: pointer; }
+.reply.clipped { -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent); mask-image: linear-gradient(180deg, #000 60%, transparent); }
+.reply.open { max-height: 42vh; overflow-y: auto; overscroll-behavior: contain; -webkit-mask-image: none; mask-image: none; }
+.reply p + p { margin-top: 4px; }
+
+/* while it works: a pulsing line and the seconds */
+.work { display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
+.work-now { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: -0.005em; color: var(--hud-ink-2); animation: hud-blink 1.6s ease-in-out infinite; }
+.work-meta { display: flex; align-items: center; gap: 10px; min-height: 8px; }
+.work .elapsed { margin-left: auto; font: 500 11px var(--font-mono); color: var(--hud-ink-3); font-variant-numeric: tabular-nums; }
+
+/* after the answer: the question with a quiet "3 steps" beside it, and ‹ 2/5 › through earlier answers */
+.exchange { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.exchange .asked { flex: 1; min-width: 0; margin: 0 !important; }
+.history { flex: none; display: inline-flex; align-items: center; gap: 1px; margin-right: -4px; }
+.history button { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--hud-ink-2); cursor: pointer; }
+.history button:disabled { opacity: 0.3; cursor: default; }
+.history span { min-width: 26px; text-align: center; font: 500 11px var(--font-mono); color: var(--hud-ink-3); font-variant-numeric: tabular-nums; }
+.steps-toggle { flex: none; display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 6px 0 9px; border: 0; border-radius: 999px; background: var(--hud-fill); color: var(--hud-ink-3); font: 500 12px var(--font-ui); cursor: pointer; }
+.steps-toggle span { display: grid; transition: transform 0.2s var(--ease); }
+.steps-toggle span.open { transform: rotate(180deg); }
+.trail { position: relative; margin: 4px 0 10px; padding: 0; list-style: none; max-height: 26vh; overflow-y: auto; font-size: 13px; color: var(--hud-ink-2); }
+.trail::before { content: ""; position: absolute; left: 6px; top: 10px; bottom: 10px; width: 1px; background: var(--hud-line-2); }
+.trail li { position: relative; display: grid; grid-template-columns: 13px 1fr; align-items: center; gap: 10px; padding: 4px 0; animation: hud-in 0.2s var(--ease); }
+.trail li > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trail .mark { display: grid; place-items: center; width: 13px; height: 13px; border-radius: 50%; background: var(--hud-ink-2); color: var(--hud-solid-ink); }
+
+.guide .voice-error { margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--hud-glass-2); font-size: 12.5px; color: var(--hud-warn); }
+
+/* things you can say, before the first question */
+.intents { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.intents button { display: inline-flex; align-items: center; gap: 7px; height: var(--btn-md); padding: 0 14px; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); color: var(--hud-ink); font: 500 13.5px var(--font-ui); cursor: pointer; animation: hud-in 0.24s var(--ease); }
+@media (hover: hover) { .intents button:hover, .hud-side:not([aria-expanded="true"]):hover { background: var(--hud-glass-2); } }
+
+/* the message field: the same glass and height (44) as the dock's round buttons */
+.type-bar { display: flex; align-items: center; gap: 6px; height: var(--btn-lg); padding: 0 4px 0 16px; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass); -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); transition: background-color 0.2s, border-color 0.2s; }
+.type-bar input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: var(--hud-ink); font: 400 15px var(--font-ui); outline: none; }
+.type-bar input::placeholder { color: var(--hud-ink-3); }
+.type-bar:focus-within { background: var(--hud-glass-2); border-color: var(--hud-line-2); }
+.type-bar .send { flex: none; display: grid; place-items: center; width: var(--btn-md); height: var(--btn-md); border: 0; border-radius: 50%; background: var(--hud-solid); color: var(--hud-solid-ink); cursor: pointer; transition: background-color 0.2s, color 0.2s; }
+.type-bar .send:disabled { background: transparent; color: var(--hud-ink-3); cursor: default; }
+
+/* the dock: the other way of asking on the left, the main one in the middle, the options on the right */
+.dock { display: grid; grid-template-columns: var(--btn-lg) 1fr var(--btn-lg); align-items: center; gap: 12px; min-height: 76px; width: 100%; }
+.guide.talk > .dock { width: 248px; }
+.dock-side { position: relative; display: grid; place-items: center; }
+.dock-center { display: flex; justify-content: center; min-width: 0; }
+.dock-center .type-bar { flex: 1; min-width: 0; }
+.dock-side .core { width: var(--btn-lg); height: var(--btn-lg); }
+.dock-center .core { width: 76px; height: 76px; }
+.hud-side { display: grid; place-items: center; width: var(--btn-lg); height: var(--btn-lg); padding: 0; border: 1px solid var(--hud-line); border-radius: 50%; background: var(--hud-glass); -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); color: var(--hud-ink); box-shadow: var(--hud-shadow); cursor: pointer; }
+.hud-side[aria-expanded="true"] { background: var(--hud-solid); border-color: transparent; color: var(--hud-solid-ink); }
+
+/* the options: a popover opening upward from its button */
+.hud-pop { position: absolute; left: 0; bottom: calc(100% + 8px); display: flex; flex-direction: column; min-width: 268px; padding: 6px; border: 1px solid var(--hud-line); border-radius: 22px; background: var(--hud-glass-2); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: var(--hud-shadow); color: var(--hud-ink); animation: hud-in 0.16s var(--ease); }
+.hud-pop > button { display: flex; align-items: center; gap: 11px; height: var(--btn-lg); padding: 0 16px 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--hud-ink); font: 500 14px var(--font-ui); text-align: left; white-space: nowrap; cursor: pointer; }
+.hud-pop > button svg { color: var(--hud-ink-2); }
+@media (hover: hover) { .hud-pop > button:not(:disabled):hover { background: var(--hud-fill); } }
+.dock-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 8px 8px 8px 14px; font-size: 14px; font-weight: 500; }
+.dock-row > span, .dock-toggle > span { display: flex; flex-direction: column; gap: 1px; }
+.dock-row small, .dock-toggle small { font-size: 12px; font-weight: 400; color: var(--hud-ink-3); }
+.dock-seg { display: flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--hud-fill); }
+.dock-seg button { height: var(--btn-sm); padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: var(--hud-ink-2); font: 500 13px var(--font-ui); cursor: pointer; }
+.dock-seg button[aria-checked="true"] { background: var(--hud-solid); color: var(--hud-solid-ink); }
+.hud-pop .dock-toggle { justify-content: space-between; height: auto; min-height: 52px; padding: 8px 12px 8px 14px; }
+.dock-toggle i { position: relative; flex: none; width: 40px; height: 24px; border-radius: 999px; background: var(--hud-fill-2); transition: background-color 0.2s var(--ease); }
+.dock-toggle i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); transition: transform 0.2s var(--ease); }
+.dock-toggle i.on { background: var(--hud-route); }
+.dock-toggle i.on::after { transform: translateX(16px); }
+.hud-pop .dock-clear { margin-top: 2px; border-top: 1px solid var(--hud-line); border-radius: 0 0 16px 16px; }
+.hud-pop .dock-clear:disabled { color: var(--hud-ink-3); cursor: default; }
+
+/* The talk ball (Steward's Core): a canvas painted by VoiceCore.tsx over the same palette as a CSS gradient, shown until WebGL draws */
+.core { position: relative; flex: none; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45)); }
 .core:disabled { cursor: default; opacity: 1; } /* the ball shows its work, never greyed out */
 .core:focus-visible { outline: 1px solid var(--hud-line-2); outline-offset: 4px; }
 .core-ball { width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 34% 30%, #E3ECFA, #8DB2F2 34%, #3D6BE0 70%, #22378F); transform: scale(var(--swell, 1)); transition: transform 0.25s var(--ease); }
@@ -41,6 +113,4 @@ body:has(.voicedock) .maphint { left: calc(var(--left, 424px) + 104px); }
 .core.thinking .core-ball { animation: core-breathe 1.6s ease-in-out infinite; }
 @media (hover: hover) { .core:not(:disabled):hover .core-ball { transform: scale(calc(var(--swell, 1) * 1.04)); } }
 @keyframes core-breathe { 50% { transform: scale(0.94); } }
-
-@keyframes voiceblink { 50% { opacity: 0.3; } }
-@media (prefers-reduced-motion: reduce) { .voicebubble .who::before { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .guide .who.live::before, .work-now { animation: none !important; } }
