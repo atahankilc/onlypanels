@@ -1,9 +1,9 @@
-// The planner's voice: tap the orb, speak, tap again. ElevenLabs hears it, Claude works the desk through its MCP tools,
+// The planner's voice: tap the ball, speak, tap again. ElevenLabs hears it, Claude works the desk through its MCP tools,
 // the desk does what was asked as clicks would, and the answer is spoken back. Typing works the same way without a mic.
-// Planner only: the homeowner's pages never record or send audio. The orb and the bubble come from the Steward project.
+// Planner only: the homeowner's pages never record or send audio. The ball (Core) and the bubble come from Steward.
 import { useEffect, useRef, useState } from "react";
 import { Input } from "./ui";
-import { VoiceOrb, VoiceState } from "./VoiceOrb";
+import { Core, VoiceState } from "./VoiceCore";
 import { VoiceAction, runActions, voiceContext } from "./voiceBus";
 import "./voice.css";
 
@@ -33,13 +33,13 @@ export default function VoiceDock() {
   const [error, setError] = useState("");
   const [hidden, setHidden] = useState(false);
   const [text, setText] = useState("");
-  const level = useRef(0); // 0..1, read by the orb every frame
+  const level = useRef(0); // 0..1, read by the ball every frame
   const rec = useRef<MediaRecorder | null>(null), chunks = useRef<Blob[]>([]), timer = useRef(0), player = useRef<HTMLAudioElement | null>(null);
   const audio = useRef<AudioContext | null>(null), meter = useRef<AnalyserNode | null>(null), frame = useRef(0);
   useEffect(() => { fetch("/api/voice/status").then((r) => r.json()).then(setReady).catch(() => setReady({ speech: false, agent: false })); }, []);
   useEffect(() => () => { rec.current?.stream.getTracks().forEach((t) => t.stop()); player.current?.pause(); cancelAnimationFrame(frame.current); audio.current?.close(); }, []);
 
-  /** Feeds the orb the loudness of whatever is live: the mic while listening, the answer while speaking. */
+  /** Feeds the ball the loudness of whatever is live: the mic while listening, the answer while speaking. */
   function measure(node: AudioNode) {
     audio.current ??= new AudioContext();
     const a = audio.current.createAnalyser();
@@ -84,7 +84,7 @@ export default function VoiceDock() {
         const source = audio.current.createMediaElementSource(el);
         source.connect(audio.current.destination);
         measure(source);
-      } catch { /* no meter: the orb still speaks */ }
+      } catch { /* no meter: the ball still speaks */ }
       setState("speaking");
       await el.play().catch(() => { quiet(); setState("off"); });
     } catch (e) {
@@ -92,10 +92,11 @@ export default function VoiceDock() {
     }
   }
 
+  const finish = () => { if (rec.current?.state === "recording") rec.current.stop(); };
+  const stop = () => { player.current?.pause(); quiet(); setState("off"); }; // a tap while it speaks stops it
   async function listen() {
-    if (state === "listening") { rec.current?.stop(); return; }
-    if (state === "speaking") { player.current?.pause(); quiet(); setState("off"); return; } // a tap while it speaks stops it
     setError(""); setHidden(false);
+    if (!ready?.speech) { setError("Voice needs ELEVENLABS_API_KEY in .env and a restarted API. Typing works."); return; }
     try {
       const stream = await microphone();
       audio.current ??= new AudioContext();
@@ -119,8 +120,8 @@ export default function VoiceDock() {
     }
   }
 
-  const canHear = !!ready?.speech, busy = state === "thinking";
-  const who = state === "listening" ? "Listening · tap to send" : state === "thinking" ? "Working on it" : state === "speaking" ? "Desk · tap to stop" : last ? "Desk" : canHear ? "Tap and speak" : "Voice needs ELEVENLABS_API_KEY";
+  const busy = state === "thinking";
+  const who = state === "listening" ? "Listening · tap the ball to send" : state === "thinking" ? "Working on it" : state === "speaking" ? "Desk · tap the ball to stop" : last ? "Desk" : "Tap the ball and speak";
   return <div className={`voicedock ${state}`}>
     {!hidden && <div className="voicebubble" aria-live="polite">
       <p className={`who${state === "listening" ? " live" : state === "speaking" ? " speaking" : ""}`}>{who}<button type="button" className="voicehide" aria-label="Hide" onClick={() => setHidden(true)}>×</button></p>
@@ -133,8 +134,7 @@ export default function VoiceDock() {
         <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Or type to the desk" disabled={busy || ready?.agent === false} aria-label="Type to the desk" />
       </form>
     </div>}
-    <VoiceOrb state={state} level={level} size={72} disabled={busy || !canHear} onClick={listen}
-      label={state === "listening" ? "Stop and send" : state === "speaking" ? "Stop speaking" : canHear ? "Talk to the desk" : "Voice needs ELEVENLABS_API_KEY"} />
+    <Core state={state} level={level} busy={busy} onListen={listen} onFinish={finish} onStop={stop} />
     {hidden && <button type="button" className="voiceshow" onClick={() => setHidden(false)}>Show answer</button>}
   </div>;
 }
