@@ -133,7 +133,8 @@ def simulate(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct,
     runs = [_year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, y, ev_day, house) for y in np.atleast_2d(years)]
     return {"self_sufficiency_pct": round(np.mean([r["self_sufficiency_pct"] for r in runs])),
             "self_use_pct": round(np.mean([r["self_use_pct"] for r in runs])),
-            "saving_eur": int(round(np.mean([r["saving_eur"] for r in runs]) / 10) * 10)}
+            "saving_eur": int(round(np.mean([r["saving_eur"] for r in runs]) / 10) * 10),
+            **{k: round(float(np.mean([r[k] for r in runs]))) for k in ("load_kwh", "own_kwh", "export_kwh")}}
 
 
 def _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, shape, ev_day=False, house=HOUSE):
@@ -165,4 +166,6 @@ def _year(house_kwh, ev_kwh, heat_kwh, production_kwh, battery_kwh, price_ct, sh
         "self_sufficiency_pct": round(own / total * 100) if total else 0,
         "self_use_pct": round(own / production_kwh * 100) if production_kwh else 0,
         "saving_eur": round((own * price_ct + exported * FEED_IN_CT_KWH) / 100 / 10) * 10,
+        # The kWh behind the shares, for the money view (costs.py): what the home uses, covers itself and sells.
+        "load_kwh": round(total), "own_kwh": round(own), "export_kwh": round(exported),
     }

@@ -1,6 +1,7 @@
 // The offer as it would leave the installer: one page, printable. Numbers are the engine's; the planner's choices are marked.
 import { Design, Request, Spot, facing } from "./plan";
 import { Button, Check } from "./ui";
+import { Costs, eur } from "./money";
 
 export const CHOICES: [string, string][] = [
   ["no_battery", "Leave out the battery"], ["battery_size", "Pick another battery size from the catalog"],
@@ -15,12 +16,12 @@ const row = (a: Design) => ({
 });
 
 type Props = {
-  r: Request; d: Design; first: Design | null; roof: Spot[]; panels: Record<string, number>;
+  r: Request; d: Design; costs?: Costs | null; first: Design | null; roof: Spot[]; panels: Record<string, number>;
   facts: [string, string, string][]; conditions: string[]; toConfirm: number;
   allowed: string[]; setAllowed: (a: string[]) => void; send: () => void;
 };
 
-export default function Offer({ r, d, first, roof, panels, facts, conditions, toConfirm, allowed, setAllowed, send }: Props) {
+export default function Offer({ r, d, costs, first, roof, panels, facts, conditions, toConfirm, allowed, setAllowed, send }: Props) {
   const now = row(d), was = first ? row(first) : now;
   const who = { Solar: d.pv.locked, Battery: d.battery.locked, Wallbox: d.wallbox.locked, "Heat pump": d.heatpump.locked } as Record<string, boolean>;
   const placed = roof.filter((x) => (panels[x.key] ?? 0) > 0);
@@ -50,6 +51,18 @@ export default function Offer({ r, d, first, roof, panels, facts, conditions, to
         </tbody></table>
         <p className="fine">Estimates, not promises: {r.buildings.length ? "measured sun and shade for this roof" : r.inputs.roof_azimuth != null ? "PVGIS sun for a roof of this direction and slope, without shade, since the home was not shared" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}, assumed hourly use, {FEED} ct for electricity sold to the grid; the rate for systems switched on from 2027 is not settled yet. The home stays connected to the grid. Without a smart meter, the grid feed is limited to 60% of the system's power.{d.heatpump.included ? " The saving counts electricity only, not the gas or oil no longer bought." : ""}</p>
       </section>
+
+      {costs && costs.design.modules === d.pv.modules && costs.design.battery_kwh === d.battery.kwh && <section><h4>Price and payback</h4>
+        <table><tbody>
+          {Object.entries(costs.by_tech).map(([t, v]) => <tr key={t}><th scope="row">{({ solar: "Solar, installed", battery: "Battery, installed", wallbox: "Wallbox, installed", heatpump: "Heat pump, installed" } as Record<string, string>)[t] ?? t}</th><td>{eur(v)}</td></tr>)}
+          <tr><th scope="row">Total</th><td>{eur(costs.gross_eur)}{costs.vat_eur ? ` incl. ${eur(costs.vat_eur)} VAT` : ", no VAT on solar and battery"}</td></tr>
+          {costs.grant && <tr><th scope="row">KfW heat pump grant</th><td>−{eur(costs.grant.eur)} ({costs.grant.rate_pct}%), applied for before ordering</td></tr>}
+          <tr><th scope="row">You pay</th><td><b>{eur(costs.pays_eur)}</b></td></tr>
+          <tr><th scope="row">Your costs a year</th><td>{eur(costs.bills.before.total_eur)} today, about {eur(costs.bills.after.total_eur)} with the system</td></tr>
+          <tr><th scope="row">Pays back</th><td>{costs.payback_years != null ? `after about ${costs.payback_years.toLocaleString("en", { maximumFractionDigits: 1 })} years` : `not within ${costs.assumptions.years} years`}; about {eur(costs.gain_eur)} ahead after {costs.assumptions.years} years</td></tr>
+        </tbody></table>
+        <p className="fine">Prices are typical and become binding with the order after a site visit. Payback assumes electricity {costs.assumptions.electricity_rise_pct}% dearer each year{costs.fuel ? `, ${costs.fuel.kind} ${costs.assumptions.fuel_rise_pct}% dearer` : ""}, panels losing {costs.assumptions.degradation_pct}% a year, one new inverter, upkeep and insurance included.{costs.grant ? " The grant needs an application at KfW before the order is signed." : ""}</p>
+      </section>}
 
       <section><h4>Based on</h4>
         <table><tbody>{facts.map(([label, value, source]) => <tr key={label}><th scope="row">{label}</th><td>{value}</td><td>{source}</td></tr>)}</tbody></table>

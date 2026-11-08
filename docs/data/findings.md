@@ -135,3 +135,8 @@ About 1,300 projects carry substructure lines and they are almost all rooftop: 1
 237 new-system projects have several options for the same home. 33% differ in kWp, with a mean range of 2.94 kWp when they differ. 44% differ in battery size, with a mean range of 5.38 kWh when they differ.
 
 So the installer's own options for one home can differ by about as much as the baseline's error. These are different statistics and only suggest a ceiling, but "our error is about the size of the spread between an expert's own options" is a claim worth testing properly.
+
+## What offers are made of
+
+`scripts/profile_products.py` sorts all 21,652 line items into kinds and groups. Products (modules, mounting, inverters, batteries, backup, energy management, electrical parts, wallboxes, heat pumps and their storage), installation (DC and AC work, battery and wallbox install, scaffolding, meter cabinet, roof and cable extras), services (planning, grid registration, travel, all-inclusive packages), packages (installer B's bundles), finance (solar credit in 50% and insurance in 22% of installer A's solar offers) and promotions. Installer A itemises: planning, travel, DC install, mounting and battery install are in about 91% of its solar offers, the meter cabinet in 81%, scaffolding in 78%. Installer B sells bundles: a package line in 45%, scaffolding (site setup) in 60%. All 31 heat pump offers hold the unit, its installation and a buffer tank; 94% a hot water tank and hydraulics. No line carries a price.
+

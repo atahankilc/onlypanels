@@ -20,6 +20,8 @@ import { Options } from "./Options";
 import { AgentPanel } from "./Agent";
 import type { RoofNumbers } from "./share";
 import { BatteryCurve } from "./BatteryCurve";
+import { CostTab, PriceBook } from "./Costs";
+import { Money, moneyOf, useCosts } from "./money";
 import { Button, Check, Field, IconButton, Input, Segmented, Select, Slider } from "./ui";
 
 const LEFT = 548; // the desk's column: the homeowner's, widened for tables
@@ -70,7 +72,7 @@ let kept: Request[] = [];
 
 export default function Planner({ handoffs, onProgress, loading = 0 }: { handoffs: Handoff[]; onProgress?: (ref: string, p: Progress) => void; loading?: number }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const [page, setPage] = useState<"requests" | "proof">("requests");
+  const [page, setPage] = useState<"requests" | "proof" | "prices">("requests");
   const [requests, setRequests] = useState<Request[]>(() => kept);
   useEffect(() => { kept = requests; }, [requests]);
   const [scores, setScores] = useState<Scores | null>(null);
@@ -96,14 +98,15 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
     <div className="inbox-col">
       <header className="inbox-head">
         <div>
-          <h1>{page === "requests" ? "Requests" : "Proof"}</h1>
+          <h1>{page === "requests" ? "Requests" : page === "prices" ? "Prices" : "Proof"}</h1>
           <p className="muted">{page === "requests"
             ? (requests.length ? `${waiting ? `${waiting} waiting for an offer, ${requests.length - waiting} sent.` : "Every offer is sent."} Each comes with the engine's draft to check, change and send.` : "Requests arrive here with the engine's draft.")
+            : page === "prices" ? "What each part of an offer costs. Every offer prices its design from here, so the planner sees what the homeowner pays and when it pays back."
             : "How the engine's first drafts compare with what experts sold, on past projects it never saw."}</p>
         </div>
-        <Segmented label="Page" value={page} onChange={setPage} options={[{ value: "requests", label: "Requests" }, { value: "proof", label: "Proof" }]} />
+        <Segmented label="Page" value={page} onChange={setPage} options={[{ value: "requests", label: "Requests" }, { value: "prices", label: "Prices" }, { value: "proof", label: "Proof" }]} />
       </header>
-      {page === "proof" ? <ProofPage /> : <>
+      {page === "proof" ? <ProofPage /> : page === "prices" ? <PriceBook /> : <>
         <ul className="reqlist">{requests.map((r) => <Line key={r.id} r={r} open={() => setOpenId(r.id)} />)}
           {Array.from({ length: loading }, (_, i) => <li key={`loading${i}`} className="loading" aria-hidden="true"><span /><span /></li>)}
         </ul>
@@ -131,7 +134,7 @@ function Line({ r, open }: { r: Request; open: () => void }) {
 }
 
 type Scores = { scores: Record<string, { kwp_within20: number; n: number; batt_exact_closest: number }> };
-type Tab = "home" | "design" | "checks" | "offer";
+type Tab = "home" | "design" | "cost" | "checks" | "offer";
 type Req = Request & { allowed?: string[] };
 const fmt = (r: Request, k: string, d: Design): string => {
   const i = r.inputs as unknown as Record<string, unknown>, v = i[k];
@@ -183,6 +186,8 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const [hotObs, setHotObs] = useState<number | null>(null); // the obstacle under the pointer in the list, lit on the model
   const done = r.checked ?? [], setDone = (checked: string[]) => update(r.id, { checked });
   const out = useDesign(r, roof);
+  const { costs, failed: costsFailed } = useCosts(r, roof); // what the design costs and pays back, from the price book
+  const [pricing, setPricing] = useState(false); // the price book open inside the Cost tab
   // Monument status from the Bavarian monument map, asked once per request by the page itself, never through our server.
   const [monument, setMonument] = useState<Monument | null>(null);
   // Without a home but with an address, the page finds the address with Photon (EU), as the homeowner's search does, and asks the same maps at that point.
@@ -248,13 +253,16 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         <div><dt>Battery</dt><dd>{d.battery.kwh || (r.inputs.has_storage && r.existing.battery_kwh ? r.existing.battery_kwh : "–")}{d.battery.kwh || (r.inputs.has_storage && r.existing.battery_kwh) ? <small> kWh{!d.battery.kwh ? " there" : ""}</small> : null}</dd></div>
         <div><dt>Need</dt><dd>{d.energy.total_mwh.toFixed(1)}<small> MWh</small></dd></div><div><dt>Makes</dt><dd>{d.energy.production_mwh.toFixed(1)}<small> MWh</small></dd></div>
       </dl>}
-      <div className="desktabs"><Segmented wide label="Sections" value={tab} onChange={setTab} options={[{ value: "home", label: "Home" }, { value: "design", label: "Design" }, { value: "checks", label: left ? `Checks ${left}` : "Checks" }, { value: "offer", label: "Offer" }]} /></div>
+      <div className="desktabs"><Segmented wide label="Sections" value={tab} onChange={setTab} options={[{ value: "home", label: "Home" }, { value: "design", label: "Design" }, { value: "cost", label: "Cost" }, { value: "checks", label: left ? `Checks ${left}` : "Checks" }, { value: "offer", label: "Offer" }]} /></div>
       <div className="deskbody">
         {!d && <p className="muted">The engine is working…</p>}
         {asks.map((x) => <AskCard key={x.id} x={x} tried={() => tryAsk(x)} done={() => answer(r.ref ?? "-", x.id)} />)}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
         {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} measured={home} /></>}
         {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, { obstacles }); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
+        {d && tab === "cost" && (pricing ? <PriceBook installer={r.inputs.installer} close={() => setPricing(false)} />
+          : <CostTab c={costs} failed={costsFailed} money={moneyOf(r)} setMoney={(money: Money) => update(r.id, { money } as Partial<Request>)} sent={r.status === "sent"}
+            use={(change: Record<string, unknown>, label: string) => setO(change as Overrides, label)} prices={() => setPricing(true)} />)}
         {d && tab === "checks" && <>
           <h3>Confirm before sending</h3>
           {confirm.length ? <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm"><div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>{k === "demand_kwh" && r.inputs.demand_source && r.inputs.demand_source !== "bill" && r.inputs.demand_source !== "unknown" ? "Not from a bill. " : k === "heat_kwh" && r.inputs.gas_eur ? `Worked out from €${Math.round(r.inputs.gas_eur).toLocaleString("en")} of gas a year at ${GAS_CT} ct per kWh all in. ` : "Assumed: nobody gave this. "}{k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : k === "living_m2" ? "Estimated from the 3D model; the heat estimate, and so the heat pump, follows it." : k === "built" ? "The customer did not say; the census's most common period nearby stands in for the heat estimate." : "It changes the design."}</small></div>
@@ -266,7 +274,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
           <ul className="tasks">{checks.map((c) => <li key={c.id}><Check checked={done.includes(c.id)} onChange={(v) => setDone(v ? [...done, c.id] : done.filter((x) => x !== c.id))}><b>{c.title}</b><small>{c.why}</small></Check></li>)}</ul>
           {r.meterPhoto && <figure className="cabinet"><img src={r.meterPhoto} alt="The customer's meter cabinet" /><figcaption className="small muted">Meter cabinet, photo from the customer.</figcaption></figure>}
         </>}
-        {d && tab === "offer" && <Offer r={r} d={d} first={first.current} roof={roof} panels={out?.panels ?? {}} toConfirm={confirm.length} allowed={allowed} setAllowed={(a) => update(r.id, { allowed: a } as Partial<Request>)} send={send}
+        {d && tab === "offer" && <Offer r={r} d={d} costs={costs} first={first.current} roof={roof} panels={out?.panels ?? {}} toConfirm={confirm.length} allowed={allowed} setAllowed={(a) => update(r.id, { allowed: a } as Partial<Request>)} send={send}
           conditions={checks.filter((c) => !done.includes(c.id)).map((c) => c.title)}
           facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]),
             ...EXTRA.filter((k) => !r.sources[k] && sourceOf(r, k) && (r.inputs.ev || !k.startsWith("ev_") && k !== "has_wallbox")).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[sourceOf(r, k)!]] as [string, string, string]), home ? ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"] : ["Roof", r.roofNumbers ? roofWords(r.roofNumbers) : "not shared", r.roofNumbers ? (r.roofNumbers.told ? "from the customer's description" : "from the customer, rounded") : "to be confirmed"]]} />}

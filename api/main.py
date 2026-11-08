@@ -21,6 +21,7 @@ from reonic_engine.design import Engine, use_from_payment
 from reonic_engine.advise import advise
 from reonic_engine.agent import agent_events, run_agent
 from reonic_engine import casework, obstacles
+from reonic_engine import costs, pricebook
 from reonic_engine.refine import refine
 
 load_dotenv(FilePath(__file__).resolve().parent.parent / ".env")  # ANTHROPIC_API_KEY for the planner's sentences; without it, rules
@@ -278,3 +279,90 @@ def site_trees(name: str = Path(pattern=SQUARE)):
     The planner's shade check uses it once a request has arrived. A square with no file has no trees we know of."""
     found = TREES / f"{name}.json"
     return FileResponse(found, media_type="application/json") if found.exists() else []
+
+
+# Money: the price book the planner keeps, and what a design costs and pays back (pricebook.py, costs.py).
+class Money(BaseModel):
+    extras: dict[str, bool] = {}  # optional extras the planner ticked or unticked for this home
+    qty: dict[str, float] = {}  # quantities the planner set for this home (metres of cable, radiators)
+    income: str | None = None  # taxable household income band for the KfW income bonus: le30, le40, le50, le60, above
+    kids: bool = False  # a child under 18 in the household (moves the income bonus)
+
+
+class CostRequest(DesignRequest):
+    money: Money = Money()
+
+
+class PriceItem(BaseModel):
+    name: str | None = None
+    tech: str | None = None
+    kind: str | None = None
+    unit: str | None = None
+    when: str | None = None
+    fixed: float | None = Field(None, ge=-100_000, le=100_000)  # negative for a discount or a local grant
+    per_unit: float | None = Field(None, ge=-100_000, le=100_000)
+    qty: float | None = Field(None, ge=0, le=1000)
+    vat: float | None = Field(None, ge=0, le=25)
+
+
+@app.get("/api/prices")
+def prices(installer: str | None = None):
+    return pricebook.book(installer)
+
+
+@app.put("/api/prices/rates")
+def prices_rates(values: dict[str, float]):
+    pricebook.set_rates(values)
+    return pricebook.book()
+
+
+@app.delete("/api/prices/rates")
+def prices_rates_reset():
+    pricebook.reset_rates()
+    return pricebook.book()
+
+
+@app.post("/api/prices")
+def prices_add(item: PriceItem):
+    try:
+        pricebook.add_item(item.model_dump())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return pricebook.book()
+
+
+@app.put("/api/prices/{item_id}")
+def prices_set(item_id: str, item: PriceItem):
+    try:
+        pricebook.set_item(item_id, item.model_dump())
+    except KeyError:
+        raise HTTPException(404, "No such item")
+    return pricebook.book()
+
+
+@app.delete("/api/prices/{item_id}")
+def prices_reset(item_id: str):
+    pricebook.reset_item(item_id)
+    return pricebook.book()
+
+
+@app.post("/api/costs")
+def cost_view(req: CostRequest):
+    """What the design costs the homeowner, the KfW grant, the yearly money before and after, and when it pays back.
+    With it, what each battery size and the heat pump add on their own, and the engine's variants in money. Prices from
+    the planner's price book; kWh from the same hourly estimate as the design. No language model."""
+    i, _ = prepared(req)
+    o = req.overrides.model_dump()
+    m = req.money
+    b = pricebook.book(i.get("installer"))
+    d = engine().design(i, o)
+    money = costs.evaluate(i, d, b, m.extras, m.qty, m.income, m.kids)
+    options = costs.battery_options(i, d, batteries.curve(i, d), b) if d["pv"]["modules"] and not i.get("has_storage") else []
+    heat = None
+    if d["heatpump"]["included"]:
+        heat = costs.heat_pump_money(i, d, engine().design(i, {**o, "heatpump": False}), b, m.extras, m.qty, m.income, m.kids)
+    variants = [{"id": a["id"], "title": a["title"], "overrides": a["overrides"],
+                 **costs.summary(costs.evaluate(i, engine().design(i, {**o, **a["overrides"]}), b, m.extras, m.qty, m.income, m.kids))}
+                for a in engine().alternatives(i, o, d)]
+    return {**money, "battery_options": options, "heatpump_money": heat, "variants": variants,
+            "notes": costs.notes(i, d, money, options, heat), "design": {"kwp": d["pv"]["kwp"], "modules": d["pv"]["modules"], "battery_kwh": d["battery"]["kwh"]}}

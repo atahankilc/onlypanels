@@ -1,0 +1,38 @@
+/* The Cost tab and the price book. Tokens from styles.css; tables reuse .grid. */
+.money-head { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; margin: 0; }
+.money-head > div { padding: 12px 14px; border-radius: 14px; background: var(--hud-fill); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.money-head dt { color: var(--hud-ink-2); font-size: 12.5px; }
+.money-head dd { margin: 0; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015em; font-variant-numeric: tabular-nums; color: var(--hud-ink); }
+.money-head dd small { font-size: 13px; font-weight: 450; color: var(--hud-ink-2); }
+.money-head .lead dd { color: var(--hud-route); }
+.money-head > div > small { color: var(--hud-ink-2); font-size: 12px; line-height: 1.35; }
+.money-note { display: flex; align-items: center; gap: 10px; }
+.money-note p { flex: 1; margin: 0; max-width: none; font-size: 13.5px; line-height: 1.45; color: var(--hud-ink-2); }
+.money-note.warn p { color: var(--hud-warn); }
+.money-why { list-style: none; margin: 0; padding: 0; font-size: 13.5px; color: var(--hud-ink-2); }
+.money-why li { max-width: none; margin: 0; padding: 5px 0; }
+.money-why b { display: inline-block; min-width: 78px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--hud-ink); }
+.money-why li.sum { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--hud-line); color: var(--hud-ink); }
+.grid tr.total th, .grid tr.total td { font-weight: 650; color: var(--hud-ink); }
+.grid tr.group th, .grid tr.group td { padding-top: 16px; color: var(--hud-ink-2); font-size: 12.5px; font-weight: 600; }
+.money-lines td:last-child, .money-bill td:last-child { width: 120px; text-align: right; }
+.money-lines td:nth-child(2) { width: 90px; color: var(--hud-ink-2); }
+.money-bill td { width: 110px; text-align: right; }
+.money-batt td:last-child { width: auto; }
+.money-batt tbody tr { cursor: pointer; transition: background-color 0.15s; }
+.money-batt tbody tr:hover, .money-batt tbody tr.on { background: var(--hud-fill); }
+.money-actions { display: flex; gap: 8px; }
+.money-grant { margin: 0; padding-left: 16px; } .money-grant li { max-width: none; }
+.payback { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.payback figcaption { display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; } .payback figcaption small { color: var(--hud-ink-2); font-size: 12.5px; min-height: 2.6em; }
+.payback svg { width: 100%; height: auto; display: block; }
+.payback .zero { stroke: var(--hud-ink-3); stroke-width: 1; }
+.payback .neg { fill: var(--hud-ink-3); } .payback .pos { fill: var(--hud-route); }
+.payback .axis { fill: var(--hud-ink-3); font: 11px var(--font-ui); }
+.pricebook { display: flex; flex-direction: column; gap: 14px; }
+.prices .control { width: 84px; min-width: 0; }
+.prices td { width: 96px; } .prices td:last-child { width: 80px; }
+.prices small.src { color: var(--hud-ink-3); font-size: 11.5px; font-weight: 400; }
+.prices tr.edited th { color: var(--hud-route); }
+.inbox-col .pricebook { max-width: 860px; }
+@media print { .money-actions, .money-note .btn { display: none; } }

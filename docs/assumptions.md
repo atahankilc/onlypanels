@@ -116,6 +116,27 @@ Code locations: engine `engine/src/reonic_engine/` (design.py, energy.py, models
 | 0.93 | Correction for minute peaks an hourly model misses | Fitted to HTW Berlin calculator values (`scripts/check_energy.py`) | `energy.py` SUB_HOUR |
 | Household, heat and car day shapes, monthly shares | When energy is used | Our assumption, simple stated shapes | `energy.py` |
 
+## Money (`pricebook.py`, `costs.py`)
+
+The data holds no prices. Every price below is a typical German end-customer price, net, for autumn 2026, and the planner can replace any of them on the Prices page (kept in `data/cache/pricebook.json`, not committed). Each item's source is in `pricebook.py` and shown on the page. Ranges checked: 10 kWp turnkey €9,500–17,000 without battery and €13,000–23,000 with 10 kWh (42watt, priwatt, Finanztip, 2026); battery €315–700 per kWh installed; air-water heat pump €27,000–40,000 gross installed, median of 160 offers about €35,000 (Utopia). Our defaults give about €11,000 for 9 kWp without extras and about €29,000 gross for a 10 kW heat pump replacing gas.
+
+| Value | Used for | Source | Where |
+|---|---|---|---|
+| Module €115, mounting €65 pitched / €85 flat, DC install €75, each per module | Solar | Our estimate inside the 2026 turnkey ranges | `pricebook.py` |
+| Hybrid inverter €900 + €110 per kW, sized to at least 85% of kWp | Solar | Our estimate | `pricebook.py`, `costs.py` DC_AC |
+| Scaffolding €1,000, AC install €900, planning €400, grid registration €250, travel €450 | Every solar offer | Our estimate; these groups are in about 90% of installer A's offers | `pricebook.py` |
+| Meter cabinet €2,200, energy manager €300, breakers €450, surge protection €350 | Extras, ticked by default where the installer adds them to at least half of its offers | Share of offers from `scripts/profile_products.py` | `pricebook.py` SHARE |
+| Battery €400 per kWh + €600 install; backup box €900 | Battery | 2026 guides, low middle of the range | `pricebook.py` |
+| Wallbox €750 + €900 install, 19% VAT | Wallbox | 2026 guides | `pricebook.py` |
+| Heat pump €4,500 + €600 per kW; hydraulics €1,900, buffer €900, hot water tank €1,900, install €6,500, balancing €800, ground work €900; old heating out €900, oil tank €1,200 | Heat pump, 19% VAT | 2026 guides; every heat pump offer in the data holds unit, install and buffer | `pricebook.py` |
+| 0% VAT on solar and battery | Price | UStG §12(3), systems up to 30 kWp on homes | `pricebook.py` |
+| KfW grant: 30% base, +16% speed bonus, income bonus 10–40%, cap 70% (80% low income), at most €28,000 eligible | Heat pump grant | BEG as reformed 21 July 2026 (Ökozentrum NRW summary, 6 Aug 2026). Speed bonus for oil, other fossil, electric (night storage) heating or a gas boiler of 20 years or more; owners living in the home only | `costs.py` BEG_* |
+| Feed-in 7.7 ct (first 10 kWp), 6.66 ct above | Money from sold power | EEG, 1 Aug 2026 – 31 Jan 2027 | `pricebook.py` RATES |
+| Gas 11.8 ct, oil 10.5 ct per kWh | Fuel no longer bought | SWM model household 2026; oil our assumption | `pricebook.py` RATES |
+| Electricity +3% a year, gas and oil +4%, panels −0.4% a year | Payback | Data default; our assumption (CO₂ price); module warranties | `pricebook.py` RATES |
+| Upkeep: solar €150, heat pump €200, boiler and chimney sweep €250 a year | Payback | Our assumption | `pricebook.py` RATES |
+| Inverter replaced once after 15 years; battery counts for 15 years; 20 years looked at; 4 ct after the 20 feed-in years | Payback | Our assumption; EEG pays 20 years | `costs.py` |
+
 ## Not available
 
 - **Energy certificate:** no public register; only the owner has it. Asked as an optional field.
