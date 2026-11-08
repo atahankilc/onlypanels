@@ -20,8 +20,10 @@ export function DeskSummary({ r, d, costs, go }: { r: Request; d: Design; costs:
     { t: "wallbox", Icon: WallboxIcon, label: "Wallbox", on: d.wallbox.included, value: d.wallbox.included ? "Yes" : "None", unit: "", sub: d.wallbox.included ? `${one(e.ev_mwh)} MWh for the car` : r.inputs.ev ? "car, no wallbox yet" : "no car" },
     { t: "heatpump", Icon: HeatIcon, label: "Heat pump", on: d.heatpump.included, value: d.heatpump.included ? String(d.heatpump.kw) : d.heatpump.blocked || r.inputs.heating === "Heatpump" ? "There" : "None", unit: d.heatpump.included ? "kW" : "", sub: d.heatpump.included ? `${one(e.hp_mwh)} MWh of power a year` : d.heatpump.blocked || r.inputs.heating === "Heatpump" ? "already heats the home" : "left out" },
   ];
-  // Need and output on one scale: the bar is the larger of the two.
-  const top = Math.max(e.total_mwh, e.production_mwh, 0.1);
+  // The home's yearly need as one bar: the part its own solar covers, the rest from the grid. What the system makes and sells is
+  // said in words beside it: three measures on one line (output, need marker, own share) read as nothing at first sight.
+  const own = (e.total_mwh * e.self_sufficiency_pct) / 100, grid = Math.max(0, e.total_mwh - own);
+  const sold = (e.production_mwh * (100 - e.self_use_pct)) / 100;
   const priced = costs && costs.design.modules === d.pv.modules && costs.design.battery_kwh === d.battery.kwh ? costs : null;
   return <div className="sysum">
     <div className="sysum-tiles">{tiles.map(({ t, Icon, label, on, value, unit, sub }) =>
@@ -31,13 +33,12 @@ export function DeskSummary({ r, d, costs, go }: { r: Request; d: Design; costs:
         <b>{value}{unit && <small> {unit}</small>}</b>
         <small>{sub}</small>
       </button>)}</div>
-    <div className="sysum-energy" role="img" aria-label={`Makes ${one(e.production_mwh)} MWh a year; the home needs ${one(e.total_mwh)} MWh; ${e.self_sufficiency_pct}% of the use comes from its own power`}>
-      <div className="sysum-bar">
-        <i className="need" style={{ left: `${(e.total_mwh / top) * 100}%` }} />
-        <i className="own" style={{ width: `${((e.total_mwh * e.self_sufficiency_pct) / 100 / top) * 100}%` }} />
-        <i className="make" style={{ width: `${(e.production_mwh / top) * 100}%` }} />
+    <div className="sysum-energy">
+      <p className="sysum-energy-head"><span>Home's power, a year</span><b>{e.self_sufficiency_pct}% from own solar</b></p>
+      <div className="sysum-bar" role="img" aria-label={`Of the home's ${one(e.total_mwh)} MWh a year, ${one(own)} MWh come from its own solar and ${one(grid)} MWh from the grid. The system makes ${one(e.production_mwh)} MWh and sells ${one(sold)} MWh.`}>
+        <i className="own" style={{ width: `${e.self_sufficiency_pct}%` }} />
       </div>
-      <p><span><i className="k make" />Makes <b>{one(e.production_mwh)} MWh</b></span><span><i className="k need" />Needs <b>{one(e.total_mwh)} MWh</b></span><span><i className="k own" /><b>{e.self_sufficiency_pct}%</b> own power</span></p>
+      <p className="sysum-energy-key"><span><i className="k own" />{one(own)} MWh own solar</span><span><i className="k grid" />{one(grid)} MWh from the grid</span><span className="sysum-made">Makes {one(e.production_mwh)} MWh · sells {one(sold)}</span></p>
     </div>
     <button type="button" className="sysum-money" onClick={() => go("cost")} title="Open the cost">
       {priced ? <>
