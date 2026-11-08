@@ -303,7 +303,7 @@ function NoHomeStage({ r }: { r: Request }) {
 function NoHomeRoof({ r }: { r: Request }) {
   return r.roofNumbers
     ? <><dl className="nohome-roof"><div><dt>Area</dt><dd>~{r.roofNumbers.m2} m²</dd></div><div><dt>Facing</dt><dd>{r.roofNumbers.facing}</dd></div><div><dt>Tilt</dt><dd>{r.roofNumbers.facing === "flat" ? "flat" : `~${r.roofNumbers.tilt}°`}</dd></div></dl>
-      <p className="small muted">Rounded by the customer's page. The area limits the solar size; the yield is a typical one until the roof is confirmed.</p></>
+      <p className="small muted">Rounded by the customer's page. The area limits the solar size. The yield is PVGIS's for this direction and slope in Munich, without shade, until the roof is confirmed.</p></>
     : <p className="small muted">The customer shared no roof. The solar size follows the household's needs alone, with no roof limit and a typical yield.</p>;
 }
 
@@ -317,7 +317,7 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
     : "The customer did not say how the rooms are heated. Usually needs a site visit." });
   const home = r.buildings.length > 0;
   if (!home) list.unshift({ id: "noroof", title: r.roofNumbers ? "Roof not shared: confirm size and direction" : "Home not shared: ask for the roof", why: r.roofNumbers
-    ? `The customer kept the home and sent only rounded roof numbers: ${roofWords(r.roofNumbers)}. The design takes the area as its limit and a typical yield, not this roof's sun. Confirm size, direction and shade with them, or ask for the address.`
+    ? `The customer kept the home and sent only rounded roof numbers: ${roofWords(r.roofNumbers)}. The design takes the area as its limit and PVGIS's yield for that direction and slope, without shade. Confirm size, direction and shade with them, or ask for the address.`
     : "The customer kept the home and the roof to themselves. The design has no roof limit and a typical yield. Ask for the roof's size and direction, or the address." });
   const blind = roofOf(r.buildings, r.installed).filter((x) => x.s.kwh_per_kwp == null).length;
   if (blind) list.unshift({ id: "sun", title: `Sun data is missing for ${blind} ${blind === 1 ? "surface" : "surfaces"}`, why: "PVGIS did not answer. A typical yield stands in, so production is less certain. Reopen the request to try again." });
@@ -521,6 +521,6 @@ function Energy({ d, inputs, measured }: { d: Design; inputs: Inputs; measured: 
       <div><dt>Saving a year at {inputs.price_ct_kwh} ct</dt><dd>€{e.saving_eur.toLocaleString("en")}</dd></div>
     </dl>
     <p className="small muted">Estimates: real weather years for Munich, this roof's directions, an assumed household day, battery losses. Checked against HTW Berlin reference values (scripts/check_energy.py).{d.heatpump.included ? " The saving counts electricity only, not the fuel no longer bought." : ""}</p>
-    <p className="small muted">Production uses {measured ? "this roof's measured sun and shade" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}. There are no prices in our data, so no system cost or payback.</p>
+    <p className="small muted">Production uses {measured ? "this roof's measured sun and shade" : inputs.roof_azimuth != null ? "PVGIS's yield for the roof's direction and slope, without shade, since the home was not shared" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}. There are no prices in our data, so no system cost or payback.</p>
   </>;
 }

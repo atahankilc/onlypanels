@@ -317,3 +317,32 @@ def surfaces(name, building_id):
     for item in around:
         item["solid"] = solids.get(item["id"])
     return {"around": around, "step": round(step, 2), "suns": [{k: s[k] for k in ("month", "hour", "az", "el", "vector", "strength")} for s in suns], "surfaces": out, "sunny": bool(any(yearly)), "missing": sum(y is None for y in yearly)}
+
+
+SUN_TABLE = Path(__file__).resolve().parents[3] / "web" / "public" / "sun-table.json"  # PVGIS 5.3 over the region (scripts/build_sun_table.py)
+COMPASS_DEG = {"north": 0, "north-east": 45, "east": 90, "south-east": 135, "south": 180, "south-west": 225, "west": 270, "north-west": 315}
+
+
+@lru_cache(maxsize=1)
+def _table():
+    return json.loads(SUN_TABLE.read_text()) if SUN_TABLE.exists() else None
+
+
+def typical_yield(tilt, azimuth):
+    """kWh a year from 1 kWp facing azimuth (0 north, 180 south) at tilt, at the table's middle point (Munich), without
+    shade. For a roof known only by its direction and slope. None when the table is missing."""
+    t = _table()
+    if not t:
+        return None
+    tilts, n = t["tilts"], len(t["azimuths"])
+    tilt = min(max(float(tilt), tilts[0]), tilts[-1])
+    i = max(k for k in range(len(tilts)) if tilts[k] <= tilt)
+    j = min(i + 1, len(tilts) - 1)
+    ft = 0.0 if i == j else (tilt - tilts[i]) / (tilts[j] - tilts[i])
+    step = 360 / n
+    az = float(azimuth) % 360
+    a0 = int(az // step) % n
+    a1, fz = (a0 + 1) % n, az / step - az // step
+    middle = t["values"][len(t["lats"]) // 2][len(t["lons"]) // 2]
+    e = lambda ti, ai: middle[ti][ai][1]
+    return ((1 - ft) * ((1 - fz) * e(i, a0) + fz * e(i, a1)) + ft * ((1 - fz) * e(j, a0) + fz * e(j, a1)))

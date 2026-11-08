@@ -9,7 +9,7 @@ import type { Obstacle } from "./roofObstacles";
 export type Inputs = { installer: string; demand_kwh: number | null; price_ct_kwh: number; heating: string | null; heat_kwh: number | null; hp_kwh?: number | null; has_solar: boolean; has_storage: boolean; ev: boolean; ev_km: number; ev_kwh_month?: number | null; ev_charge_home?: string | null; ev_day?: boolean | null; has_wallbox?: boolean | null;
   demand_source?: string | null; monthly_eur?: number | null; big_users?: string[]; living_m2?: number | null; living_from_model?: boolean; area_built?: string | null; area_built_share?: number | null; cert_kwh_m2?: number | null; built?: string | null; trees?: boolean | null; roof_renovation?: string | null; goal?: string | null;
   solar_thermal?: boolean; owner?: string | null; backup?: boolean | null; home_day?: string | null; heat_dist?: string | null; boiler_age?: string | null; gas_eur?: number | null;
-  mount?: string; area_m2?: number | null };
+  mount?: string; area_m2?: number | null; roof_tilt?: number | null; roof_azimuth?: number | null };
 export type Overrides = { modules?: number | null; battery_kwh?: number | null; wallbox?: boolean | null; heatpump?: boolean | null };
 /** One step of the engine's own decision, in order. Input keys match the request's facts, so their source can be shown. */
 export type TraceStep = { id: string; title: string; kind: "measured" | "learned" | "rule" | "physics" | "input"; by?: "engine" | "planner"; inputs: { key: string | null; label: string; value: string }[]; how: string; result: string; context?: string };
@@ -77,6 +77,7 @@ const drawnOf = (buildings: Selected[], c: Choice) => Object.fromEntries(buildin
 const source = (known: unknown): Source => (known === null || known === undefined ? "assumed" : "customer");
 
 /** What the homeowner produced becomes the planner's starting point. Skipped answers arrive marked, nothing is asked twice. */
+const COMPASS_DEG: Record<string, number> = { north: 0, "north-east": 45, east: 90, "south-east": 135, south: 180, "south-west": 225, west: 270, "north-west": 315 };
 export function fromHomeowner(h: Handoff): Request {
   const { buildings, answers: a, choice } = h;
   const car = !!(a.ev || a.ev_planned);
@@ -91,7 +92,8 @@ export function fromHomeowner(h: Handoff): Request {
       demand_source: a.use_source === "exact" ? "bill" : a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source, monthly_eur: a.use_source === "payment" ? a.monthly_eur : null,
       big_users: a.big_users, living_m2: a.living_m2 ?? modelM2(buildings), living_from_model: !a.living_m2 && !!modelM2(buildings), cert_kwh_m2: a.cert_kwh_m2, built: a.built, area_built: a.area?.built ?? null, area_built_share: a.area?.built_share ?? null, goal: a.goal,
       solar_thermal: !!a.has_solar && (a.solar_kind === "thermal" || a.solar_kind === "both"), owner: a.owner ?? null, backup: a.backup ?? null, home_day: a.home_day ?? null, heat_dist: a.heat_dist ?? null, boiler_age: FOSSIL_HEAT.includes(a.heating ?? "") ? a.boiler_age ?? null : null, gas_eur: a.heating === "Gas" ? a.gas_eur ?? null : null,
-      area_m2: !buildings.length && h.roof ? h.roof.m2 : null },
+      area_m2: !buildings.length && h.roof ? h.roof.m2 : null,
+      ...(!buildings.length && h.roof ? { roof_tilt: h.roof.facing === "flat" ? 0 : h.roof.tilt, roof_azimuth: COMPASS_DEG[h.roof.facing] ?? 180 } : {}) },
     sources: { demand_kwh: a.use_source === "exact" ? "customer" : "assumed", price_ct_kwh: a.price_known ? "customer" : "assumed", heating: source(a.heating), heat_kwh: a.heating === "Gas" && a.gas_eur ? "assumed" : source(a.heat_kwh), ev: source(a.ev), ev_km: car ? source(a.ev_km) : "customer", has_solar: source(a.has_solar), has_storage: source(a.has_storage), ...(!buildings.length && h.roof ? { area_m2: "customer" as Source } : {}) },
     overrides: a.wants_hp === false ? { heatpump: false } : a.wants_hp ? { heatpump: true } : {},
     // The homeowner's marked area is a priority, not a limit: no roof is taken out for them, modules fill their cells first.

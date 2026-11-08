@@ -59,6 +59,9 @@ class Inputs(BaseModel):
     # or the planner said "only 18 fit" or "use the garden"), the area limits the size.
     mount: str = "roof"
     area_m2: float | None = None
+    # A roof known only by its main side's direction (compass degrees, 180 south) and slope, when the home was not shared.
+    roof_azimuth: float | None = None
+    roof_tilt: float | None = None
     demand_kwh: float | None = None
     price_ct_kwh: float = 32
     heating: str | None = None
@@ -122,6 +125,13 @@ def design(req: DesignRequest):
     if not i["demand_kwh"] and i.get("monthly_eur"):
         i["demand_kwh"], i["demand_source"] = use_from_payment(i["monthly_eur"], i["price_ct_kwh"]), "payment"
     i["demand_kwh"] = i["demand_kwh"] or TYPICAL_USE_KWH
+    if not i.get("surfaces") and i.get("area_m2") and i.get("roof_tilt") is not None and i.get("roof_azimuth") is not None:
+        # Only the roof's direction and slope: one surface of that area with the region's PVGIS yield, so the yield and
+        # the hours of the day follow the direction. No shade is known.
+        found = sun.typical_yield(i["roof_tilt"], i["roof_azimuth"])
+        if found:
+            i["surfaces"] = [{"kind": "roof", "max_modules": int(i["area_m2"] // 2), "kwh_per_kwp": round(found),
+                              "tilt": i["roof_tilt"], "azimuth": i["roof_azimuth"]}]
     o = req.overrides.model_dump()
     d = engine().design(i, o)
     return {**d, "alternatives": engine().alternatives(i, o, d), "battery_curve": batteries.curve(i, d), "assumed": assumed}

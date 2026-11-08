@@ -48,7 +48,7 @@ export default function Offer({ r, d, first, roof, panels, facts, conditions, to
           <tr><th scope="row">Share of your use from your own panels</th><td>about {e.self_sufficiency_pct}%</td></tr>
           <tr><th scope="row">Saving</th><td>about €{e.saving_eur.toLocaleString("en")} at {r.inputs.price_ct_kwh} ct per kWh</td></tr>
         </tbody></table>
-        <p className="fine">Estimates, not promises: {r.buildings.length ? "measured sun and shade for this roof" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}, assumed hourly use, {FEED} ct for electricity sold to the grid; the rate for systems switched on from 2027 is not settled yet. The home stays connected to the grid. Without a smart meter, the grid feed is limited to 60% of the system's power.{d.heatpump.included ? " The saving counts electricity only, not the gas or oil no longer bought." : ""}</p>
+        <p className="fine">Estimates, not promises: {r.buildings.length ? "measured sun and shade for this roof" : r.inputs.roof_azimuth != null ? "PVGIS sun for a roof of this direction and slope, without shade, since the home was not shared" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}, assumed hourly use, {FEED} ct for electricity sold to the grid; the rate for systems switched on from 2027 is not settled yet. The home stays connected to the grid. Without a smart meter, the grid feed is limited to 60% of the system's power.{d.heatpump.included ? " The saving counts electricity only, not the gas or oil no longer bought." : ""}</p>
       </section>
 
       <section><h4>Based on</h4>
