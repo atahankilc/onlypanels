@@ -363,5 +363,18 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .panel.quiz > h2.ask { margin: 20px 0 0; padding: 0; }
 .panel.quiz > h2.ask.gap { margin-top: 26px; }
 
-/* With map / without map: the whole page cross-fades (document.startViewTransition in FindHome). */
+/* Between the two ways of answering (swap in FindHome). Plain: the whole page cross-fades. */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.35s; animation-timing-function: var(--ease); }
+/* The With/Without switch: the map opens as a circle out of it, or closes back into it. The switch itself stays put
+   above both; the page underneath eases back a little and returns, so the circle reads as a layer, not a wipe. */
+html[data-vt] .startswitch { view-transition-name: startswitch; }
+html[data-vt]::view-transition-group(startswitch) { z-index: 3; }
+html[data-vt]::view-transition-old(root), html[data-vt]::view-transition-new(root) { mix-blend-mode: normal; transform-origin: var(--vt-x) var(--vt-y); animation-duration: 0.8s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
+html[data-vt="in"]::view-transition-new(root) { z-index: 2; animation-name: vt-open; }
+html[data-vt="in"]::view-transition-old(root) { z-index: 1; animation-name: vt-recede; }
+html[data-vt="out"]::view-transition-old(root) { z-index: 2; animation-name: vt-close; }
+html[data-vt="out"]::view-transition-new(root) { z-index: 1; animation-name: vt-return; }
+@keyframes vt-open { from { clip-path: circle(0 at var(--vt-x) var(--vt-y)); } to { clip-path: circle(var(--vt-r) at var(--vt-x) var(--vt-y)); } }
+@keyframes vt-close { from { clip-path: circle(var(--vt-r) at var(--vt-x) var(--vt-y)); } to { clip-path: circle(0 at var(--vt-x) var(--vt-y)); } }
+@keyframes vt-recede { to { scale: 0.9; opacity: 0.25; filter: blur(6px); } }
+@keyframes vt-return { from { scale: 0.9; opacity: 0.25; filter: blur(6px); } }

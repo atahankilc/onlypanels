@@ -24,12 +24,24 @@ function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real 
 // The start choice is a preference of this browser, nothing about a home.
 const START_KEY = "start-choice";
 const savedStart = (): Start | null => { try { const v = localStorage.getItem(START_KEY); return v === "map" || v === "form" ? v : null; } catch { return null; } };
-/** Between the two ways of answering: the page cross-fades instead of sweeping, where the browser can. */
-const swap = (fn: () => void) => {
-  const d = document as Document & { startViewTransition?: (f: () => void) => unknown };
-  if (!d.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) { fn(); return; }
-  d.startViewTransition(() => flushSync(fn));
+/** Between the two ways of answering, where the browser can. Plain: the page cross-fades. "in" / "out": the map
+ *  opens as a circle out of the With/Without switch, or closes back into it (see html[data-vt] in styles.css). */
+const swap = (fn: () => void, map?: "in" | "out") => {
+  const d = document as Document & { startViewTransition?: (f: () => void) => { finished: Promise<void> } };
+  // The map switch plays even with the system's reduced motion on: it is one short movement the person asked for.
+  if (!d.startViewTransition || (!map && matchMedia("(prefers-reduced-motion: reduce)").matches)) { fn(); return; }
+  const html = document.documentElement;
+  const from = map && document.querySelector(".startswitch")?.getBoundingClientRect();
+  if (from) {
+    const x = from.left + from.width / 2, y = from.top + from.height / 2;
+    const r = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y)); // reaches the farthest corner
+    html.style.setProperty("--vt-x", `${x}px`); html.style.setProperty("--vt-y", `${y}px`); html.style.setProperty("--vt-r", `${r}px`);
+    html.dataset.vt = map;
+  } else delete html.dataset.vt;
+  const mine = ++swaps;
+  d.startViewTransition(() => flushSync(fn)).finished.finally(() => { if (mine === swaps) delete html.dataset.vt; }); // a quicker second switch keeps its own circle
 };
+let swaps = 0;
 const saveStart = (s: Start) => { try { localStorage.setItem(START_KEY, s); } catch { /* private mode: asked again next time */ } };
 
 const newRef = () => `R-${Math.random().toString(36).slice(2, 7).toUpperCase()}`; // a reference the homeowner can quote
@@ -153,7 +165,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const listing = bare && stage !== "sent" && (formView ?? (requests.length || loading ? "list" : "form")) === "list";
   const addHome = () => { setStart("map"); saveStart("map"); setStage("roof"); setFace(null); setStep("pick"); setMove(null); };
   /** Map or questions, switched at once from either side. Answers already given stay. */
-  const switchTo = (s: Start) => { if (s === start) return; swap(() => (s === "form" ? begin("form") : addHome())); };
+  const switchTo = (s: Start) => { if (s === start) return; swap(() => (s === "form" ? begin("form") : addHome()), s === "form" ? "out" : "in"); };
   /** Back from the first page: the map's picking step, or the start choice for questions only. */
   const backToPick = () => { if (start === "form" && requests.length) { setFormView("list"); return; } setFace(null); setStep("pick"); setMove("out"); if (start === "form") setStart(null); };
 
