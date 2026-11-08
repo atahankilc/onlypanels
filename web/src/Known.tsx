@@ -237,13 +237,13 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
   }
 
   if (stage === "goal") {
-    if (a.goal === "cost") add(known, "Low cost first: your installer may suggest a smaller battery or none", YOU);
+    if (a.goal === "cost") add(known, "Low cost first: battery and solar chosen by what leaves you most ahead over 20 years", YOU);
     else if (a.goal === "independence") add(known, "Independence first: a battery comes in more readily", YOU);
     else if (a.goal === "environment") add(known, "The environment first: up to a fifth more solar, as far as the roof allows", YOU);
-    else add(assumed, "No priority: no lean either way");
+    else add(assumed, "No priority: sized as experts do for homes like yours");
     if (a.backup === true) {
       add(known, a.has_storage ? "Backup power: parts that run the house from your battery in an outage" : "Backup power: a battery stays in the design, with parts that run the house in an outage", YOU);
-      if (a.goal === "cost") add(known, "Low cost and backup pull apart: your installer asks which matters more", MATH);
+      if (a.goal === "cost") add(known, "Low cost with backup: a battery stays, the size that pays best", MATH);
     } else if (a.backup === false) add(known, "No backup power needed", YOU);
     else add(assumed, "No backup power unless you ask");
     add(later, "Reads your priority before choosing between options");
