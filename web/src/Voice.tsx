@@ -3,7 +3,7 @@
 // work while it works; the answer, with the question and its steps folded above it), and the dock sits below it at the
 // bottom left: the other way to ask on the left (keyboard), the main way in the middle (the ball), the options on the
 // right (ask by voice or text, tap or hold to talk, spoken replies on or off, start over), remembered on this device.
-// Before the first question only a few things you can say show, as chips.
+// Before the first question only the dock shows.
 // What happens behind: ElevenLabs hears, Claude works the app through an MCP server, the page does what was asked as
 // taps would, ElevenLabs speaks the answer. Planner: the desk (desk.py). Homeowner: a helper through the questions
 // (guide.py), off until they allow it, since what they say leaves the browser before Send; it never gets the home, the
@@ -11,7 +11,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowUp, Back, ChevronDown, ChevronRight, Keyboard, Restart, Sliders, Tick } from "./icons";
 import { Core, VoiceState } from "./VoiceCore";
-import { VoiceAction, guideContext, runActions, usePlace, voiceContext } from "./voiceBus";
+import { VoiceAction, guideContext, runActions, voiceContext } from "./voiceBus";
 import "./voice.css";
 
 type Who = "planner" | "homeowner";
@@ -28,20 +28,6 @@ const SIDE = {
   planner: { url: "/api/voice/turn", context: voiceContext, placeholder: "Ask the desk", name: "Desk" },
   homeowner: { url: "/api/guide/turn", context: guideContext, placeholder: "Ask the helper", name: "Helper" },
 };
-/** A few things worth saying where the person is now. */
-function suggestions(who: Who): string[] {
-  if (who === "planner") {
-    const c = voiceContext();
-    if (c.open) return c.open.to_confirm.length ? ["What is left to confirm?", "What does it cost?", "Without a battery?"] : ["What does it cost?", "Without a battery?", "Show the offer"];
-    return ["Open the newest request", "Which are waiting?", "Show the prices"];
-  }
-  const g = guideContext();
-  if (g.screen === "start") return ["Help me start", "Without the map", "What happens with my data?"];
-  if (g.screen === "pick") return ["How do I pick my home?", "Without the map"];
-  if (g.screen === "requests") return ["Start a new request", "What happens next?"];
-  if (g.screen === "sent") return ["What happens now?"];
-  return ["What is this question for?", "I don't know this", "Next question"];
-}
 const CONSENT_KEY = "voice-helper-allowed";
 const read = (key: string, fallback: string) => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
 const write = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* not remembered */ } };
@@ -59,7 +45,6 @@ async function microphone(): Promise<MediaStream> {
 }
 
 export default function VoiceDock({ who = "planner" }: { who?: Who }) {
-  usePlace();
   const side = SIDE[who];
   const [ready, setReady] = useState<{ speech: boolean; agent: boolean } | null>(null);
   const [state, setState] = useState<VoiceState>("off");
@@ -229,9 +214,6 @@ export default function VoiceDock({ who = "planner" }: { who?: Who }) {
   return <section className={`guide ${who} ${center}`} aria-label={side.name}>
     {error && state !== "listening" && <p className="voice-error">{error}</p>}
     {caption && <div className={`guide-bubble${past && state === "off" ? " past" : ""}`}>{caption}</div>}
-    {fresh && !asking && state === "off" && <ul className="intents" aria-label="Things you can ask">
-      {suggestions(who).map((s) => <li key={s}><button type="button" onClick={() => submit(s)}>{s}</button></li>)}
-    </ul>}
     <div className="dock">
       <div className="dock-side">
         {center === "talk" ? <button type="button" className="hud-side" onClick={() => gate(() => setTypingNow(true))} aria-label="Type instead" title="Type instead"><Keyboard size={20} /></button>

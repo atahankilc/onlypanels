@@ -60,10 +60,7 @@ body:has(.guide) .maphint { left: calc(var(--left, 424px) + 32px + 248px + 20px)
 
 .guide .voice-error { margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--hud-glass-2); font-size: 12.5px; color: var(--hud-warn); }
 
-/* things you can say, before the first question */
-.intents { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.intents button { display: inline-flex; align-items: center; gap: 7px; height: var(--btn-md); padding: 0 14px; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); color: var(--hud-ink); font: 500 13.5px var(--font-ui); cursor: pointer; animation: hud-in 0.24s var(--ease); }
-@media (hover: hover) { .intents button:hover, .hud-side:not([aria-expanded="true"]):hover { background: var(--hud-glass-2); } }
+@media (hover: hover) { .hud-side:not([aria-expanded="true"]):hover { background: var(--hud-glass-2); } }
 
 /* the message field: the same glass and height (44) as the dock's round buttons */
 .type-bar { display: flex; align-items: center; gap: 6px; height: var(--btn-lg); padding: 0 4px 0 16px; border: 1px solid var(--hud-line); border-radius: 999px; background: var(--hud-glass); -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); transition: background-color 0.2s, border-color 0.2s; }

@@ -1,6 +1,6 @@
 // What the planner's voice sees and does. The desk publishes what is on screen; a spoken turn returns actions, which
 // the screen that owns them carries out as clicks (Planner for the list, Workspace for an open request).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { Inputs, Overrides } from "./plan";
 
 export type VoiceAction =
@@ -32,26 +32,14 @@ export type DeskContext = {
 
 let context: DeskContext = { page: "requests", requests: [], open: null };
 export const voiceContext = () => context;
-export const setDeskContext = (c: Omit<DeskContext, "open">) => { context = { ...context, ...c }; moved(); };
-export const setOpenContext = (open: DeskContext["open"]) => { context = { ...context, open, page: open ? "request" : context.page === "request" ? "requests" : context.page }; moved(); };
+export const setDeskContext = (c: Omit<DeskContext, "open">) => { context = { ...context, ...c }; };
+export const setOpenContext = (open: DeskContext["open"]) => { context = { ...context, open, page: open ? "request" : context.page === "request" ? "requests" : context.page }; };
 
 /** What the homeowner's helper sees: where they are and their answers. Never the home, the address or the meter photo. */
 export type GuideContext = { screen: "start" | "pick" | "questions" | "requests" | "sent"; page: string | null; pages: string[]; answers: Record<string, unknown> };
 let guide: GuideContext = { screen: "start", page: null, pages: [], answers: {} };
 export const guideContext = () => guide;
-export const setGuideContext = (g: GuideContext) => { guide = g; moved(); };
-
-/** The dock's suggestions follow the screen: it hears when the place changes (not on every render). */
-const places = new EventTarget();
-let place = "";
-function moved() {
-  const now = [context.page, context.open?.id, context.open?.tab, guide.screen, guide.page].join("|");
-  if (now !== place) { place = now; places.dispatchEvent(new Event("moved")); }
-}
-export function usePlace() {
-  const [, tick] = useState(0);
-  useEffect(() => { const on = () => tick((n) => n + 1); places.addEventListener("moved", on); return () => places.removeEventListener("moved", on); }, []);
-}
+export const setGuideContext = (g: GuideContext) => { guide = g; };
 
 const bus = new EventTarget();
 /** Several design changes or confirmations in one turn become one each: the screen updates from one request state per
