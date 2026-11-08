@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import FindHome from "./FindHome";
 import { Mark } from "./icons";
 import { DEMO_COUNT, loadDemo } from "./demo";
@@ -9,6 +9,11 @@ import { sunOf } from "./api";
 import { Segmented } from "./ui";
 
 type View = "homeowner" | "planner";
+// The demo keeps every request in the page. With the homeowner and the planner on their own addresses, two tabs of the same browser
+// each held their own: an offer sent in one never reached the other. The tabs now tell each other what was sent and how far each
+// request is. It stays in this browser, as the requests do.
+const tabs = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("onlypanels-demo") : null;
+type TabNews = { type: "sent"; h: Handoff; sentAt: number; out: Handoff } | { type: "progress"; ref: string; p: Progress };
 const viewOf = (): View => (location.pathname.replace(/\/+$/, "") === "/planner" ? "planner" : "homeowner");
 
 export default function App() {
@@ -26,7 +31,8 @@ export default function App() {
   const [mine, setMine] = useState<Mine[]>([]);
   // `out` is what reaches the installer (share.ts). Sun never travels: with the home shared, the installer works it out again
   // from the building, the same way, so marked cells still line up. Until then the request waits.
-  const sent = (h: Handoff, sentAt = Date.now(), out: Handoff = h) => {
+  const sent = (h: Handoff, sentAt = Date.now(), out: Handoff = h, told = false) => {
+    if (!told && h.ref && !h.seed) tabs?.postMessage({ type: "sent", h, sentAt, out } satisfies TabNews); // the demo's own requests load in every tab
     const arrive = (x: Handoff) => setHandoffs((l) => [...l.filter((y) => y.ref !== x.ref), { ...x, sentAt }]);
     if (out.buildings.some((b) => b.sun === undefined))
       Promise.all(out.buildings.map((b) => (b.sun !== undefined ? b : sunOf(b.square, b.id).then((sun) => ({ ...b, sun })).catch(() => ({ ...b, sun: null })))))
@@ -36,8 +42,20 @@ export default function App() {
   };
   // The demo starts with three requests on real homes, oldest first, as if their homeowners had sent them.
   const [loading, setLoading] = useState(DEMO_COUNT); // demo requests still on their way
-  useEffect(() => loadDemo((h) => sent(h, h.sentAt), () => setLoading((n) => Math.max(0, n - 1))), []);
-  const progress = (ref: string, p: Progress) => setMine((l) => l.map((x) => (x.ref === ref ? { ...x, opened: x.opened || p.opened, offer: p.offer ?? x.offer } : x)));
+  useEffect(() => loadDemo((h) => sent(h, h.sentAt, h, true), () => setLoading((n) => Math.max(0, n - 1))), []);
+  const progress = (ref: string, p: Progress, told = false) => {
+    if (!told) tabs?.postMessage({ type: "progress", ref, p } satisfies TabNews);
+    setMine((l) => l.map((x) => (x.ref === ref ? { ...x, opened: x.opened || p.opened, offer: p.offer ?? x.offer } : x)));
+  };
+  // News from another tab, applied as if it happened here, without telling it back.
+  const latest = useRef({ sent, progress });
+  latest.current = { sent, progress };
+  useEffect(() => {
+    if (!tabs) return;
+    const hear = (e: MessageEvent<TabNews>) => { const m = e.data; if (m.type === "sent") latest.current.sent(m.h, m.sentAt, m.out, true); else latest.current.progress(m.ref, m.p, true); };
+    tabs.addEventListener("message", hear);
+    return () => tabs.removeEventListener("message", hear);
+  }, []);
   return (
     <div className="app">
       <header className="topbar">
