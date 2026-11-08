@@ -134,6 +134,8 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .again { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 /* one topic a page: a heading, one line, big answers */
 .stage.review .panel.quiz, .curtain.new .panel.quiz { display: flex; flex-direction: column; padding: 24px 18px 14px; animation: rise 0.35s var(--ease) backwards; }
+/* A long page scrolls; nothing in it is squeezed to fit (the round check went oval when "What you sent" opened). */
+.stage.review .panel.quiz > *, .curtain.new .panel.quiz > * { flex-shrink: 0; }
 .count { margin: 0 0 12px; font: 500 11px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--hud-ink-2); }
 .quiz h1 { margin-bottom: 8px; font-size: 30px; line-height: 1.12; text-wrap: balance; }
 .quiz > p { max-width: none; }
@@ -157,7 +159,7 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .answers.grid2 { grid-template-columns: 1fr 1fr; }
 .quiz .more.flat { border-top: 0; padding-top: 0; }
 /* After sending: a check, the reference, what happens next, and what was sent. */
-.quiz .done { display: grid; place-items: center; width: 52px; height: 52px; margin: 8px 0 18px; border-radius: 50%; background: var(--hud-live); color: var(--hud-base); animation: rise 0.4s var(--ease); }
+.quiz .done { display: grid; place-items: center; flex: none; width: 52px; height: 52px; aspect-ratio: 1; margin: 8px 0 18px; border-radius: 50%; background: var(--hud-live); color: var(--hud-base); animation: rise 0.4s var(--ease); }
 .next-steps { list-style: none; counter-reset: step; display: grid; gap: 16px; margin: 22px 0 8px; padding: 0; }
 .next-steps li { counter-increment: step; display: grid; grid-template-columns: 28px 1fr; column-gap: 12px; row-gap: 2px; }
 .next-steps li::before { content: counter(step); grid-row: span 2; display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--hud-line); border-radius: 50%; font-size: 13px; color: var(--hud-ink-2); }

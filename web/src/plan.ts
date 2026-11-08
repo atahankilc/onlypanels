@@ -35,7 +35,7 @@ export type Progress = { opened: boolean; offer: Offer | null };
 export type Mine = { ref: string; label: string; sentAt: number; handoff: Handoff } & Progress;
 /** Solar already on the building: size and year as the customer gave them, else the area they marked and the sun it gets. */
 export type Existing = { kwp: number | null; year: number | null; battery_kwh: number | null; m2?: number | null; kwh_per_kwp?: number | null };
-export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string };
+export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string; seed?: { opened?: boolean; offer?: Offer | null } }; // seed: demo requests that arrive already opened or offered
 
 const TYPICAL_KM = 11300;
 /** The marked area with panels and the sun it gets: measured yield after shade, weighted by area. */
@@ -60,7 +60,7 @@ export function fromHomeowner(h: Handoff): Request {
   const { buildings, answers: a, choice } = h;
   const car = !!(a.ev || a.ev_planned);
   return {
-    id: h.ref ? `homeowner-${h.ref}` : "homeowner", ref: h.ref, label: buildings[0]?.label ?? "Home", from: "Homeowner", buildings, status: "draft",
+    id: h.ref ? `homeowner-${h.ref}` : "homeowner", ref: h.ref, label: buildings[0]?.label ?? "Home", from: "Homeowner", buildings, status: h.seed?.offer ? "sent" : "draft", opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? undefined,
     inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating, heat_kwh: a.heat_kwh, hp_kwh: a.heating === "Heatpump" ? a.hp_kwh : null, has_solar: !!a.has_solar, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM * (a.ev_count ?? 1),
       ev_kwh_month: a.ev && !a.ev_planned ? a.ev_kwh_month : null, ev_charge_home: car ? a.ev_charge_home : null, ev_day: car ? a.ev_day : null, has_wallbox: car ? a.has_wallbox : null,
       demand_source: a.use_source === "exact" ? "bill" : a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source, monthly_eur: a.use_source === "payment" ? a.monthly_eur : null,

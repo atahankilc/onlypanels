@@ -13,7 +13,7 @@ export default function App() {
   const [mine, setMine] = useState<Mine[]>([]);
   const sent = (h: Handoff, sentAt = Date.now()) => {
     setHandoffs((l) => [...l.filter((x) => x.ref !== h.ref), h]);
-    if (h.ref) setMine((l) => [{ ref: h.ref!, label: h.buildings[0]?.label ?? "Home", sentAt, handoff: h, opened: false, offer: null }, ...l.filter((x) => x.ref !== h.ref)].sort((a, b) => b.sentAt - a.sentAt));
+    if (h.ref) setMine((l) => [{ ref: h.ref!, label: h.buildings[0]?.label ?? "Home", sentAt, handoff: h, opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? null }, ...l.filter((x) => x.ref !== h.ref)].sort((a, b) => b.sentAt - a.sentAt));
   };
   // The demo starts with three requests on real homes, oldest first, as if their homeowners had sent them.
   useEffect(() => { loadDemo().then((list) => [...list].sort((a, b) => a.sentAt - b.sentAt).forEach((h) => sent(h, h.sentAt))).catch(() => undefined); }, []);
