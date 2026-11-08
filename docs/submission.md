@@ -4,7 +4,7 @@ Paste into https://thinc-hack.lovable.app/ (deadline Sunday 14:00). Numbers from
 
 ## Team
 
-- Team name: OnlyPanels *(confirm)*
+- Team name: OnlyPanels
 - Case: Reonic
 - Repository: https://github.com/atahankilc/onlypanels
 - Pitch slides: `OnlyPanels-pitch.pdf` in the repository root
@@ -33,4 +33,4 @@ Yes. The planner runs the desk by voice: ElevenLabs hears the command (about 0.5
 
 ## Demo
 
-Optional: a URL or a video of at most 2 minutes. Follow `docs/demo-script.md`.
+A video of at most 2 minutes: plan and voiceover in `docs/demo-video.md`.
