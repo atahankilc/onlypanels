@@ -223,3 +223,12 @@ def test_battery_table_matches_the_design_with_an_old_system(engine):
     d = engine.design(home, {"battery_kwh": 0})
     row = next(r for r in curve(home, d) if r["kwh"] == 0)
     assert row["own_pct"] == d["energy"]["self_sufficiency_pct"] and row["saving_eur"] == d["energy"]["saving_eur"]
+
+
+def test_no_extra_modules_onto_a_poor_surface(engine):
+    home = {"installer": "2a8ba8e2", "demand_kwh": 6000, "price_ct_kwh": 32}
+    good = {"max_modules": 9, "kwh_per_kwp": 1090, "tilt": 30, "azimuth": 180}
+    north = {"max_modules": 30, "kwh_per_kwp": 590, "tilt": 30, "azimuth": 0}
+    plain = engine.design({**home, "surfaces": [{**good, "max_modules": 60, "kwh_per_kwp": 950}]})["pv"]["modules"]
+    mixed = engine.design({**home, "surfaces": [good, north]})["pv"]["modules"]
+    assert mixed <= plain  # the blend is weak, but the extra modules would all go north

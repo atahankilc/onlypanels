@@ -317,7 +317,14 @@ class Engine:
             free = self.predict(row, added, None, None, extra_kwp=old_kwp)[0] * GOAL_PV.get(goal, 1.0)
             before_sun = max(1, round(min(free[0], max_modules * ASSUMED_KWP_PER_MODULE) / ASSUMED_KWP_PER_MODULE))
             sun_share = site_yield(before_sun, surfaces, typical * mount["yield"]) / typical
-            kwp = np.minimum(free * sun_factor(sun_share), max_modules * ASSUMED_KWP_PER_MODULE)
+            factor = sun_factor(sun_share)
+            if factor > 1:
+                # More modules land where the last ones went: if that surface is a poor one, adding there earns too little.
+                placed = place(before_sun, surfaces)
+                last = max((k for k, n in enumerate(placed) if n), default=0)
+                if (surfaces[last].get("kwh_per_kwp") or typical) < POOR_ROOF * typical:
+                    factor = 1.0
+            kwp = np.minimum(free * factor, max_modules * ASSUMED_KWP_PER_MODULE)
         modules = locked_modules if lock is not None else max(1, round(kwp[0] / ASSUMED_KWP_PER_MODULE))
         kwp_final = modules * ASSUMED_KWP_PER_MODULE
         capped = lock is None and max_modules is not None and free_kwp > max_modules * ASSUMED_KWP_PER_MODULE
