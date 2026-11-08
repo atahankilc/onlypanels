@@ -156,13 +156,8 @@ export const designBody = (i: Inputs, o: Overrides, roof: Spot[], off: string[],
   // Beyond the customer's area only good surfaces take modules: a planner does not fill a north roof to reach a size.
   const best = Math.max(0, ...use.map((r) => r.yield_)), good = (r: Spot) => r.yield_ >= OVERFLOW_SHARE * best;
   const parts = [...use.filter((r) => r.inside > 0).map((r) => ({ r, n: r.inside })), ...(strict ? [] : use.filter((r) => r.fits > r.inside && good(r)).map((r) => ({ r, n: r.fits - r.inside })))];
-  // What is already there counts only while the request says so: switching it off in Facts takes it out of the design and the money.
-  const existing = ex ? { ...(i.has_solar ? { existing_kwp: ex.kwp, existing_year: ex.year, existing_m2: ex.m2 ?? null, existing_kwh_per_kwp: ex.kwh_per_kwp ?? null } : {}),
-    ...(i.has_storage ? { existing_battery_kwh: ex.battery_kwh } : {}) } : {};
-  // Every measured surface switched off: one surface that holds nothing, so the engine places no module instead of reading "no roof".
-  const surfaces = parts.length || !roof.length ? parts.map(({ r, n }) => ({ max_modules: n, kwh_per_kwp: r.yield_, tilt: r.s.tilt, azimuth: r.s.azimuth }))
-    : [{ max_modules: 0, kwh_per_kwp: roof[0].yield_, tilt: roof[0].s.tilt, azimuth: roof[0].s.azimuth }];
-  return { parts, body: { inputs: { ...i, ...existing, surfaces }, overrides: o } };
+  const existing = ex ? { existing_kwp: ex.kwp, existing_year: ex.year, existing_m2: ex.m2 ?? null, existing_kwh_per_kwp: ex.kwh_per_kwp ?? null, existing_battery_kwh: ex.battery_kwh } : {};
+  return { parts, body: { inputs: { ...i, ...existing, surfaces: parts.map(({ r, n }) => ({ max_modules: n, kwh_per_kwp: r.yield_, tilt: r.s.tilt, azimuth: r.s.azimuth })) }, overrides: o } };
 };
 export const refine = (text: string) => post<{ inputs: Partial<Inputs>; overrides: Overrides; understood: ({ code: string } & Record<string, unknown>)[]; source: string }>("/api/refine", { text, mount: "roof" });
 

@@ -61,10 +61,9 @@ def known(i):
     return [{"id": k, "label": label, "known": ok, "why": why} for k, label, ok, why in facts]
 
 
-def evidence(offers, i, d, need_mwh, car=False, approved=None, homes=None):
-    """The range experts' offers span for homes like this one, what is known, and where the draft sits.
-    homes: the engine's own similar homes (project ids), so the counts match what the design says."""
-    near = offers[offers.project_id.isin(homes)] if homes is not None else similar_offers(offers, i["installer"], need_mwh, car)
+def evidence(offers, i, d, need_mwh, car=False, approved=None):
+    """The range experts' offers span for homes like this one, what is known, and where the draft sits."""
+    near = similar_offers(offers, i["installer"], need_mwh, car)
     w = near.weight.values
     kwp = near.kwp.values
     low, mid, high = _q(kwp, w, LOW), _q(kwp, w, 0.5), _q(kwp, w, HIGH)

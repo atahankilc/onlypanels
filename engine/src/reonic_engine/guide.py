@@ -13,6 +13,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 # What each page asks and why, in the words of the pages (Review.tsx) and what stands in for a skipped answer (questions.ts).
 PAGES = {
+    "intro": "Before the questions: every question is optional, the home's location fills gaps, each answer says what it is for, and they choose what is sent at the end.",
     "where": "Where is your home? The address, for the installer's visit. It is typed, never said to the helper.",
     "roofq": "The roof in words: which way the larger side faces, how steep it is, how big the house is. Rough answers are fine.",
     "roof": "On the map: mark the parts of the roof you would like panels on, with Whole surface or Draw. Optional.",
@@ -53,6 +54,7 @@ ANSWERS = {
     "roof_slope": ("choice", ["gentle", "steep", "unsure"]), "roof_size": ("choice", ["small", "medium", "large", "known"]),
     "big_users": ("list", ["pool", "sauna", "ac", "water"]),
 }
+NO_MAP_PAGES = ["where", "roofq", "solar", "battery", "use", "big", "house", "heat", "car", "goal", "send", "share"]  # Review.pagesFor(false)
 NEVER = {"address", "meter_photo", "area"}  # never through the helper, either way
 
 
@@ -113,7 +115,13 @@ def build(guide: Guide) -> MCPServer:
             raise ToolError("That choice is only on the start screen.")
         if way not in ("map", "questions"):
             raise ToolError("way is map or questions")
-        return guide.act({"type": "start", "way": "form" if way == "questions" else "map"}, f"Started with {way}.")
+        if way == "map":
+            guide.screen = "pick"
+            return guide.act({"type": "start", "way": "map"}, "The map shows now: they find their area and click the buildings of their home, then Continue.")
+        # Questions open straight at their first page, even when sent requests exist (the page skips its list for this),
+        # so go_to_page and set_answers work in the same turn.
+        guide.screen, guide.pages = "questions", NO_MAP_PAGES
+        return guide.act({"type": "start", "way": "form"}, "The questions show now, at their start page; the first question is where the home is (they type the address).")
 
     @server.tool(description="On the list of sent requests: start a new request, which opens the questions at their first page. "
                              "Then go_to_page and set_answers work in the same turn.")
@@ -121,14 +129,14 @@ def build(guide: Guide) -> MCPServer:
         if guide.screen != "requests":
             raise ToolError("New request is only on the list of sent requests.")
         guide.screen = "questions"
-        guide.pages = guide.pages or ["where", "roofq", "solar", "battery", "use", "big", "house", "heat", "car", "goal", "send", "share"]
+        guide.pages = guide.pages or NO_MAP_PAGES
         return guide.act({"type": "new"}, "New request started.")
 
     @server.tool(description="Go to a page of the questions by its name from pages_in_order, e.g. the next one, or 'send' for the overview.")
     def go_to_page(page: str) -> str:
         if guide.screen != "questions":
             raise ToolError("The questions are not open yet. " + (SCREENS.get(guide.screen) or ""))
-        if page not in guide.pages and page not in ("send", "share"):
+        if page not in guide.pages and page not in ("intro", "send", "share"):
             raise ToolError(f"Pages: {guide.pages}")
         return guide.act({"type": "goto", "page": page}, f"Showing {page}.")
 

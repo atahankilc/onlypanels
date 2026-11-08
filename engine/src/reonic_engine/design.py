@@ -204,7 +204,7 @@ class Engine:
         kwh, sizes = d["battery"]["kwh"], sorted(d["battery"]["choices"])
         locks = {"modules": d["pv"]["modules"]}  # a battery variant keeps the solar as it is
         picks = []
-        if not i.get("has_storage") and d["pv"]["modules"]:  # no battery variants for a design without solar
+        if not i.get("has_storage"):
             guide = any(n["code"] == "battery_guide" for n in d["review"])
             if kwh and d["battery"]["unsure"]:
                 picks.append(("no_battery", "Without battery", "The battery decision is open: the same system without one.", {**locks, "battery_kwh": 0}))
@@ -223,7 +223,7 @@ class Engine:
             picks.insert(0, hp) if i.get("boiler_age") in ("over20", "10to20") else picks.append(hp)
         # Larger solar, as large as experts go for similar homes (9 in 10 chose less), within what the roof holds.
         largest = int(d["similar"]["kwp_high"] // ASSUMED_KWP_PER_MODULE)
-        if d["pv"]["max_modules"] is not None:
+        if d["pv"]["max_modules"]:
             largest = min(largest, d["pv"]["max_modules"])
         if len(picks) < 2 and largest - d["pv"]["modules"] >= 3 and o.get("modules") is None:
             picks.append(("pv_large", "Larger solar", f"{largest} modules, about as large as experts go for similar homes: more to sell, a lower share used at home.", {"modules": largest}))
@@ -321,8 +321,6 @@ class Engine:
         if surfaces:
             max_modules = sum(s["max_modules"] for s in surfaces)
         locked_modules = o.get("modules")
-        if max_modules == 0 and locked_modules is None:
-            locked_modules = 0  # a roof that holds no module (every surface taken out): no solar, not "no roof known"
         lock = locked_modules * ASSUMED_KWP_PER_MODULE if locked_modules is not None else None
 
         free_kwp = self.predict(row, added)[0][0]
@@ -381,7 +379,7 @@ class Engine:
             reasons.append({"code": "battery_existing"})
         elif battery_yes:
             reasons.append({"code": "battery_yes", "rate": similar["battery_rate"], "kwh": battery_kwh,
-                            "kwp": round(kwp_final, 1), "per_kwp": round(battery_kwh / kwp_final, 1) if kwp_final else 0,
+                            "kwp": round(kwp_final, 1), "per_kwp": round(battery_kwh / kwp_final, 1),
                             "common": ", ".join(f"{v:g}" for v in similar["battery_common"])})
         else:
             reasons.append({"code": "battery_no", "rate": similar["battery_rate"]})
@@ -414,8 +412,7 @@ class Engine:
             production = sum(
                 n * ASSUMED_KWP_PER_MODULE * (s.get("kwh_per_kwp") or typical * MOUNTS[s["kind"]]["yield"])
                 for n, s in zip(placed, surfaces)) / 1000
-            if kwp_final:
-                reasons.append({"code": "site_sun", "kwh": round(production * 1000 / kwp_final)})
+            reasons.append({"code": "site_sun", "kwh": round(production * 1000 / kwp_final)})
         price = i.get("price_ct_kwh", 32.0)
         sun = sun_shape(surfaces, placed)  # real weather years, this roof's directions
         old_mwh = ex["mwh"] if known else 0.0
@@ -648,7 +645,7 @@ def _trace(*, i, o, base, ev_mwh, hp_mwh, total, heat_type, heat_mwh, hp_kw, hp_
     elif backup:
         b_res, by = f"{_num(battery_kwh)} kWh, kept because the customer wants backup power, which needs a battery.", "engine"
     elif battery_kwh:
-        b_res, by = f"{_num(battery_kwh)} kWh ({_num(battery_kwh / kwp_final) if kwp_final else 0} kWh per kWp). The engine is {round(p_battery * 100)}% sure a battery belongs here.", "engine"
+        b_res, by = f"{_num(battery_kwh)} kWh ({_num(battery_kwh / kwp_final)} kWh per kWp). The engine is {round(p_battery * 100)}% sure a battery belongs here.", "engine"
     else:
         b_res, by = f"No battery. The engine is {round((1 - p_battery) * 100)}% sure it does not belong here.", "engine"
     steps.append({"id": "battery", "title": "Battery", "kind": "learned", "by": by,

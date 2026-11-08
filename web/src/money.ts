@@ -39,8 +39,7 @@ export const years = (v: number | null) => (v == null ? "not within the years lo
 let version = 0;
 const listeners = new Set<() => void>();
 export const pricesChanged = () => { version += 1; listeners.forEach((f) => f()); };
-/** Changes whenever a price or running price changes: views that depend on prices ask again. */
-export const usePriceVersion = () => useSyncExternalStore((f) => { listeners.add(f); return () => listeners.delete(f); }, () => version);
+const usePriceVersion = () => useSyncExternalStore((f) => { listeners.add(f); return () => listeners.delete(f); }, () => version);
 
 // The open request's money, for the parts of the desk that show it beside the design (variants, battery sizes).
 let current: Costs | null = null;

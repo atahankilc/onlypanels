@@ -55,3 +55,18 @@ def test_a_new_request_opens_the_questions_in_the_same_turn():
             await mcp.call_tool("new_request", {})
             return await mcp.call_tool("go_to_page", {"page": "use"})
     assert not asyncio.run(go()).is_error and g.actions == [{"type": "new"}, {"type": "goto", "page": "use"}]
+
+
+def test_choosing_questions_opens_them_in_the_same_turn():
+    g = Guide({"screen": "start"})
+    async def go():
+        async with Client(build(g)) as mcp:
+            said = await mcp.call_tool("choose_start", {"way": "questions"})
+            return said, await mcp.call_tool("go_to_page", {"page": "use"})
+    said, moved = asyncio.run(go())
+    assert "start page" in text_of(said) and not moved.is_error
+    assert g.actions == [{"type": "start", "way": "form"}, {"type": "goto", "page": "use"}]
+
+
+def text_of(result):
+    return result.content[0].text

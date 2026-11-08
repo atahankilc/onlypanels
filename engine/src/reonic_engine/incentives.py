@@ -35,10 +35,6 @@ FKG_HP = 15
 FKG_CAP = 60
 
 
-def _standing(eur):
-    return f"€{abs(round(eur)):,} {'ahead' if eur >= 0 else 'behind'}"
-
-
 def rules(i, d, m):
     """The rules and grants for this home and design. m: the money view from costs.evaluate."""
     kwp = d["pv"]["kwp"] if d["pv"]["modules"] else 0
@@ -71,8 +67,7 @@ def rules(i, d, m):
                 "A smart meter lifts the limit; worth it only when much is lost.", "Solarspitzengesetz, EEG §9")
         draft = m.get("draft_2027") or {}
         add("eeg_2027", "EEG 2027 draft: no fixed feed-in from 2027", "draft", True,
-            (f"payback {draft['payback_years']:g} years instead of {m['payback_years']:g}" if draft.get("payback_years") and m.get("payback_years")
-             else f"{_standing(draft['gain_eur'])} after 20 years instead of {_standing(m['gain_eur'])}" if draft else None),
+            f"payback {draft['payback_years']:g} years instead of {m['payback_years']:g}" if draft.get("payback_years") and m.get("payback_years") else None,
             f"The cabinet's draft for systems switched on from 1 January 2027: about {DRAFT_FEED_CT:g} ct for at most {DRAFT_MONTHS} months, then market value, "
             f"and feed-in capped at {round(DRAFT_CAP * 100)}% for good. Not law yet: Bundestag, Bundesrat and the EU still decide.",
             "Tell the customer: switching on before 2027 keeps the 20-year tariff.", "EEG 2027 cabinet draft, 29 July 2026")

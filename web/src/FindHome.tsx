@@ -217,10 +217,17 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const screen = step === "pick" && start === null ? "start" : listing ? "requests" : step === "pick" ? "pick" : stage === "sent" ? "sent" : "questions";
   const { address: _a, meter_photo: _m, area: _c, ...spoken } = answers;
   useEffect(() => { setGuideContext({ screen, page: screen === "questions" ? stage : null, pages: [...pagesFor(buildings.length > 0), "share"], answers: spoken }); });
+  const starting = useRef<string | null>(null); // the page a voice start lands on
   useVoiceActions((x) => {
-    if (x.type === "start" && start === null && !move) swap(() => begin(x.way));
+    // "Only questions" by voice opens the questions themselves, not first the list of sent requests, as the helper says.
+    // The switch plays as a transition and lands later, so a page asked for in the same turn waits for it.
+    if (x.type === "start" && start === null && !move) {
+      starting.current = ""; // begin() picks the first page; a page asked for in the same turn replaces it
+      swap(() => { begin(x.way); if (x.way === "form") { setFormView("form"); if (starting.current) setStage(starting.current as Stage); } starting.current = null; });
+    }
     if (x.type === "new" && listing) { setFormView("form"); setStage("where"); }
-    if (x.type === "goto" && step === "review" && (stage !== "sent" || listing)) setStage(x.page as Stage);
+    if (x.type === "goto" && starting.current !== null) starting.current = x.page;
+    else if (x.type === "goto" && step === "review" && (stage !== "sent" || listing)) setStage(x.page as Stage);
     if (x.type === "answers" && stage !== "sent") {
       const v = x.answers as Partial<Answers>;
       setAnswers((a) => ({ ...a, ...v,
