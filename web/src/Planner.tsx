@@ -19,7 +19,7 @@ const HEATS: [string, string][] = [["", "Unknown"], ["Gas", "Gas"], ["Oil", "Oil
 const summary = (d: Design) => `${d.pv.kwp.toFixed(1)} kWp · ${d.battery.kwh ? `${d.battery.kwh} kWh` : "no battery"}${d.wallbox.included ? " · wallbox" : ""}${d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}`;
 const FACT: Record<string, string> = { demand_kwh: "Yearly electricity", price_ct_kwh: "Price", heating: "Heating", heat_kwh: "Yearly heat", ev: "Electric car", ev_km: "Driving", has_solar: "Existing solar", has_storage: "Existing battery", installer: "Catalog",
   ev_kwh_month: "Car charged at home", ev_charge_home: "Charging at home", ev_day: "Car charges in daytime", has_wallbox: "Wallbox already there", hp_kwh: "Heat pump use now", monthly_eur: "Monthly payment",
-  big_users: "Big users", living_m2: "Living area", cert_kwh_m2: "Energy certificate", built: "Built", trees: "Big trees near the roof", roof_renovation: "Roof renewal soon", goal: "Customer's priority" };
+  big_users: "Big users", living_m2: "Living area", cert_kwh_m2: "Energy certificate", built: "Built", roof_renovation: "Roof renewal soon", goal: "Customer's priority" };
 const BUILT: [string, string][] = [["", "Not given"], ["before1979", "Before 1979"], ["1979to1990", "1979 – 1990"], ["1991to2000", "1991 – 2000"], ["2001to2010", "2001 – 2010"], ["since2011", "2011 or later"]];
 const HOME_SHARE: [string, string][] = [["", "Not given"], ["most", "Most"], ["half", "About half"], ["little", "Little"]];
 const RENEWAL: [string, string][] = [["", "Not given"], ["yes", "Yes"], ["no", "No"], ["unsure", "Not sure"]];
@@ -117,7 +117,7 @@ const fmt = (r: Request, k: string, d: Design): string => {
 };
 /** Facts that matter for this design and were not given by anyone: they must be confirmed before the offer leaves. */
 const relevant = (r: Request, d: Design) => Object.keys(r.sources).filter((k) => (k !== "heat_kwh" || d.heatpump.included) && (k !== "ev_km" || r.inputs.ev));
-const EXTRA = ["ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "hp_kwh", "big_users", "living_m2", "cert_kwh_m2", "built", "trees", "roof_renovation", "goal"];
+const EXTRA = ["ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "hp_kwh", "big_users", "living_m2", "cert_kwh_m2", "built", "roof_renovation", "goal"];
 /** What the planner must confirm before the offer leaves: assumed facts this design uses, and a living area guessed
  * from the 3D model when a heat pump is sized from it. The request list counts the same. */
 const toConfirm = (r: Request, d: Design) => [...relevant(r, d).filter((k) => r.sources[k] === "assumed"),
@@ -349,7 +349,6 @@ function Facts({ r, d, setI }: { r: Request; d?: Design; setI: (c: Partial<Input
     <Tagged label="Energy certificate (kWh per m² a year)" source={sourceOf(r, "cert_kwh_m2")}>{num("cert_kwh_m2", 5)}</Tagged>
     <Tagged label="Built" source={sourceOf(r, "built")}>{pick("built", BUILT)}</Tagged>
     {!i.built && i.area_built && <p className="small muted span">Most common nearby, 2022 census: {label(BUILT, i.area_built)}, {Math.round(Number(i.area_built_share ?? 0) * 100)}% of homes. The engine uses it for the heat estimate until the customer says.</p>}
-    <Tagged label="Big trees near the roof" source={sourceOf(r, "trees")}>{yn("trees", i.trees)}</Tagged>
     <Tagged label="Roof renewal soon" source={sourceOf(r, "roof_renovation")}>{pick("roof_renovation", RENEWAL)}</Tagged>
     <Tagged label="Customer's priority" source={sourceOf(r, "goal")}>{pick("goal", GOAL)}</Tagged>
     {i.demand_source === "payment" && <Tagged label="Monthly payment (€)" source={sourceOf(r, "monthly_eur")}>{num("monthly_eur", 5)}</Tagged>}
