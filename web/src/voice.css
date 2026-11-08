@@ -108,6 +108,8 @@ body:has(.guide) .maphint { left: calc(var(--left, 424px) + 32px + 248px + 20px)
 .core-ball.ready { background: transparent; }
 .core.listening .core-ball { transform: scale(calc(var(--swell, 1) * 1.06)); }
 .core.thinking .core-ball { animation: core-breathe 1.6s ease-in-out infinite; }
+.core.off .core-ball { animation: core-idle 3.6s ease-in-out infinite; } /* at rest it breathes, so it reads as alive */
+@keyframes core-idle { 50% { transform: scale(1.04); } }
 @media (hover: hover) { .core:not(:disabled):hover .core-ball { transform: scale(calc(var(--swell, 1) * 1.04)); } }
 @keyframes core-breathe { 50% { transform: scale(0.94); } }
-@media (prefers-reduced-motion: reduce) { .guide .who.live::before, .work-now { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .guide .who.live::before, .work-now, .core.off .core-ball { animation: none !important; } }

@@ -1,7 +1,6 @@
 // Ported from the Steward project (frontend/src/building/Core.tsx) with its owner's permission: the planner's talk
 // button. A soft, grainy ball of colour that flows, painted by a fragment shader. The palette says what the voice is
-// doing in the desk's own colours: calm blue at rest, the live green while it listens, indigo while it works, the route
-// blue while it speaks. The flow quickens with the voice level and rings outward while it speaks.
+// doing: calm blue at rest, the live green while it listens, indigo while it works, the sun's amber while it speaks. The flow quickens with the voice level and rings outward while it speaks.
 // A tap listens until the next tap; holding sends on release; a tap while it speaks stops it. Without WebGL the rest
 // palette is a static CSS gradient.
 import { useEffect, useRef, type KeyboardEvent, type MouseEvent, type PointerEvent, type RefObject } from 'react'
@@ -17,7 +16,7 @@ const PALETTES: Record<VoiceState, Palette> = {
   off: ['#283A9E', '#3D6BE0', '#93A9F6', '#E9E3FB'].map(hex),
   listening: ['#06594A', '#0FA67A', '#62D8B5', '#E0F8EF'].map(hex),
   thinking: ['#272A86', '#5A55E6', '#A99EFF', '#EEEBFF'].map(hex),
-  speaking: ['#1532B0', '#2F6BFF', '#7FA2FF', '#E6E8FF'].map(hex),
+  speaking: ['#7A3204', '#E2780E', '#FFB547', '#FFF2DA'].map(hex), // the sun's amber (--hud-sun, --hud-warn): unmistakable from the blue at rest
 }
 
 const VERTEX = `
@@ -142,7 +141,7 @@ export function Core({ state, level, busy, size = 'large', hold = false, onHold,
         stop.forEach((channel, at) => (colour[index][at] = ease(colour[index][at], channel, 6, dt)))
         gl.uniform3fv(stops[index], colour[index])
       })
-      time += dt * (0.35 + energy * 2.2 + work * 1.1 + (current === 'listening' ? 0.3 : 0)) * (reduced ? 0.4 : 1)
+      time += dt * (0.75 + energy * 2.2 + work * 1.1 + (current === 'listening' ? 0.4 : 0)) * (reduced ? 0.6 : 1) // alive at rest too
       element.style.setProperty('--swell', (1 + energy * 0.07).toFixed(3))
       fit()
       gl.uniform1f(uTime, time)
