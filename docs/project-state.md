@@ -3,8 +3,8 @@
 Living document. Update it whenever the phase, blockers or next steps change.
 
 **Last updated:** 2026-11-08
-**Phase:** Feature work is wrapping up for the 15:00 deadline. Homeowner flow and planner desk work end to end in Munich, with or without the map. The homeowner only gives information and chooses what is sent (D62, D110). The planner opens the request, with every fact marked by source, checks it, sees what it costs, what past projects support and what the rules mean, and decides. D118 and D120 to D123 in `docs/decisions.md` are still Proposed and wait for the user.
-**Deadline:** Sunday 8 November 2026, 15:00
+**Phase:** Feature work is wrapping up for the 14:00 deadline. Homeowner flow and planner desk work end to end in Munich, with or without the map. The homeowner only gives information and chooses what is sent (D62, D110). The planner opens the request, with every fact marked by source, checks it, sees what it costs, what past projects support and what the rules mean, and decides. D118 and D120 to D123 in `docs/decisions.md` are still Proposed and wait for the user.
+**Deadline:** Sunday 8 November 2026, 14:00
 
 ## Done
 

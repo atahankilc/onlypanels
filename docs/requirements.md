@@ -27,7 +27,7 @@ Every requirement in the brief, with page and current status. Update the status 
 | Comparison with the expert for the same project | Done, on held-out projects |
 | Results across many projects | Done, dev scores; final test run pending |
 
-## Must submit (page 8, by Sunday 15:00)
+## Must submit (page 8, by Sunday 14:00)
 
 | Item | Status |
 |---|---|

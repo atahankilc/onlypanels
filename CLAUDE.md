@@ -1,6 +1,6 @@
 # Reonic hackathon project
 
-Build an AI system that proposes PV, battery and heat pump designs the way an expert planner would. **Submission deadline: Sunday 8 November 2026, 15:00.** A simple solution that runs beats a complex one that does not.
+Build an AI system that proposes PV, battery and heat pump designs the way an expert planner would. **Submission deadline: Sunday 8 November 2026, 14:00.** A simple solution that runs beats a complex one that does not.
 
 Read `docs/project-state.md` first. Keep `project-state.md`, `decisions.md` and `open-questions.md` current as work progresses.
 
