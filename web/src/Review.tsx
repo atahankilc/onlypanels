@@ -39,8 +39,8 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   const [way, setWay] = useState<"exact" | "range" | "people" | "payment">(a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source === "people" || a.use_source === "unknown" ? "people" : a.use_source === "payment" ? "payment" : "exact");
   // Gas can be given in kWh or as what is paid a year; the euros are turned into kWh at Munich's all-in gas price.
   const [gasWay, setGasWay] = useState<"kwh" | "eur">(a.gas_eur ? "eur" : "kwh");
-  const [priceOpen, setPriceOpen] = useState(a.price_known);
-  const priceField = () => !priceOpen ? <button type="button" className="textlink lone" onClick={() => setPriceOpen(true)}>My price per kWh is not {PRICE_CT} ct</button> : numberField(optional("Price per kWh (cents), from your bill"), a.price_known ? a.price_ct_kwh : null, (v) => setAnswers({ ...a, price_ct_kwh: v ?? PRICE_CT, price_known: v != null }), `${PRICE_CT} if you skip (Munich basic supply)`, SPAN.price_ct_kwh);
+  // The price is a field of its own; left empty, the placeholder says what stands in.
+  const priceField = () => numberField("Price per kWh (cents)", a.price_known ? a.price_ct_kwh : null, (v) => setAnswers({ ...a, price_ct_kwh: v ?? PRICE_CT, price_known: v != null }), `${PRICE_CT} if you skip, Munich's basic supply`, SPAN.price_ct_kwh);
   /** Switching how to answer drops what was given the other way: moving off "Bill" means the number typed before is not sent. */
   const switchWay = (to: typeof way) => {
     setWay(to);
