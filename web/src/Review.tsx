@@ -14,6 +14,7 @@ const BY_PEOPLE = [["1", 2000], ["2", 2700], ["3", 3500], ["4", 3800], ["5+", 45
 // district heating gets none (the planner is told why).
 const HEATING = [["Heatpump", "Heat pump"], ["Gas", "Gas"], ["Oil", "Oil"], ["District", "District heating"], ["Electric", "Electric heating"], ["OtherRenewable", "Wood or pellets"], ["unknown", "Something else or not sure"]] as const;
 const SOLAR_KIND = [["pv", "Electricity"], ["thermal", "Hot water"], ["both", "Both"]] as const;
+const HEAT_DIST = [["floor", "Underfloor"], ["radiators", "Radiators"], ["both", "Both"]] as const;
 const HOME_DAY = [["most", "Mostly"], ["some", "Sometimes"], ["rarely", "Rarely"]] as const;
 const OWNER = [["sole", "Only me or my family"], ["shared", "Shared with other owners"], ["tenant", "I rent it"]] as const;
 const BIG_USERS = [["pool", "Pool"], ["sauna", "Sauna"], ["ac", "Air conditioning"], ["water", "Electric water heater"]] as const;
@@ -119,7 +120,7 @@ export default function Review({ refId, progress, done, stage, setStage, answers
       ["Big electric users", "big", [["Has", a.big_users.length ? a.big_users.map((v) => label(BIG_USERS, v)).join(", ") : "None"]]],
       ["Your house", "house", [["Built", label(BUILT, a.built)], ["Living area", n(a.living_m2, "m²")], ["Energy certificate", n(a.cert_kwh_m2, "kWh per m²")], ["Owned by", label(OWNER, a.owner)]]],
       ["Heating", "heat", [["Heating", label(HEATING, a.heating)], ...(a.heating === "Heatpump" ? [["Its electricity", n(a.hp_kwh, "kWh a year")] as [string, string]] : []),
-        ...(REPLACEABLE.includes(a.heating ?? "") ? [["Heat pump", yes(a.wants_hp, "Interested", "Not interested")], [a.heating === "Oil" ? "Oil" : a.heating === "Electric" ? "Its electricity" : "Gas", a.heating === "Oil" ? n(a.oil_l, "litres a year") : n(a.heat_kwh, "kWh a year")]] as [string, string][] : [])]],
+        ...(REPLACEABLE.includes(a.heating ?? "") ? [["Heat pump", yes(a.wants_hp, "Interested", "Not interested")], [a.heating === "Oil" ? "Oil" : a.heating === "Electric" ? "Its electricity" : "Gas", a.heating === "Oil" ? n(a.oil_l, "litres a year") : n(a.heat_kwh, "kWh a year")], ["Heats through", label(HEAT_DIST, a.heat_dist)]] as [string, string][] : [])]],
       ["Electric car", "car", a.ev ? [["Car", car], ["How many", a.ev_count ? String(a.ev_count) : no], ["Charged at home", n(a.ev_kwh_month, "kWh a month")], ["Driving", n(a.ev_km, "km a year")]] : [["Car", car]]],
       ...(a.ev ? [["Charging", "charge", [["Where", a.ev_charge_home === "most" ? "Mostly at home" : a.ev_charge_home === "half" ? "Half and half" : a.ev_charge_home === "little" ? "Mostly elsewhere" : no],
         ["Home in the day", yes(a.ev_day, "Often", "Rarely")], ["Wallbox", yes(a.has_wallbox, "Already there", "Not yet")]]] as [string, Stage, [string, string][]]] : []),
@@ -269,7 +270,7 @@ export default function Review({ refId, progress, done, stage, setStage, answers
 
       {stage === "heat" && page("How do you heat your home?", null, <div className="answers grid2">
         {HEATING.map(([value, label]) => <Button key={value} size="lg" wide aria-pressed={a.heating === value}
-          onClick={() => answer({ heating: value, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null }, !(REPLACEABLE.includes(value) || value === "Heatpump"))}>{label}{a.area?.heating === value && <span className="common">Common here</span>}</Button>)}
+          onClick={() => answer({ heating: value, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null, heat_dist: null }, !(REPLACEABLE.includes(value) || value === "Heatpump"))}>{label}{a.area?.heating === value && <span className="common">Common here</span>}</Button>)}
         {a.area?.heating && <p className="small muted span2">{a.area.heating === "District" ? "Most homes nearby use district heating" : a.area.heating === "Electric" ? "Most homes nearby heat with electricity" : `"Common here": ${Math.round((a.area.heating_share ?? 0) * 100)}% of homes nearby`}, Census 2022.</p>}
       </div>, a.heating === "Heatpump" ? <>
         {numberField(optional("Its electricity a year (kWh)"), a.hp_kwh, (hp_kwh) => setAnswers({ ...a, hp_kwh }), "From its own meter or bill")}
@@ -287,6 +288,11 @@ export default function Review({ refId, progress, done, stage, setStage, answers
             : a.heating === "Electric"
             ? numberField(optional("Its electricity a year (kWh)"), a.heat_kwh, (heat_kwh) => setAnswers({ ...a, heat_kwh }), "From its own meter or bill")
             : numberField(optional("Gas a year (kWh), from your bill"), a.heat_kwh, (heat_kwh) => setAnswers({ ...a, heat_kwh }))}
+          <h2>How is the heat spread in the rooms?<span className="opt">Optional</span></h2>
+          <p className="small muted">A heat pump works best with underfloor heating or large radiators.</p>
+          <div className="answers">
+            {HEAT_DIST.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.heat_dist === v} onClick={() => setAnswers({ ...a, heat_dist: a.heat_dist === v ? null : v })}>{label}</Button>)}
+          </div>
         </>}
       </>)}
 
