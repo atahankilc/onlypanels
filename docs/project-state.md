@@ -2,7 +2,7 @@
 
 Living document. Update it whenever the phase, blockers or next steps change.
 
-**Last updated:** 2026-11-08, morning
+**Last updated:** 2026-11-08, 05:45
 **Phase:** Feature work is wrapping up for the 15:00 deadline. Homeowner flow and planner desk work end to end in Munich, with or without the map. The homeowner only gives information and chooses what is sent (D62, D110). The planner opens the request, with every fact marked by source, checks it, can ask the advisor, and decides. Every decision in `docs/decisions.md` is agreed: none is left Proposed.
 **Deadline:** Sunday 8 November 2026, 15:00
 
@@ -42,10 +42,12 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - The roof's sun moves the module count: more modules on a weaker roof, fewer on a stronger one, a smaller system and a warning on a poor one (D112). Past-project scores do not change
 - Requests without a home: a roof shared or described as direction and slope takes its PVGIS yield from the sun table; an unknown direction keeps the typical 950 kWh per kWp. A shared address is found with Photon on the planner's page and the monument and heat plan checks run there (D114)
 - The light theme is removed: the app is dark only, map labels are white on a dark halo
+- The homeowner's start choice (map or questions) is kept in the browser; a browser that chose no map opens straight on its requests or questions. Switching with the With/Without switch opens the map as a circle out of the switch and closes it back in (view transitions; plays with reduced motion too, a plain change where the browser has none). Checked in a recorded headless browser, including fast repeated switches
+- Final test-split run done once (`scripts/final_test.py`), results per installer in `docs/data/findings.md`. Test matches dev, so the dev work did not overfit
 
 ## Not done
 
-- Pitch deck, demo recording, final test-set run: not started
+- Pitch deck, demo recording: not started
 - Every assumed value and default, with its source, is in `docs/assumptions.md`. Keep it current when a constant changes
 
 ## Next steps
@@ -55,8 +57,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 3. Check the own-electricity share and saving before a planner quotes them
 4. Decide where expert comparison and results go
 5. Planner view plan proposed in `reports/Planner planı.md`, awaiting the user's answers to its five questions
-6. Pitch deck and demo recording, with `docs/demo-script.md` rewritten for this flow. Feature freeze at 12:00
-7. Final test-split run for the reported numbers
+6. Pitch deck and demo recording, with `docs/demo-script.md` rewritten for this flow and the final test numbers. Feature freeze at 12:00
 
 ## Parked
 
