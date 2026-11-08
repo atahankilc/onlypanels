@@ -11,6 +11,36 @@
         ],
         "createdAt": "2026-11-08T11:02:32.653Z",
         "reason": "user confirmed: keep the homeowner intro heading's green-to-blue highlight (.quiz h1 .hl)"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist",
+        "createdAt": "2026-11-08T12:05:18.441Z",
+        "reason": "user chose the Steward look with Geist for the app (memory steward-look); the deck matches the app"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist mono",
+        "createdAt": "2026-11-08T12:05:18.469Z",
+        "reason": "user chose the Steward look with Geist for the app (memory steward-look); the deck matches the app"
+      },
+      {
+        "rule": "all-caps-body",
+        "value": "*",
+        "files": [
+          "docs/pitch/deck.html"
+        ],
+        "createdAt": "2026-11-08T12:05:18.494Z",
+        "reason": "uppercase is only on short kicker labels and table headers, no body passages"
+      },
+      {
+        "rule": "oversized-h1",
+        "value": "*",
+        "files": [
+          "docs/pitch/deck.html"
+        ],
+        "createdAt": "2026-11-08T12:05:18.521Z",
+        "reason": "1920x1080 slide deck: a title slide headline is meant to fill the slide"
       }
     ]
   }
