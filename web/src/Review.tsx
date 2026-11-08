@@ -173,7 +173,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
     <aside className="panel tall quiz" key="send" ref={panel}>
       <p className="count">Overview</p>
       <h1>Is everything right?</h1>
-      <p className="muted">An installer plans your system from this and sends you an offer. Anything left open is fine: what we assume for it is under each part, and they will ask you.</p>
+      <p className="muted">An installer plans your system from this and sends you an offer. Anything left open is fine: what we assume is under each part.</p>
       {(() => {
         // The whole request in three numbers: the answers given (the same count the sending page shows), what maps and the census
         // found without asking, and what stands in for an answer left open. Arithmetic on an answer is not counted again.
@@ -190,7 +190,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
       })()}
       <section className="photo-ask">
         <h2>A photo of your meter cabinet</h2>
-        <p className="small muted">Open the cabinet door and take one photo of the whole cabinet. It helps the installer judge whether the cabinet needs work before planning a visit.</p>
+        <p className="small muted">One photo of the open cabinet shows whether it needs work.</p>
         {a.meter_photo && <img className="photo-preview" src={a.meter_photo} alt="Your meter cabinet" />}
         <input ref={photoInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { takePhoto(e.target.files?.[0]); e.target.value = ""; }} />
         <div className="pair">
@@ -247,8 +247,8 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
         {!progress?.offer && <ol className="next-steps">
           {buildings.length > 0 && shared.home
             ? <li><b>They look at your roof and your answers</b><span>On the same 3D model of your home, with its measured sun and shade.</span></li>
-            : <li><b>They look at your answers</b><span>{buildings.length > 0 ? (shared.roof && request.roof ? "With the roof numbers you sent. Your home stayed with you." : "Your home stayed with you, so they estimate the roof.") : shared.roof && request.roof ? "With your roof as you described it." : "No roof was sent, so they estimate it with you."}</span></li>}
-          <li><b>{missing ? `They may ask about ${missing} ${missing === 1 ? "answer" : "answers"} you left open` : "They may call with a question or two"}</b><span>{missing ? "Have your electricity and heating bills at hand." : "You answered everything, so it should be quick."}</span></li>
+            : <li><b>They look at your answers</b><span>{buildings.length > 0 ? (shared.roof && request.roof ? "With the roof numbers you sent. Your home stayed with you." : "Your home stayed with you, so they estimate the roof.") : shared.roof && request.roof ? "With your roof as you described it." : "No roof was sent, so they estimate it."}</span></li>}
+          <li><b>{missing ? `${missing} ${missing === 1 ? "answer" : "answers"} left open: we assumed ${missing === 1 ? "it" : "them"}` : "You answered everything"}</b><span>{missing ? "Your offer is built on what we assumed, as shown in what you sent." : "Your offer is built on your own answers."}</span></li>
           <li><b>You get an offer</b><span>Solar, battery and anything else that fits, with what it makes and saves.</span></li>
         </ol>}
         <details className="sent-answers"><summary>What you sent</summary>{view}</details>

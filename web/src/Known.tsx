@@ -63,8 +63,8 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
     }
     if (a.roof_size === "known" && a.roof_m2) add(known, <><b>{k(a.roof_m2)} m²</b> of roof</>, YOU);
     else if (a.roof_size && a.roof_size !== "known") add(known, <>About <b>{TOLD_M2[a.roof_size]} m²</b> of roof, a {a.roof_size === "small" ? "smaller" : a.roof_size === "large" ? "larger" : "middle-sized"} Munich roof</>, YOU);
-    else add(assumed, "No size: no roof limit until your installer checks");
-    add(later, "Confirms size, direction and shade with you, or from the address");
+    else add(assumed, "No size: sized to your use, with no roof limit");
+    add(later, "Measures the roof from your address or on a visit");
   }
 
   if (stage === "solar") {
@@ -252,7 +252,7 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
   if (stage === "send") {
     if (a.meter_photo) add(known, "A photo of your meter cabinet", YOU);
     else add(assumed, "No photo: the cabinet may need a look on a visit");
-    add(later, "Looks at the photo to judge whether the cabinet needs work before planning a visit");
+    add(later, "Judges from it whether the cabinet needs work");
   }
 
   return { known, assumed, later };
