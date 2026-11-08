@@ -349,3 +349,5 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 
 .startswitch { position: absolute; z-index: 1; left: 12px; bottom: 16px; }
 @media (max-width: 760px) { .startswitch { display: none; } }
+.panel.quiz > h2.ask { margin: 20px 0 0; padding: 0; }
+.panel.quiz > h2.ask.gap { margin-top: 26px; }

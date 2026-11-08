@@ -8,7 +8,7 @@ import { Close, Search, Undo } from "./icons";
 import Review, { Stage } from "./Review";
 import SunView from "./SunView";
 import StartChoice, { Start } from "./Start";
-import { SHARE_ALL, Shared, forInstaller, roofNumbers } from "./share";
+import { SHARE_ALL, Shared, forInstaller, roofNumbers, toldRoof } from "./share";
 import { Button, IconButton, Segmented } from "./ui";
 
 const PHOTO: View = { layer: "photo", moment: null }; // every page but the roof page shows the photo
@@ -53,7 +53,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
   const [choice, setChoice] = useState<Choice>(NO_CHOICE);
   const [shared, setShared] = useState<Shared>(SHARE_ALL); // what the homeowner lets go to the installer
-  const request: Handoff = { buildings, answers, choice, ref, roof: roofNumbers(buildings) };
+  const request: Handoff = { buildings, answers, choice, ref, roof: buildings.length ? roofNumbers(buildings) : toldRoof(answers) };
   // The homeowner keeps the whole request; the installer gets only what was switched on.
   useEffect(() => { if (stage === "sent" && !requests.some((m) => m.ref === ref)) onSend(request, forInstaller(request, shared)); }, [stage]);
   const [tool, setTool] = useState<Tool | null>(null); // no tool: the mouse moves the map
@@ -136,7 +136,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const begin = (s: Start) => {
     setStart(s); saveStart(s);
     if (s === "map") setStage("roof");
-    if (s === "form") { setBuildings([]); setStage("solar"); setOpen(null); setStep("review"); setMove("in"); }
+    if (s === "form") { setBuildings([]); setStage("where"); setOpen(null); setStep("review"); setMove("in"); }
   };
   // Questions only: no map behind the questions. Its frame asks once more for the home, keeping every answer.
   // Questions only: no map at all, the questions in the middle. A sent request with a home still opens on the map.
@@ -184,14 +184,14 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
       {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
       {step === "pick" && !move && start === null && <StartChoice onChoose={begin} />}
       {bare && !move && <nav className="formbar" aria-label="How you answer">
-        <Segmented label="Map or questions" value="form" onChange={switchTo} options={[{ value: "map", label: "Map" }, { value: "form", label: "Questions" }]} />
+        <Segmented label="With or without the map" value="form" onChange={switchTo} options={[{ value: "map", label: "With map" }, { value: "form", label: "Without map" }]} />
         {(requests.length > 0 || loading > 0) && <Button aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>Your requests</Button>}
       </nav>}
       {bare && listOpen && <div className="formlist" onClick={(e) => e.target === e.currentTarget && setListOpen(false)}>
         <div><Requests list={requests} loading={loading} onOpen={(m) => { setListOpen(false); if (!m.handoff.buildings.length) { openRequest(m); return; } setStep("pick"); setTimeout(() => openRequest(m), 0); }} />
           <Button size="lg" wide onClick={() => setListOpen(false)}>Close</Button></div>
       </div>}
-      {step === "pick" && start === "map" && !move && !buildings.length && <div className="startswitch"><Segmented label="Map or questions" variant="glass" size="lg" value="map" onChange={switchTo} options={[{ value: "map", label: "Map" }, { value: "form", label: "Questions" }]} /></div>}
+      {step === "pick" && start === "map" && !move && !buildings.length && <div className="startswitch"><Segmented label="With or without the map" variant="glass" size="lg" value="map" onChange={switchTo} options={[{ value: "map", label: "With map" }, { value: "form", label: "Without map" }]} /></div>}
       {step === "pick" && start === "map" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
       {(step === "pick" || move === "in") && <Curtain move={move} done={moved}>

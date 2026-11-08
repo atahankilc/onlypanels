@@ -1,14 +1,25 @@
 // What a request carries to the installer, as the homeowner chose before sending. The homeowner keeps the full version.
 // Sun is never sent: it follows from the building, so the installer works it out again when the home is shared.
-import { NO_CHOICE, Selected } from "./api";
+import { Answers, NO_CHOICE, Selected } from "./api";
 import type { Handoff } from "./plan";
 
 /** home: the address and the building's shape, together, since Bavaria's open building models give one away from the other.
  *  marked: the areas drawn on the roof, which need the home. roof: only a few roof numbers, when the home stays here. */
-export type Shared = { home: boolean; marked: boolean; roof: boolean; photo: boolean };
-export const SHARE_ALL: Shared = { home: true, marked: true, roof: true, photo: true };
+export type Shared = { home: boolean; marked: boolean; roof: boolean; photo: boolean; address: boolean };
+export const SHARE_ALL: Shared = { home: true, marked: true, roof: true, photo: true, address: true };
 /** A roof in three numbers: they fit thousands of Munich roofs, so they cannot be traced back to one address. */
-export type RoofNumbers = { m2: number; facing: string; tilt: number };
+export type RoofNumbers = { m2: number; facing: string; tilt: number; told?: boolean }; // told: from the homeowner's words, not measured. facing "unknown" when not sure
+
+// Questions only: the homeowner's words as roof numbers. Sizes are the quartiles of measured roof area of Munich homes
+// (scripts/roof_size_bands.py: 81, 109, 162 m²); slopes are our assumption for gentle, steep and not sure.
+const TOLD_M2 = { small: 80, medium: 110, large: 160 } as const;
+const TOLD_TILT = { gentle: 25, steep: 45, unsure: 35 } as const;
+export function toldRoof(a: Answers): RoofNumbers | null {
+  const m2 = a.roof_size === "known" ? a.roof_m2 : a.roof_size ? TOLD_M2[a.roof_size] : null;
+  if (!m2 || !a.roof_facing) return null;
+  const flat = a.roof_facing === "flat";
+  return { m2, facing: a.roof_facing === "unsure" ? "unknown" : a.roof_facing, tilt: flat ? 0 : TOLD_TILT[a.roof_slope ?? "unsure"], told: true };
+}
 
 const COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
 
@@ -31,7 +42,7 @@ export function forInstaller(h: Handoff, shared: Shared): Handoff {
     buildings: home ? h.buildings.map(({ sun: _sun, ...b }) => b) : [],
     choice: home && shared.marked ? h.choice : NO_CHOICE,
     // The census picture belongs to a place: it goes with the home or not at all.
-    answers: { ...h.answers, area: home ? h.answers.area : null, meter_photo: shared.photo ? h.answers.meter_photo : null },
+    answers: { ...h.answers, area: home ? h.answers.area : null, meter_photo: shared.photo ? h.answers.meter_photo : null, address: shared.address ? h.answers.address : null },
     shared: { ...shared, home, marked: home && shared.marked, roof: !home && shared.roof && !!h.roof },
     roof: !home && shared.roof ? h.roof ?? null : null,
   };

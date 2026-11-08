@@ -27,13 +27,16 @@ const FOSSIL = ["Gas", "Oil", "OtherNonRenewable"];
 const REPLACEABLE = [...FOSSIL, "Electric"]; // heating a heat pump can replace
 const number = (v: string) => (v === "" ? null : Number(v));
 
-export type Stage = "roof" | "solar" | "battery" | "use" | "big" | "house" | "heat" | "car" | "charge" | "goal" | "send" | "share" | "sent";
+const FACING = [["south", "South"], ["south-east", "South-east"], ["south-west", "South-west"], ["east", "East"], ["west", "West"], ["north", "North"], ["flat", "Flat roof"], ["unsure", "Not sure"]] as const;
+const SLOPE = [["gentle", "Gentle", "Easy to walk on, under about 30°"], ["steep", "Steep", "A usual pitched roof"], ["unsure", "Not sure", ""]] as const;
+const SIZE = [["small", "Small house", "Terraced or semi-detached"], ["medium", "Detached house", "One family"], ["large", "Large house", "Two families or more, or a big footprint"], ["known", "I know the roof area", ""]] as const;
+export type Stage = "where" | "roofq" | "roof" | "solar" | "battery" | "use" | "big" | "house" | "heat" | "car" | "charge" | "goal" | "send" | "share" | "sent";
 /** One topic a page. A follow-up opens on the same page, under the answer that needs it, so the count never changes. */
 // Every household sees the same pages, so the count never moves. A battery without solar is rare, but one tap answers it.
 // Charging habits only follow a car, now or soon.
 const PAGES: Stage[] = ["roof", "solar", "battery", "use", "big", "house", "heat", "car", "charge", "goal", "send"];
-// Without a home on the map there is no roof to mark: questions only start at existing solar.
-const pagesFor = (mapped: boolean) => (mapped ? PAGES : PAGES.filter((p) => p !== "roof"));
+// Without a home on the map there is no roof to mark: questions only start with where the home is and its roof, in words.
+const pagesFor = (mapped: boolean): Stage[] => (mapped ? PAGES : ["where", "roofq", ...PAGES.filter((p) => p !== "roof")]); // without the map the home is told in words
 const flowFor = (a: Answers, mapped = true): Stage[] => pagesFor(mapped).filter((p) => p !== "charge" || a.ev);
 
 type Props = {
@@ -124,7 +127,9 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
       : a.use_source === "people" ? `${BY_PEOPLE.find((x) => x[1] === a.demand_kwh)?.[0] ?? ""} people, typical use` : a.use_source === "unknown" ? "Not known" : no;
     const car = a.ev === false ? "No" : a.ev ? (a.ev_planned ? `Coming ${a.ev_when === "soon" ? "within a year" : a.ev_when === "later" ? "later" : "soon"}` : "Yes") : no;
     const groups: [string, Stage, [string, string][]][] = [
-      ...(mapped ? [["Your roof", "roof", [["Priority area", `${Math.round(m2)} m²`]]] as [string, Stage, [string, string][]]] : []),
+      ...(mapped ? [["Your roof", "roof", [["Priority area", `${Math.round(m2)} m²`]]] as [string, Stage, [string, string][]]]
+        : [["Your home", "where", [["Address", a.address || no]]], ["Your roof", "roofq", [["Larger side", label(FACING, a.roof_facing)], ...(a.roof_facing === "flat" ? [] : [["Slope", label(SLOPE, a.roof_slope)]]),
+          ["Size", a.roof_size === "known" ? n(a.roof_m2, "m²") : label(SIZE, a.roof_size)]]]] as [string, Stage, [string, string][]][]),
       ["Solar already there", "solar", a.has_solar ? [["Solar", "Yes"], ["Makes", label(SOLAR_KIND, a.solar_kind)], ["Marked area", `${Math.round(panelM2)} m²`], ...(a.solar_kind === "thermal" ? [] : [["Size", n(a.solar_kwp, "kWp")], ["Year", a.solar_year ? String(a.solar_year) : no]] as [string, string][])] : [["Solar", yes(a.has_solar)]]],
       ["Home battery", "battery", [["Battery", yes(a.has_storage)], ...(a.has_storage ? [["Size", n(a.battery_kwh, "kWh")] as [string, string]] : [])]],
       ["Electricity", "use", [["Yearly use", use], ["Price", a.price_known ? `${a.price_ct_kwh} ct per kWh` : no], ["Home in the day", label(HOME_DAY, a.home_day)]]],
@@ -183,6 +188,8 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
           {home && <li><Check checked={shared.home} onChange={(v) => set({ home: v })}><b>Your home</b><small>{buildings[0]?.label ?? "Your building"}, with its building shape. Bavaria publishes every building's shape openly, so the shape shows where the home is: the two only go together.</small></Check></li>}
           {home && shared.home && <li className="share-sub"><Check checked={shared.marked} onChange={(v) => set({ marked: v })}><b>Areas you marked</b><small>{Math.round(m2)} m² of roof you want panels on first.</small></Check></li>}
           {home && !shared.home && roof && <li className="share-sub"><Check checked={shared.roof} onChange={(v) => set({ roof: v })}><b>Roof numbers only</b><small>{roof.m2} m² of roof · {roof.facing === "flat" ? "flat" : `facing ${roof.facing}, ${roof.tilt}° slope`}. Rounded, so they fit thousands of roofs and cannot lead to your address.</small></Check></li>}
+          {!home && a.address && <li><Check checked={shared.address} onChange={(v) => set({ address: v })}><b>Your address</b><small>{a.address}. Lets the installer check trees, monument rules and the heat plan, and plan a visit.</small></Check></li>}
+          {!home && roof?.told && <li><Check checked={shared.roof} onChange={(v) => set({ roof: v })}><b>Your roof, as you described it</b><small>{roof.m2} m² · {roof.facing === "flat" ? "flat" : roof.facing === "unknown" ? "direction not known" : `larger side facing ${roof.facing}, about ${roof.tilt}°`}. Without it the installer guesses a typical roof.</small></Check></li>}
           {a.meter_photo && <li><Check checked={shared.photo} onChange={(v) => set({ photo: v })}><b>Meter cabinet photo</b><small>The one photo you added.</small></Check></li>}
         </ul>
         {home && (shared.home
@@ -396,6 +403,17 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
         </div>
       </div>)}
 
+      {stage === "where" && page("Where is your home?", "Optional. Your installer needs it for a visit. Nothing looks it up: it stays as text in this browser, and before sending you can still leave it out.",
+        <div className="answers"><Field label={optional("Address")}><Input autoComplete="street-address" placeholder="Street and number, postcode" value={a.address ?? ""} onChange={(e) => setAnswers({ ...a, address: e.target.value || null })} /></Field></div>)}
+      {stage === "roofq" && page("Tell us about your roof", "Rough answers are fine. They stand in for what the map would measure.", <>
+        <h2 className="ask">Which way does the larger side face?</h2>
+        <div className="answers grid2">{FACING.map(([v, l]) => <Button key={v} size="lg" wide aria-pressed={a.roof_facing === v} onClick={() => setAnswers({ ...a, roof_facing: v })}>{l}</Button>)}</div>
+        {a.roof_facing && a.roof_facing !== "flat" && <><h2 className="ask gap">How steep is it?</h2>
+          <div className="answers">{SLOPE.map(([v, l, line]) => <Button key={v} size="lg" wide className={line ? "choice" : undefined} aria-pressed={a.roof_slope === v} onClick={() => setAnswers({ ...a, roof_slope: v })}>{line ? <><b>{l}</b><small>{line}</small></> : l}</Button>)}</div></>}
+        <h2 className="ask gap">How big is the house?</h2>
+        <div className="answers">{SIZE.map(([v, l, line]) => <Button key={v} size="lg" wide className={line ? "choice" : undefined} aria-pressed={a.roof_size === v} onClick={() => setAnswers({ ...a, roof_size: v })}>{line ? <><b>{l}</b><small>{line}</small></> : l}</Button>)}
+          {a.roof_size === "known" && <Field label="Roof area, all sides together"><Input type="number" min={10} placeholder="m²" value={a.roof_m2 ?? ""} onChange={(e) => setAnswers({ ...a, roof_m2: number(e.target.value) })} /></Field>}</div>
+      </>)}
       {stage === "goal" && page("What matters most to you?", "We size the system with this in mind.", <div className="answers">
         {GOALS.map(([v, label, line]) => <Button key={v} size="lg" wide className="choice" aria-pressed={a.goal === v} onClick={() => setAnswers({ ...a, goal: v })}><b>{label}</b><small>{line}</small></Button>)}
       </div>, <>
