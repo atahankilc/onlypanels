@@ -98,14 +98,14 @@ type Req = Request & { allowed?: string[] };
 const fmt = (r: Request, k: string, d: Design): string => {
   const i = r.inputs as unknown as Record<string, unknown>, v = i[k];
   if (k === "demand_kwh") return v == null ? `${(d.energy.base_mwh * 1000).toLocaleString("en")} kWh (stand-in)` : `${Number(v).toLocaleString("en")} kWh`;
-  if (k === "heat_kwh") return v != null ? `${Number(v).toLocaleString("en")} kWh` : `${Math.round(d.energy.hp_mwh * 3.5 * 1000 / 100) * 100 ? (Math.round(d.energy.hp_mwh * 3.5 * 1000 / 100) * 100).toLocaleString("en") : "15,000"} kWh (${i.living_m2 && i.built ? "estimated from the house" : "stand-in"})`;
+  if (k === "heat_kwh") return v != null ? `${Number(v).toLocaleString("en")} kWh` : `${Math.round(d.energy.hp_mwh * 3.5 * 1000 / 100) * 100 ? (Math.round(d.energy.hp_mwh * 3.5 * 1000 / 100) * 100).toLocaleString("en") : "15,000"} kWh (${i.living_m2 && (i.built || i.area_built || i.cert_kwh_m2) ? "estimated from the house" : "stand-in"})`;
   if (k === "installer") return INSTALLERS.find(([x]) => x === v)?.[1] ?? String(v);
   if (k === "ev_kwh_month") return `${v} kWh a month`;
   if (k === "hp_kwh") return `${Number(v).toLocaleString("en")} kWh a year`;
   if (k === "monthly_eur") return `€${v} a month`;
   if (k === "living_m2") return `${v} m²${i.living_from_model && !r.sources.living_m2 ? " (estimated from the 3D model)" : ""}`;
   if (k === "cert_kwh_m2") return `${v} kWh per m² a year`;
-  if (k === "built") return label(BUILT, v);
+  if (k === "built") return v ? label(BUILT, v) : i.area_built ? `${label(BUILT, i.area_built)} (most common nearby, 2022 census: ${Math.round(Number(i.area_built_share ?? 0) * 100)}% of homes)` : "not given";
   if (k === "ev_charge_home") return label(HOME_SHARE, v);
   if (k === "roof_renovation") return label(RENEWAL, v);
   if (k === "goal") return label(GOAL, v);
@@ -121,7 +121,8 @@ const EXTRA = ["ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "hp_kw
 /** What the planner must confirm before the offer leaves: assumed facts this design uses, and a living area guessed
  * from the 3D model when a heat pump is sized from it. The request list counts the same. */
 const toConfirm = (r: Request, d: Design) => [...relevant(r, d).filter((k) => r.sources[k] === "assumed"),
-  ...(d.heatpump.included && r.inputs.heat_kwh == null && r.inputs.living_from_model && !r.sources.living_m2 ? ["living_m2"] : [])];
+  ...(d.heatpump.included && r.inputs.heat_kwh == null && r.inputs.living_from_model && !r.sources.living_m2 ? ["living_m2"] : []),
+  ...(d.heatpump.included && r.inputs.heat_kwh == null && !r.inputs.cert_kwh_m2 && !r.inputs.built && r.inputs.area_built && !r.sources.built ? ["built"] : [])];
 const SOURCE_LONG: Record<Source, string> = { customer: "from the customer", assumed: "assumed", planner: "confirmed by the planner" };
 
 function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null }) {
@@ -188,7 +189,7 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
         {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && <><h3>Roof</h3><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "checks" && <>
           <h3>Confirm before sending</h3>
-          {confirm.length ? <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm"><div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>Assumed: nobody gave this. {k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : k === "living_m2" ? "Estimated from the 3D model; the heat estimate, and so the heat pump, follows it." : "It changes the design."}</small></div>
+          {confirm.length ? <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm"><div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>Assumed: nobody gave this. {k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : k === "living_m2" ? "Estimated from the 3D model; the heat estimate, and so the heat pump, follows it." : k === "built" ? "The customer did not say; the census's most common period nearby stands in for the heat estimate." : "It changes the design."}</small></div>
             <Button onClick={() => update(r.id, { sources: { ...r.sources, [k]: "planner" } })}>Confirm</Button><Button variant="plain" onClick={() => setTab("home")}>Change</Button></li>)}</ul>
             : <p className="small muted">Every fact the design uses is from the customer or confirmed by you.</p>}
           {warns.length > 0 && <><h3>Points from the review</h3>{warns.map((n) => <p key={n.code} className="flag">{n.text}</p>)}</>}
@@ -313,6 +314,7 @@ function Tagged({ label, source, children }: { label: string; source?: Source; c
 const sourceOf = (r: Request, k: string): Source | undefined => {
   if (r.sources[k]) return r.sources[k];
   if (k === "living_m2" && r.inputs.living_from_model) return "assumed";
+  if (k === "built" && !r.inputs.built && r.inputs.area_built) return "assumed";
   const v = (r.inputs as unknown as Record<string, unknown>)[k];
   return v == null || (Array.isArray(v) && !v.length) ? undefined : r.from === "Homeowner" ? "customer" : undefined;
 };
@@ -346,6 +348,7 @@ function Facts({ r, d, setI }: { r: Request; d?: Design; setI: (c: Partial<Input
     <Tagged label={i.living_from_model && !s.living_m2 ? "Living area (m², from the 3D model)" : "Living area (m²)"} source={sourceOf(r, "living_m2")}><Input type="number" step={5} value={i.living_m2 ?? ""} onChange={(e) => setI({ living_m2: e.target.value ? Number(e.target.value) : null, living_from_model: false })} /></Tagged>
     <Tagged label="Energy certificate (kWh per m² a year)" source={sourceOf(r, "cert_kwh_m2")}>{num("cert_kwh_m2", 5)}</Tagged>
     <Tagged label="Built" source={sourceOf(r, "built")}>{pick("built", BUILT)}</Tagged>
+    {!i.built && i.area_built && <p className="small muted span">Most common nearby, 2022 census: {label(BUILT, i.area_built)}, {Math.round(Number(i.area_built_share ?? 0) * 100)}% of homes. The engine uses it for the heat estimate until the customer says.</p>}
     <Tagged label="Big trees near the roof" source={sourceOf(r, "trees")}>{yn("trees", i.trees)}</Tagged>
     <Tagged label="Roof renewal soon" source={sourceOf(r, "roof_renovation")}>{pick("roof_renovation", RENEWAL)}</Tagged>
     <Tagged label="Customer's priority" source={sourceOf(r, "goal")}>{pick("goal", GOAL)}</Tagged>
