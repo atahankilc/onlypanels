@@ -66,7 +66,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 
 ## Next steps
 
-1. User tries the full flow in the browser, with and without the map
+1. Homeowner pages are done except the offer page (what the homeowner sees once the planner sends): the user wants to test it. Start page, map pick, sent page, request list and voice helper are accepted as they are. Next the user moves to the planner view
 2. Check the engine fixes in `reports/`: 2 m² per panel, price in sizing, roof area as limit. They change scored numbers
 3. Check the own-electricity share and saving before a planner quotes them
 4. Decide where expert comparison and results go
