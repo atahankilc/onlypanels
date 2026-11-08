@@ -32,11 +32,14 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - Map picking step: blocks appear first, then each 2 km square's real LoD2 roofs replace them in the background (a web worker shapes them, nearest square first, two at a time). The blocks stay invisible underneath for clicks. The API now gzips its answers. Checked in the browser
 - The map's ground is the Bavarian aerial photo (DOP20) in both steps, at full brightness. Ground and roofs share one set of 512 px photo tiles kept in the page, so roofs show what the ground already loaded at once instead of waiting for a separate image. Roofs take their photo from three rings around the view: one tile level sharper than the ground in the middle, coarser outside, the widest (about 5 km) past every drawn square. On the chosen home's step the street block's neighbours get photo roofs too. The "Photo only" switch is gone
 - Homeowner questions cover district and electric heating, solar for hot water, who owns the home, backup power (D94) and whether someone is home in the day, which shapes the hourly energy check (D95), and how rooms are heated, for the planner's flow temperature check (D96), and the boiler's age, for the grants check (D97). Gas can be given in euros a year (D98). An optional meter cabinet photo reaches the planner's checks and stays in the browser (D99). The planner's monument check reads the Bavarian monument map (D100), and a heat plan check reads Munich's heat plan (D103). The last three reach the planner as checks. Research behind it: `reports/Ev sahibi bilgisi: yeterli mi.md`
+- A chosen home stays in the browser until the homeowner sends (D102): addresses, census area, monument status, parts, surfaces, shade and yearly sun are worked out in the page; the server only serves whole 2 km squares. Yearly sun comes from `web/public/sun-table.json`, built by `scripts/build_sun_table.py`; the census file by `scripts/build_zensus.py`
 - The light theme is removed: the app is dark only, map labels are white on a dark halo
 
 ## Not done
 
 - Pitch deck, demo recording, final test-set run: not started
+- Finer sun table (5° tilt, 10° azimuth) is being built by `scripts/build_sun_table.py` (resumable). The committed table has 10° and 20° steps: within 1 to 3% of exact PVGIS on roofs, up to 5% on some walls. When it is done, measure again against PVGIS and commit `web/public/sun-table.json`
+- Questions-only path (D104) still shows an empty map frame and asks no address or roof by hand
 - Team decisions in `docs/decisions.md` marked Proposed are not yet agreed
 - Every assumed value and default, with its source, is in `docs/assumptions.md`. Keep it current when a constant changes
 
