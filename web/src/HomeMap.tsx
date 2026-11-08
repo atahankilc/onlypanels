@@ -3,7 +3,7 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import * as THREE from "three";
 import { Poly, Selected, SunSurface, View, homesIn, polyOf, surfaceKey, Square, homesUrl, squareEdges, squaresIn } from "./api";
-import { fit, ordered } from "./panels";
+import { fit, ordered, take } from "./panels";
 import { TILT_PER_PX, TURN_PER_PX, leash } from "./camera";
 import { P2, P3, centre, inside, normal, toLngLat, toLocal } from "./geometry";
 import { Info, Locate, Minus, Needle, Plus } from "./icons";
@@ -637,7 +637,8 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         const count = live.current.panels?.[surfaceKey(b, s)] ?? 0;
         if (!count || s.kind !== "roof") continue;
         const key = surfaceKey(b, s);
-        for (const q of ordered(x.polys[poly], s, live.current.priority?.[key], [...(live.current.taken?.[key] ?? []), ...(live.current.blocked?.[key] ?? [])]).rects.slice(0, count)) {
+        const fitted = ordered(x.polys[poly], s, live.current.priority?.[key], [...(live.current.taken?.[key] ?? []), ...(live.current.blocked?.[key] ?? [])]);
+        for (const q of take(fitted.rects, count, fitted.inside)) {
           const k = points.length; points.push(...q); faces.push(k, k + 1, k + 2, k, k + 2, k + 3);
           q.forEach((p, i) => edges.push(...p, ...q[(i + 1) % 4]));
           // The module image is upright: a module lying on its side turns it.

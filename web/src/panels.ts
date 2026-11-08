@@ -94,3 +94,23 @@ export function ordered(poly: Poly, s: SurfaceCells, marked?: number[], taken?: 
   return { rects: [...inside, ...outside], inside: inside.length };
 }
 export type SurfaceCells = { n: P3; cells: number[]; outline: [number, number][]; holes: [number, number][][] };
+
+/** The first `count` modules, with a row they only partly fill centred in that row instead of pushed to one end. Rows are not
+ *  mixed across the homeowner's marked area: the first `inside` modules are the marked ones, and a row is only shifted among
+ *  the modules on its own side of that line, so nothing leaves the marked area. */
+export function take(rects: P3[][], count: number, inside: number): P3[][] {
+  const chosen = rects.slice(0, count);
+  if (!chosen.length || count >= rects.length) return chosen;
+  const last = chosen[chosen.length - 1];
+  const along = unit([last[1][0] - last[0][0], last[1][1] - last[0][1], last[1][2] - last[0][2]]);
+  const across = unit([last[3][0] - last[0][0], last[3][1] - last[0][1], last[3][2] - last[0][2]]);
+  const rowOf = (r: P3[]) => dot(r[0], across), side = (i: number) => i < inside;
+  const row = rowOf(last), group = side(chosen.length - 1);
+  const same = (r: P3[], i: number) => side(i) === group && Math.abs(rowOf(r) - row) < 0.2;
+  const all = rects.map((r, i) => [r, i] as const).filter(([r, i]) => same(r, i)).map(([r]) => r);
+  const taken = chosen.filter((r, i) => same(r, i));
+  if (taken.length >= all.length) return chosen;
+  const line = [...all].sort((a, b) => dot(a[0], along) - dot(b[0], along));
+  const start = Math.floor((line.length - taken.length) / 2), middle = new Set(line.slice(start, start + taken.length));
+  return [...chosen.filter((r, i) => !same(r, i)), ...line.filter((r) => middle.has(r))];
+}
