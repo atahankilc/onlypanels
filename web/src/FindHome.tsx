@@ -9,7 +9,7 @@ import Review, { Stage } from "./Review";
 import SunView from "./SunView";
 import StartChoice, { Start } from "./Start";
 import { SHARE_ALL, Shared, forInstaller, roofNumbers } from "./share";
-import { Button, IconButton } from "./ui";
+import { Button, IconButton, Segmented } from "./ui";
 
 const PHOTO: View = { layer: "photo", moment: null }; // every page but the roof page shows the photo
 const short = (label: string) => label.split(", ").slice(0, 2).join(", ");
@@ -139,10 +139,12 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
     if (s === "form") { setBuildings([]); setStage("solar"); setOpen(null); setStep("review"); setMove("in"); }
   };
   // Questions only: no map behind the questions. Its frame asks once more for the home, keeping every answer.
-  const bare = start === "form" && step === "review";
+  // Questions only: no map at all, the questions in the middle. A sent request with a home still opens on the map.
+  const bare = start === "form" && step === "review" && buildings.length === 0;
+  const [listOpen, setListOpen] = useState(false); // the earlier requests, over the questions
   const addHome = () => { setStart("map"); saveStart("map"); setStage("roof"); setFace(null); setStep("pick"); setMove("out"); };
-  /** Asks again how to start, from either way: the map's picking step, or the questions. */
-  const changeStart = () => { setStart(null); if (step === "review") { setFace(null); setStep("pick"); setMove("out"); } };
+  /** Map or questions, switched at once from either side. Answers already given stay. */
+  const switchTo = (s: Start) => { setListOpen(false); if (s === start) return; if (s === "form") begin("form"); else addHome(); };
   /** Back from the first page: the map's picking step, or the start choice for questions only. */
   const backToPick = () => { setFace(null); setStep("pick"); setMove("out"); if (start === "form") setStart(null); };
 
@@ -181,17 +183,15 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
       </div>}
       {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
       {step === "pick" && !move && start === null && <StartChoice onChoose={begin} />}
-      {bare && stage !== "sent" && <section className="bare-card" aria-label="Your roof">
-        <div>
-          <p className="eyebrow">Without your home</p>
-          <h2>We are guessing your roof.</h2>
-          <p>Its size, slope and sun decide most of your offer. Pick your building and we measure them, here in your browser.</p>
-          <Button variant="solid" size="lg" onClick={addHome}>Add my home on the map</Button>
-          <small>Your answers stay. Nothing is sent until you choose.</small>
-          <button type="button" className="textlink" onClick={changeStart}>Change how to start</button>
-        </div>
-      </section>}
-      {step === "pick" && start === "map" && !move && !buildings.length && <Button className="startswitch" variant="glass" size="lg" onClick={changeStart}>Map or questions?</Button>}
+      {bare && !move && <nav className="formbar" aria-label="How you answer">
+        <Segmented label="Map or questions" value="form" onChange={switchTo} options={[{ value: "map", label: "Map" }, { value: "form", label: "Questions" }]} />
+        {(requests.length > 0 || loading > 0) && <Button aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>Your requests</Button>}
+      </nav>}
+      {bare && listOpen && <div className="formlist" onClick={(e) => e.target === e.currentTarget && setListOpen(false)}>
+        <div><Requests list={requests} loading={loading} onOpen={(m) => { setListOpen(false); if (!m.handoff.buildings.length) { openRequest(m); return; } setStep("pick"); setTimeout(() => openRequest(m), 0); }} />
+          <Button size="lg" wide onClick={() => setListOpen(false)}>Close</Button></div>
+      </div>}
+      {step === "pick" && start === "map" && !move && !buildings.length && <div className="startswitch"><Segmented label="Map or questions" variant="glass" size="lg" value="map" onChange={switchTo} options={[{ value: "map", label: "Map" }, { value: "form", label: "Questions" }]} /></div>}
       {step === "pick" && start === "map" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
       {(step === "pick" || move === "in") && <Curtain move={move} done={moved}>
