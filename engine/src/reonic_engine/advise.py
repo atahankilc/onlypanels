@@ -22,7 +22,8 @@ Choose the option that best serves this customer, considering their stated prior
 their car and heating, and the roof. "draft" is a valid choice: keep it when nothing is clearly better.
 
 Rules:
-- Use only numbers that appear in the input. Never compute, estimate or round to new numbers. Do not invent prices.
+- Use only numbers that appear in the input, each with its unit (kWh, kWp, MWh, kW, EUR, %, modules). Never compute
+  differences, sums or new roundings. Do not invent prices.
 - reasons: 2 to 4 short sentences in plain English, each one concrete fact about this home that supports the choice.
 - questions: up to 4 things the planner should confirm with the customer before sending, most important first. Only ask
   what would change the design or the offer. Do not ask what the facts already answer.
@@ -65,23 +66,66 @@ def brief(i, d):
     return {"home": home, "options": options, "battery_sizes": batteries, "engine_notes": notes}
 
 
-def _numbers(text):
-    return [float(n.replace(",", "")) for n in re.findall(r"\d[\d,]*(?:\.\d+)?", text)]
+# What each brief field is measured in, by its name. A number the advisor writes with a unit must equal a value of that unit.
+UNIT_OF_FIELD = [("kwh_per_kwp", "yield"), ("price_ct_kwh", "ct"), ("_pct", "%"), ("_eur", "eur"), ("_mwh", "mwh"), ("kwh", "kwh"),
+                 ("kwp", "kwp"), ("_kw", "kw"), ("modules", "modules"), ("_km", "km"), ("tilt", "deg"), ("facing", "deg"), ("_m2", "m2")]
+UNIT_OF_WORD = [(r"kwh\s*(?:per|/)\s*kwp", "yield"), (r"kwh", "kwh"), (r"kwp", "kwp"), (r"mwh", "mwh"), (r"kw\b", "kw"),
+                (r"(?:eur|euros?)\b", "eur"), (r"(?:%|percent)", "%"), (r"(?:modules?|panels?)\b", "modules"), (r"km\b", "km"),
+                (r"(?:°|degrees?)", "deg"), (r"(?:m²|m2|square met)", "m2"), (r"(?:ct|cents?)\b", "ct")]
+NUMBER = r"\d[\d,]*(?:\.\d+)?"
 
 
-def _known(b):
-    seen = set()
-    for n in _numbers(json.dumps(b)):
-        seen |= {n, round(n), round(n, 1)}
-        if n >= 1000:
-            seen.add(round(n / 1000, 1))  # kWh said as MWh
-    return seen
+def _values(b):
+    """(unit, value) for every number in the brief; unit None where the field name tells none."""
+    out = []
+
+    def walk(x, key=""):
+        if isinstance(x, dict):
+            for k, v in x.items():
+                walk(v, k)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v, key)
+        elif isinstance(x, bool) or x is None:
+            return
+        elif isinstance(x, (int, float)):
+            unit = next((u for part, u in UNIT_OF_FIELD if part in key or key == part.strip("_")), None)
+            out.append((unit, float(x)))
+        elif isinstance(x, str):
+            out.extend((None, float(n.replace(",", ""))) for n in re.findall(NUMBER, x))  # notes and labels, e.g. "1979to1990"
+    walk(b)
+    for unit, v in list(out):
+        if unit == "kwh":
+            out.append(("mwh", v / 1000))
+        elif unit == "mwh":
+            out.append(("kwh", v * 1000))
+    return out
+
+
+def _said(text):
+    """(unit, value, decimals) for each number in a sentence; € before a number counts as its unit."""
+    out = []
+    for m in re.finditer(r"(€\s*)?(" + NUMBER + r")\s*", text):
+        raw = m.group(2).rstrip(",")
+        after = text[m.end():].lower()
+        unit = "eur" if m.group(1) else next((u for word, u in UNIT_OF_WORD if re.match(word, after)), None)
+        out.append((unit, float(raw.replace(",", "")), len(raw.split(".")[1]) if "." in raw else 0))
+    return out
+
+
+def _given(said, values):
+    """A number the engine gave, as shown at the precision it is written with. With a unit, only values of that unit count."""
+    unit, n, digits = said
+    if not unit:
+        return any(v == n for _, v in values)  # no unit to tie it to: only an exact value of the engine's
+    pool = [v for u, v in values if u == unit]
+    return any(abs(round(v, digits) - n) < 1e-9 or (digits == 0 and abs(v - n) < 0.5 and v >= 100) for v in pool)
 
 
 def checked(advice, b):
     """Drop every sentence with a number the engine did not give."""
-    known = _known(b)
-    fine = lambda s: all(n in known for n in _numbers(s))
+    values = _values(b)
+    fine = lambda s: all(_given(x, values) for x in _said(s))
     advice.reasons = [s for s in advice.reasons if fine(s)]
     advice.questions = [s for s in advice.questions if fine(s)]
     if advice.risk and not fine(advice.risk):
