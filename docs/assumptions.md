@@ -72,6 +72,7 @@ Code locations: engine `engine/src/reonic_engine/` (design.py, energy.py, models
 | 2,250 kWh of heat per kW | Heat pump size from heat use | Median of heat pumps sold here (`scripts/profile_hp_ev.py`), and use × 0.85 ÷ 1,900 h | `models.py` HP_KWH_PER_KW |
 | 5, 7, 10, 12 kW | Heat pump sizes offered | Our assumption | `models.py` HP_SIZES |
 | COP 3.5 | Heat → heat pump electricity | The data's own defaults (heat demand is 3.5 × heat pump electricity in 94% of heat pump homes, `scripts/profile_heating.py`) | `design.py` HEAT_PUMP_COP |
+| Gas 11.8 ct per kWh, all in | Yearly gas payment → yearly heat (kWh), when the customer knows only the euros | SWM model household: 15,000 kWh for about €1,764 a year from January 2026, base fee and VAT included (SWM press release of 7 November 2025, read from a search summary; the price sheet itself was not readable). The base fee makes small users' real price higher, so their heat comes out a little high. Shown to the planner as assumed | `api.ts` GAS_CT |
 | 2 kWh | A learned battery this close to the installer's most sold size becomes that size | Dev cross-validation (D73) | `design.py` HABIT_KWH |
 | 80% | Below this the battery decision is flagged as open | Dev cross-validation (findings) | `design.py` UNSURE_BATTERY |
 | 1.5 kWh per kWp and per MWh | Battery guideline note | HTW Berlin 2022 | `design.py` GUIDE_KWH_PER_UNIT |

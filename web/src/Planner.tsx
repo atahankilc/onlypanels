@@ -1,5 +1,5 @@
 import { isValidElement, useEffect, useRef, useState } from "react";
-import { View, surfaceKey } from "./api";
+import { GAS_CT, View, surfaceKey } from "./api";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
 import { Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, offerOf, refine, roofOf, turnTo } from "./plan";
@@ -212,7 +212,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && <><h3>Roof</h3><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "checks" && <>
           <h3>Confirm before sending</h3>
-          {confirm.length ? <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm"><div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>{k === "demand_kwh" && r.inputs.demand_source && r.inputs.demand_source !== "bill" && r.inputs.demand_source !== "unknown" ? "Not from a bill. " : "Assumed: nobody gave this. "}{k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : k === "living_m2" ? "Estimated from the 3D model; the heat estimate, and so the heat pump, follows it." : k === "built" ? "The customer did not say; the census's most common period nearby stands in for the heat estimate." : "It changes the design."}</small></div>
+          {confirm.length ? <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm"><div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>{k === "demand_kwh" && r.inputs.demand_source && r.inputs.demand_source !== "bill" && r.inputs.demand_source !== "unknown" ? "Not from a bill. " : k === "heat_kwh" && r.inputs.gas_eur ? `Worked out from €${Math.round(r.inputs.gas_eur).toLocaleString("en")} of gas a year at ${GAS_CT} ct per kWh all in. ` : "Assumed: nobody gave this. "}{k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : k === "living_m2" ? "Estimated from the 3D model; the heat estimate, and so the heat pump, follows it." : k === "built" ? "The customer did not say; the census's most common period nearby stands in for the heat estimate." : "It changes the design."}</small></div>
             <Button onClick={() => update(r.id, { sources: { ...r.sources, [k]: "planner" } })}>Confirm</Button><Button variant="plain" onClick={() => setTab("home")}>Change</Button></li>)}</ul>
             : <p className="small muted">Every fact the design uses is from the customer or confirmed by you.</p>}
           {warns.length > 0 && <><h3>Points from the review</h3>{warns.map((n) => <p key={n.code} className="flag">{n.text}</p>)}</>}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Answers, PRICE_CT, Selected, modelM2 } from "./api";
+import { Answers, GAS_CT, PRICE_CT, Selected, modelM2 } from "./api";
 import { Face } from "./HomeMap";
 import { Mine } from "./plan";
 import { Status, day, stepOf } from "./Requests";
@@ -45,6 +45,8 @@ export default function Review({ refId, progress, done, stage, setStage, answers
   const at_ = Math.max(0, PAGES.indexOf(stage));
   // The electricity page shows one way of answering at a time: the number, a range, and as a last resort the household size.
   const [way, setWay] = useState<"exact" | "range" | "people" | "payment">(a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source === "people" || a.use_source === "unknown" ? "people" : a.use_source === "payment" ? "payment" : "exact");
+  // Gas can be given in kWh or as what is paid a year; the euros are turned into kWh at Munich's all-in gas price.
+  const [gasWay, setGasWay] = useState<"kwh" | "eur">(a.gas_eur ? "eur" : "kwh");
   const priceField = () => numberField(optional("Price per kWh (cents), from your bill"), a.price_known ? a.price_ct_kwh : null, (v) => setAnswers({ ...a, price_ct_kwh: v ?? PRICE_CT, price_known: v != null }), `${PRICE_CT} if you skip (Munich basic supply)`);
   const noIdea = <button type="button" className="textlink" onClick={() => setWay("people")}>I have no idea</button>;
   const go = (next: Stage) => {
@@ -121,7 +123,7 @@ export default function Review({ refId, progress, done, stage, setStage, answers
       ["Big electric users", "big", [["Has", a.big_users.length ? a.big_users.map((v) => label(BIG_USERS, v)).join(", ") : "None"]]],
       ["Your house", "house", [["Built", label(BUILT, a.built)], ["Living area", n(a.living_m2, "m²")], ["Energy certificate", n(a.cert_kwh_m2, "kWh per m²")], ["Owned by", label(OWNER, a.owner)]]],
       ["Heating", "heat", [["Heating", label(HEATING, a.heating)], ...(a.heating === "Heatpump" ? [["Its electricity", n(a.hp_kwh, "kWh a year")] as [string, string]] : []),
-        ...(REPLACEABLE.includes(a.heating ?? "") ? [["Heat pump", yes(a.wants_hp, "Interested", "Not interested")], [a.heating === "Oil" ? "Oil" : a.heating === "Electric" ? "Its electricity" : "Gas", a.heating === "Oil" ? n(a.oil_l, "litres a year") : n(a.heat_kwh, "kWh a year")], ["Heats through", label(HEAT_DIST, a.heat_dist)], ...(FOSSIL.includes(a.heating ?? "") ? [["Boiler age", label(BOILER_AGE, a.boiler_age)]] : [])] as [string, string][] : [])]],
+        ...(REPLACEABLE.includes(a.heating ?? "") ? [["Heat pump", yes(a.wants_hp, "Interested", "Not interested")], [a.heating === "Oil" ? "Oil" : a.heating === "Electric" ? "Its electricity" : "Gas", a.heating === "Oil" ? n(a.oil_l, "litres a year") : a.heating === "Gas" && a.gas_eur ? `€${Math.round(a.gas_eur).toLocaleString("en")} a year` : n(a.heat_kwh, "kWh a year")], ["Heats through", label(HEAT_DIST, a.heat_dist)], ...(FOSSIL.includes(a.heating ?? "") ? [["Boiler age", label(BOILER_AGE, a.boiler_age)]] : [])] as [string, string][] : [])]],
       ["Electric car", "car", a.ev ? [["Car", car], ["How many", a.ev_count ? String(a.ev_count) : no], ["Charged at home", n(a.ev_kwh_month, "kWh a month")], ["Driving", n(a.ev_km, "km a year")]] : [["Car", car]]],
       ...(a.ev ? [["Charging", "charge", [["Where", a.ev_charge_home === "most" ? "Mostly at home" : a.ev_charge_home === "half" ? "Half and half" : a.ev_charge_home === "little" ? "Mostly elsewhere" : no],
         ["Home in the day", yes(a.ev_day, "Often", "Rarely")], ["Wallbox", yes(a.has_wallbox, "Already there", "Not yet")]]] as [string, Stage, [string, string][]]] : []),
@@ -271,7 +273,7 @@ export default function Review({ refId, progress, done, stage, setStage, answers
 
       {stage === "heat" && page("How do you heat your home?", null, <div className="answers grid2">
         {HEATING.map(([value, label]) => <Button key={value} size="lg" wide aria-pressed={a.heating === value}
-          onClick={() => answer({ heating: value, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null, heat_dist: null, boiler_age: null }, !(REPLACEABLE.includes(value) || value === "Heatpump"))}>{label}{a.area?.heating === value && <span className="common">Common here</span>}</Button>)}
+          onClick={() => answer({ heating: value, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null, heat_dist: null, boiler_age: null, gas_eur: null }, !(REPLACEABLE.includes(value) || value === "Heatpump"))}>{label}{a.area?.heating === value && <span className="common">Common here</span>}</Button>)}
         {a.area?.heating && <p className="small muted span2">{a.area.heating === "District" ? "Most homes nearby use district heating" : a.area.heating === "Electric" ? "Most homes nearby heat with electricity" : `"Common here": ${Math.round((a.area.heating_share ?? 0) * 100)}% of homes nearby`}, Census 2022.</p>}
       </div>, a.heating === "Heatpump" ? <>
         {numberField(optional("Its electricity a year (kWh)"), a.hp_kwh, (hp_kwh) => setAnswers({ ...a, hp_kwh }), "From its own meter or bill")}
@@ -288,7 +290,13 @@ export default function Review({ refId, progress, done, stage, setStage, answers
             ? numberField(optional("Oil a year (litres)"), a.oil_l, (oil_l) => setAnswers({ ...a, oil_l, heat_kwh: oil_l ? oil_l * KWH_PER_LITRE_OIL : null }))
             : a.heating === "Electric"
             ? numberField(optional("Its electricity a year (kWh)"), a.heat_kwh, (heat_kwh) => setAnswers({ ...a, heat_kwh }), "From its own meter or bill")
-            : numberField(optional("Gas a year (kWh), from your bill"), a.heat_kwh, (heat_kwh) => setAnswers({ ...a, heat_kwh }))}
+            : gasWay === "eur" ? <>
+              {numberField(optional("Gas a year (€), all in"), a.gas_eur, (gas_eur) => setAnswers({ ...a, gas_eur, heat_kwh: gas_eur ? Math.round(gas_eur / (GAS_CT / 100) / 100) * 100 : null }))}
+              <button type="button" className="textlink lone" onClick={() => { setGasWay("kwh"); setAnswers({ ...a, gas_eur: null, heat_kwh: null }); }}>I know the kWh</button>
+            </> : <>
+              {numberField(optional("Gas a year (kWh), from your bill"), a.heat_kwh, (heat_kwh) => setAnswers({ ...a, heat_kwh, gas_eur: null }))}
+              <button type="button" className="textlink lone" onClick={() => { setGasWay("eur"); setAnswers({ ...a, heat_kwh: null }); }}>I only know what I pay a year</button>
+            </>}
           {FOSSIL.includes(a.heating ?? "") && <>
             <h2>How old is the boiler?<span className="opt">Optional</span></h2>
             <p className="small muted">The year is on its type plate. It can change the grants.</p>
