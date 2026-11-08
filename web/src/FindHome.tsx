@@ -4,7 +4,7 @@ import { P2, P3, toLocal } from "./geometry";
 import { Handoff, Mine } from "./plan";
 import Requests from "./Requests";
 import HomeMap, { Face, Picked, Step, Tool, letter } from "./HomeMap";
-import { Close, Photo, Search, Undo } from "./icons";
+import { Close, Search, Undo } from "./icons";
 import Review, { Stage } from "./Review";
 import SunView from "./SunView";
 import { Button, IconButton } from "./ui";
@@ -31,7 +31,6 @@ export default function FindHome({ dark, onSend, requests, loading = 0 }: { dark
   const [step, setStep] = useState<Step>("pick");
   const [move, setMove] = useState<"in" | "out" | null>(null); // while the map's edge sweeps between the steps: see .curtain
   const [waiting, setWaiting] = useState(false);
-  const [aerial, setAerial] = useState(false);
   const [open, setOpen] = useState<string | null>(null); // the building shown in detail
   const [near, setNear] = useState<string | null>(null); // the building under the pointer in the list
   const [face, setFace] = useState<Face | null>(null); // the roof surface under the pointer, on the map or in the list
@@ -143,7 +142,7 @@ export default function FindHome({ dark, onSend, requests, loading = 0 }: { dark
 
   return (
     <main className={`stage ${step}`}>
-      <HomeMap dark={dark} buildings={buildings} step={step} focus={focus} aerial={aerial} onPick={step === "pick" ? toggle : undefined}
+      <HomeMap dark={dark} buildings={buildings} step={step} focus={focus} onPick={step === "pick" ? toggle : undefined}
         open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={step === "review" && stage === "roof" ? view : PHOTO} chosen={step === "review" ? chosen : []} onToggle={() => undefined} editing={drawing && !!tool} installed={[]}
         marked={step === "review" ? marked : undefined} taken={step === "review" ? taken : undefined} editsOn={drawn === "panels" ? taken : marked} tool={drawing ? tool ?? undefined : undefined} onPaint={drawing ? paint : undefined} />
       {step === "review" && drawing && !move && <div className="tools">
@@ -152,7 +151,6 @@ export default function FindHome({ dark, onSend, requests, loading = 0 }: { dark
         <IconButton variant="glass" size="lg" label="Undo" disabled={!undo.length} onClick={stepBack}><Undo /></IconButton>
       </div>}
       {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
-      {step === "pick" && <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "3D buildings" : "Photo only"}</Button>}
       {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
       {(step === "pick" || move === "in") && <Curtain move={move} done={moved}>

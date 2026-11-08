@@ -270,14 +270,12 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .credits { position: absolute; z-index: 2; right: 76px; bottom: 68px; max-width: min(520px, calc(100vw - 100px)); margin: 0; padding: 10px 16px; border: 1px solid var(--hud-line); border-radius: 22px; background: var(--hud-glass-2); box-shadow: var(--hud-shadow); font-size: 12px; color: var(--hud-ink-2); }
 .credits a { text-underline-offset: 2px; }
 .me { width: 16px; height: 16px; border: 3px solid var(--hud-solid); border-radius: 50%; background: var(--hud-route); box-shadow: var(--hud-shadow); }
-.map-aerial { position: absolute; z-index: 1; right: 76px; bottom: 16px; }
 
 @media (max-width: 820px) {
   .topbar { padding: 12px 14px 0; }
   .finder, .panel { left: 10px; right: 10px; width: auto; }
   .finder { top: 60px; } .panel, .panel.tall { top: auto; bottom: 10px; max-height: 42dvh; }
   .mapctl { bottom: auto; top: 116px; right: 10px; }
-  .map-aerial { right: auto; left: 10px; bottom: 90px; }
   .mapnote, .maphint { display: none; }
   .tools { top: 12px; left: 50%; }
   .sunview { top: 66px; right: 12px; left: 12px; width: auto; }

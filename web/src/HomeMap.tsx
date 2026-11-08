@@ -24,6 +24,10 @@ const KEEP_SQUARES = 16; // the farthest beyond this leave the map, so a long se
 const MOVE_CHECK_MS = 300, PULSE_MS = 1100;
 const EDGES_FROM_ZOOM = 16, EDGES_FULL_ZOOM = 17; // from afar houses cannot be told apart anyway, so no lines to draw
 const EDGE_OPACITY = 0.8;
+// One photo around the view for every real roof in it, sharper the closer the view: 15 cm, 30 cm, 1 m a pixel. The service takes over 10 s for 4096 px and under 2 s for 2048.
+const ROOF_PHOTO = [{ fromZoom: 18, sideM: 300 }, { fromZoom: 17, sideM: 600 }, { fromZoom: 0, sideM: 2000 }];
+const ROOF_PHOTO_PX = 2048;
+const WEB_MERCATOR_M = 40075016.686; // the world's width in EPSG:3857 metres
 const MAX_DETAIL_LOADS = 2; // real roofs come after the blocks, a square or two at a time, nearest first
 export const SUN_LOW = 500, SUN_HIGH = 1400; // kWh per m² a year
 const PANEL_W = 424; // room the panel takes on a wide screen
@@ -40,6 +44,33 @@ const COLORS = { roof: "#3A6FA8", edge: "#8A95A8", hover: "#2F5E94", pendingDim:
 const lit = (hex: string, n: P3) => new THREE.Color(hex).multiplyScalar(0.95 - 0.35 * n[1]).getHex();
 // Walls have no up, so their normal has no reliable sign: east and west sides just sit a step darker, so corners read in daylight.
 const litWall = (hex: string, n: P3) => new THREE.Color(hex).multiplyScalar(1 - 0.24 * Math.abs(n[0])).getHex();
+/** Real roofs: inside the photo's box a roof shows the aerial photo, a marked one tinted by its mark. Walls, and roofs outside it, keep their colour. */
+function roofMaterial() {
+  return new THREE.ShaderMaterial({
+    vertexColors: true, side: THREE.DoubleSide,
+    uniforms: { photo: { value: null }, fit: { value: new THREE.Vector4() }, hasPhoto: { value: 0 }, opacity: { value: 1 } },
+    vertexShader: `attribute float roof; attribute float mark; varying vec3 vColor; varying float vRoof; varying float vMark; varying vec2 vXY;
+      void main() { vColor = color; vRoof = roof; vMark = mark; vXY = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform sampler2D photo; uniform vec4 fit; uniform float hasPhoto; uniform float opacity;
+      varying vec3 vColor; varying float vRoof; varying float vMark; varying vec2 vXY;
+      void main() {
+        vec3 c = vColor;
+        vec2 uv = vec2(vXY.x * fit.x + fit.y, vXY.y * fit.z + fit.w);
+        if (hasPhoto > 0.5 && vRoof > 0.5 && all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)))) {
+          c = mix(texture2D(photo, uv).rgb, vColor, vMark * 0.55);
+        }
+        gl_FragColor = vec4(c, opacity);
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+const mercator = (lon: number, lat: number): P2 => [(180 + lon) / 360, (180 - (180 / Math.PI) * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360))) / 360];
+/** Turns a square's local metres into the photo's 0..1, as x * a + b and y * c + d. The photo's box is in EPSG:3857 metres. */
+function photoFit(at: P2, box: number[]) {
+  const [ox, oy] = mercator(at[0], at[1]), unit = 1 / (2 * Math.PI * 6371008.8 * Math.cos((at[1] * Math.PI) / 180)), C = WEB_MERCATOR_M;
+  const w = box[2] - box[0], h = box[3] - box[1];
+  return new THREE.Vector4((unit * C) / w, (ox * C - C / 2 - box[0]) / w, (unit * C) / h, ((0.5 - oy) * C - box[1]) / h);
+}
 const wide = () => matchMedia("(min-width: 821px)").matches;
 
 export type Picked = { id: string; home: string; square: string; at: P2 };
@@ -47,7 +78,7 @@ export type Step = "pick" | "review";
 export type Face = { building: string; poly: number };
 export const letter = (i: number) => String.fromCharCode(65 + i);
 type Props = {
-  buildings: Selected[]; step: Step; focus: P2 | null; aerial: boolean; onPick?: (b: Picked) => void;
+  buildings: Selected[]; step: Step; focus: P2 | null; onPick?: (b: Picked) => void;
   open: string | null; near: string | null; face: Face | null; look: { id: string } | null;
   onFace: (f: Face | null) => void; onOpen: (id: string) => void;
   view: View; chosen: string[]; onToggle: (key: string) => void; dark: boolean; editing: boolean; installed: string[];
@@ -350,6 +381,33 @@ function roofPhoto(b: Selected, roofs: THREE.Mesh[], redraw: () => void) {
   });
 }
 
+/** The aerial photo laid on roofs drawn around an origin, one image for all of them. Used for the neighbours of the chosen home. */
+function drapePhoto(origin: P2, roofs: THREE.Mesh[], redraw: () => void) {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const roof of roofs) {
+    const at = roof.geometry.getAttribute("position");
+    for (let i = 0; i < at.count; i++) { x0 = Math.min(x0, at.getX(i)); x1 = Math.max(x1, at.getX(i)); y0 = Math.min(y0, at.getY(i)); y1 = Math.max(y1, at.getY(i)); }
+  }
+  if (!roofs.length || !Number.isFinite(x0)) return;
+  x0 -= 3; x1 += 3; y0 -= 3; y1 += 3;
+  const merc = (p: P2): P2 => [(p[0] * 20037508.34) / 180, Math.log(Math.tan(((90 + p[1]) * Math.PI) / 360)) * 6378137];
+  const [a, c] = [merc(toLngLat(origin, [x0, y0])), merc(toLngLat(origin, [x1, y1]))];
+  const px = (m: number) => Math.min(ROOF_PHOTO_PX, Math.max(256, Math.round(m / 0.1))); // 10 cm where it fits, so close up it is as sharp as the chosen roof
+  const url = `https://geoservices.bayern.de/od/wms/dop/v1/dop20?service=WMS&version=1.3.0&request=GetMap&layers=by_dop20c&styles=&crs=EPSG:3857&bbox=${a[0]},${a[1]},${c[0]},${c[1]}&width=${px(x1 - x0)}&height=${px(y1 - y0)}&format=image/jpeg`;
+  new THREE.TextureLoader().setCrossOrigin("anonymous").load(url, (texture) => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 16;
+    for (const roof of roofs) {
+      const at = roof.geometry.getAttribute("position"), uv = new Float32Array(at.count * 2);
+      for (let i = 0; i < at.count; i++) { uv[i * 2] = (at.getX(i) - x0) / (x1 - x0); uv[i * 2 + 1] = (at.getY(i) - y0) / (y1 - y0); }
+      roof.geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+      const material = roof.material as THREE.MeshBasicMaterial;
+      material.map = texture; material.color.set("#FFFFFF"); material.needsUpdate = true;
+    }
+    redraw();
+  }, undefined, () => undefined);
+}
+
 function mesh(points: P3[], faces: number[], color: THREE.ColorRepresentation, opacity = 1) {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(points.flat(), 3));
@@ -393,7 +451,7 @@ type Real = { mesh: THREE.Mesh; ids: string[]; starts: Uint32Array; shade: Float
 type OnMap = { scene: THREE.Scene; at: P2; done: boolean; real?: Real };
 type Spot = { id: string; square: string };
 
-export default function HomeMap({ buildings, step, focus, aerial, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, dark, editing, installed, panels, panelW, turn, onReady, marked, taken, editsOn, tool, onPaint }: Props) {
+export default function HomeMap({ buildings, step, focus, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, dark, editing, installed, panels, panelW, turn, onReady, marked, taken, editsOn, tool, onPaint }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const models = useRef<{ scene: THREE.Scene; at: P2; id: string; polys: Poly[]; surfaces: { s: SunSurface; poly: number }[]; skins: ReturnType<typeof skinOf>[]; ghosts: THREE.Mesh }[]>([]); // one per building, each around its own origin
@@ -413,8 +471,8 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   const [bearing, setBearing] = useState(0);
   const spot = useRef<maplibregl.Marker | null>(null);
   const pins = useRef<maplibregl.Marker[]>([]);
-  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, dark, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, aerial });
-  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, dark, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, aerial };
+  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, dark, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint });
+  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, dark, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint };
   const clearDraft = useRef(() => {});
   const drawing = () => live.current.step === "review" && live.current.editing && !!live.current.onPaint && !!live.current.tool;
 
@@ -431,18 +489,20 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
   const refreshSquares = useRef(() => {});
   const hidden = useRef(new Map<string, unknown>()); // the map layers the review step switched off, and how they were
   const camera = useRef<{ center: maplibregl.LngLat; zoom: number; bearing: number; pitch: number } | null>(null); // where picking stopped
+  const dressAll = useRef(() => {}); // the roofs' photo, again on every real square
   const flags = useRef(new Map<string, Set<string>>()); // what each building is marked as, for the real roofs: the blocks keep theirs as feature state
   /** Colours a square's real roofs, or one building of it, from its marks and the theme. */
   const tint = (name: string, only?: string) => {
     const real = squares.current.get(name)?.real;
     if (!real) return;
     const t = TONES[live.current.dark ? "dark" : "light"], colour = real.mesh.geometry.getAttribute("color") as THREE.BufferAttribute, out = colour.array as Uint8Array;
-    const roofC = new THREE.Color(), wallC = new THREE.Color();
+    const roofC = new THREE.Color(), wallC = new THREE.Color(), marks = real.mesh.geometry.getAttribute("mark") as THREE.BufferAttribute, marked = marks.array as Uint8Array;
     const one = (k: number) => {
       const f = flags.current.get(`${name}|${real.ids[k]}`), state = f?.has("near") ? COLORS.face : f?.has("picked") ? COLORS.roof : f?.has("hover") ? t.hover : null;
       roofC.set(state ?? t.ghost);
       wallC.set(state ?? t.block);
       if (state) wallC.multiplyScalar(0.7);
+      marked.fill(state ? 255 : 0, real.starts[k], real.starts[k + 1]);
       for (let v = real.starts[k]; v < real.starts[k + 1]; v++) {
         const c = real.roof[v] ? roofC : wallC, s = real.shade[v] * 255;
         out[v * 3] = Math.min(255, c.r * s); out[v * 3 + 1] = Math.min(255, c.g * s); out[v * 3 + 2] = Math.min(255, c.b * s);
@@ -450,7 +510,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     };
     if (only === undefined) real.ids.forEach((_, k) => one(k));
     else { const k = real.index.get(only); if (k === undefined) return; one(k); }
-    colour.needsUpdate = true;
+    colour.needsUpdate = true; marks.needsUpdate = true;
     map.current?.triggerRepaint();
   };
   const mark = (b: Spot, key: string, value: boolean) => {
@@ -515,7 +575,9 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       const ghosts = ghostsOf(b, solid, around);
       ghosts.renderOrder = -1;
       g.add(ghosts);
-      g.add(neighboursOf(b, drawn, block));
+      const neighbours = neighboursOf(b, drawn, block);
+      g.add(neighbours);
+      drapePhoto(b.origin, neighbours.children.filter((o) => o.userData.part === "roof") as THREE.Mesh[], () => map.current?.triggerRepaint());
       scene.add(g);
       return { scene, at: b.origin, id: b.id, polys: [...roofs, ...walls], surfaces: (b.sun?.surfaces ?? []).map((x) => ({ s: x, poly: polyOf(b, x) })), skins, ghosts };
     });
@@ -566,7 +628,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       x.scene.getObjectByName("neighbours")?.children.forEach((o) => {
         const material = (o as THREE.Mesh).material as THREE.MeshBasicMaterial, n = o.userData.n as P3;
         if (o.name === "outline") material.color.set(t.line);
-        else material.color.set(o.userData.part === "roof" ? lit(t.ghost, n) : litWall(t.block, n));
+        else if (!material.map) material.color.set(o.userData.part === "roof" ? lit(t.ghost, n) : litWall(t.block, n));
       });
       (x.scene.children[0] as THREE.Group).children.forEach((o) => {
         const material = (o as THREE.Mesh).material as THREE.MeshBasicMaterial;
@@ -698,15 +760,15 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
             what.userData.seen = camera.projectionMatrix.clone();
             renderer.render(what, camera);
           };
-          // Real roofs fade with the blocks they replace, and step aside for the aerial photo. Their lines stay over it.
-          const solidT = solid.current.visibility === "visible" ? 1 - shown.current : 0, roofsT = live.current.aerial ? 0 : solidT;
-          if (solidT > 0) around.current.forEach(({ name }) => {
+          // Real roofs fade with the blocks they replace.
+          const roofsT = solid.current.visibility === "visible" ? 1 - shown.current : 0;
+          if (roofsT > 0) around.current.forEach(({ name }) => {
             const square = squares.current.get(name);
             if (!square?.done || (!square.real && edgeFade(m.getZoom()) === 0)) return;
             if (square.real) {
-              const material = square.real.mesh.material as THREE.MeshBasicMaterial;
+              const material = square.real.mesh.material as THREE.ShaderMaterial;
               square.real.mesh.visible = roofsT > 0;
-              material.opacity = roofsT; material.transparent = roofsT < 1; material.depthWrite = roofsT >= 1;
+              material.uniforms.opacity.value = roofsT; material.transparent = roofsT < 1; material.depthWrite = roofsT >= 1;
             }
             draw(square.scene, square.at);
           });
@@ -714,7 +776,8 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
         },
       });
       m.addSource("aerial", { type: "raster", tiles: [AERIAL], tileSize: 512 });
-      m.addLayer({ id: "aerial", type: "raster", source: "aerial", layout: { visibility: "none" } }, BLOCKS);
+      // The aerial photo is the ground, in place of the base map's roads and land. Its labels stay on top.
+      m.addLayer({ id: "aerial", type: "raster", source: "aerial" }, BLOCKS);
 
       // The edge of the prototype: dimmed outside, a yellow line, and the reason written along it.
       m.addSource(SITE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
@@ -793,6 +856,39 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
           }, BLOCKS);
         }).catch(() => { asking.delete(name); failed.add(name); showMissing(); pump(); });
       };
+      // The roofs' photo: one image around the view's centre, fetched again once the centre leaves its middle half or the zoom changes tier.
+      let photo: { texture: THREE.Texture; box: number[] } | null = null, photoAsk = 0;
+      const dress = (square: OnMap) => {
+        const material = square.real?.mesh.material as THREE.ShaderMaterial | undefined;
+        if (!material) return;
+        material.uniforms.photo.value = photo?.texture ?? null;
+        material.uniforms.hasPhoto.value = photo ? 1 : 0;
+        if (photo) material.uniforms.fit.value = photoFit(square.at, photo.box);
+      };
+      dressAll.current = () => { squares.current.forEach(dress); m.triggerRepaint(); };
+      const refreshPhoto = () => {
+        if (live.current.step !== "pick" || m.getZoom() < HOMES_FROM_ZOOM) return;
+        const c = m.getCenter(), X = ((c.lng + 180) / 360 - 0.5) * WEB_MERCATOR_M, Y = (0.5 - mercator(c.lng, c.lat)[1]) * WEB_MERCATOR_M;
+        const metre = 1 / Math.cos((c.lat * Math.PI) / 180); // EPSG:3857 metres per real metre here
+        const half = ((ROOF_PHOTO.find((t) => m.getZoom() >= t.fromZoom) as { sideM: number }).sideM / 2) * metre;
+        if (photo) {
+          const [x0, y0, x1, y1] = photo.box, h = (x1 - x0) / 2;
+          if (Math.abs(h - half) < 1 && Math.abs(X - (x0 + h)) < h / 2 && Math.abs(Y - (y0 + h)) < h / 2) return;
+        }
+        const box = [X - half, Y - half, X + half, Y + half], ticket = ++photoAsk;
+        const url = `https://geoservices.bayern.de/od/wms/dop/v1/dop20?service=WMS&version=1.3.0&request=GetMap&layers=by_dop20c&styles=&crs=EPSG:3857&bbox=${box.join(",")}&width=${ROOF_PHOTO_PX}&height=${ROOF_PHOTO_PX}&format=image/jpeg`;
+        new THREE.TextureLoader().setCrossOrigin("anonymous").load(url, (texture) => {
+          if (ticket !== photoAsk || !ready.current) { texture.dispose(); return; }
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.anisotropy = 8;
+          const old = photo?.texture;
+          photo = { texture, box };
+          dressAll.current();
+          old?.dispose();
+        }, undefined, () => undefined);
+      };
+      m.on("moveend", refreshPhoto);
+
       // Real roofs: the worker fetches and shapes them, the page only hands the result to the GPU.
       const shaping = new Set<string>(), noReal = new Set<string>();
       const pumpReal = () => {
@@ -810,8 +906,10 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
         const g = new THREE.BufferGeometry();
         g.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
         g.setAttribute("color", new THREE.BufferAttribute(new Uint8Array(data.positions.length), 3, true));
+        g.setAttribute("roof", new THREE.BufferAttribute(data.roof, 1)); // 0 or 1 as it is: normalised, 1 would arrive as 1/255
+        g.setAttribute("mark", new THREE.BufferAttribute(new Uint8Array(data.roof.length), 1, true));
         g.setIndex(new THREE.BufferAttribute(data.index, 1));
-        const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+        const mesh = new THREE.Mesh(g, roofMaterial());
         mesh.frustumCulled = false;
         square.scene.add(mesh);
         // The lines now follow the real roofs instead of the blocks' tops, and draw after them.
@@ -821,6 +919,8 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
         line.renderOrder = 1;
         square.real = { mesh, ids: data.ids, starts: data.starts, shade: data.shade, roof: data.roof, index: new Map(data.ids.map((id, k) => [id, k])) };
         tint(data.name);
+        dress(square);
+        refreshPhoto(); // the map may not have moved since it loaded
         m.setPaintProperty(homesOf(data.name), "fill-extrusion-opacity", 0); // still there to be clicked
         m.triggerRepaint();
         pumpReal();
@@ -1221,7 +1321,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       hidden.current.clear();
     }
     refreshSquares.current();
-    setSolid({ visibility: "visible", opacity: to || aerial ? 0 : 1 });
+    setSolid({ visibility: "visible", opacity: to ? 0 : 1 });
     const start = performance.now();
     let frameId = 0;
     const tick = (now: number) => {
@@ -1233,7 +1333,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
       if (to) {
         setSolid({ visibility: "none" });
         // Nothing is drawn that nobody sees: labels, blocks and the region's edge all rest until the user goes back.
-        for (const l of m.getStyle().layers) if (l.type === "symbol" || [BLOCKS, PENDING, "aerial", "outside", "limit-line"].includes(l.id)) {
+        for (const l of m.getStyle().layers) if (l.type === "symbol" || [BLOCKS, PENDING, "outside", "limit-line"].includes(l.id)) {
           hidden.current.set(l.id, m.getLayoutProperty(l.id, "visibility") ?? "visible");
           m.setLayoutProperty(l.id, "visibility", "none");
         }
@@ -1254,14 +1354,6 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
     spot.current = new maplibregl.Marker({ element: pin }).setLngLat(focus).addTo(m);
     m.flyTo({ center: focus, zoom: 18, pitch: PITCH, bearing: 0, duration: 1800 });
   }, [focus]);
-  useEffect(() => {
-    if (!ready.current) return;
-    const m = map.current;
-    m?.setLayoutProperty("aerial", "visibility", aerial ? "visible" : "none");
-    // See-through, not hidden: buildings must stay clickable over the photo.
-    if (step === "pick") setSolid({ opacity: aerial ? 0 : 1 });
-    m?.triggerRepaint();
-  }, [aerial]);
   return (
     <>
       <div className="sheet" aria-hidden="true" />

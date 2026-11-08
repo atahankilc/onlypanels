@@ -168,7 +168,7 @@ function Workspace({ dark, r, update, back, scores }: { dark: boolean; r: Reques
   const send = () => { update(r.id, { status: "sent", ...(d ? { offer: offerOf(d) } : {}) }); back(); };
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
-    <HomeMap dark={dark} buildings={r.buildings} installed={r.installed} step={step} focus={null} aerial={false} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
+    <HomeMap dark={dark} buildings={r.buildings} installed={r.installed} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
       panels={tab === "home" && view.layer === "sun" ? {} : out?.panels} panelW={LEFT} turn={turnTo(roof)} onReady={() => setStep("review")} />
     <aside className="panel tall desk">
       <header className="deskhead">
