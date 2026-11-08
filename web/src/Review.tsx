@@ -42,7 +42,10 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
     setStage(next);
   };
   const flow = flowFor(a), here = Math.max(0, flow.indexOf(stage));
-  const next = () => go(flow[here + 1]);
+  // Changing an answer from the overview brings you straight back to it.
+  const [fromOverview, setFromOverview] = useState(false);
+  const next = () => go(fromOverview ? "send" : flow[here + 1]);
+  const nextLabel = fromOverview ? "Go to overview" : "Next";
   const previous = () => (here ? go(flow[here - 1]) : back());
   /** An answer only records itself, and opens below what it needs. Every page moves on with its own Next, never by itself. */
   const answer = (change: Partial<Answers>, _done = true) => setAnswers({ ...a, ...change });
@@ -65,7 +68,7 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
     {line && <p className="muted">{line}</p>}
     {body}
     {more && <div className="more">{more}</div>}
-    <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={next}>Next</Button></div>
+    <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={next}>{nextLabel}</Button></div>
   </>;
   /** A field that helps but can be left empty: it says so in its label. */
   const optional = (label: string) => <>{label}<span className="opt">Optional</span></>;
@@ -85,19 +88,50 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
         <p className="small muted">To change it, pick a tool on the map. <b>Whole surface</b>: drag across surfaces. <b>Draw</b>: click around a part and close the shape. A shape over marked parts takes them out, over free parts or a wall adds them.</p>
         {changed && <button type="button" className="textlink" onClick={reset}>Start over</button>}
       </>}
-      <div className="stick"><Button size="lg" onClick={back}>Back</Button><Button variant="solid" size="lg" wide disabled={loading} onClick={next}>Next</Button></div>
+      <div className="stick"><Button size="lg" onClick={back}>Back</Button><Button variant="solid" size="lg" wide disabled={loading} onClick={next}>{nextLabel}</Button></div>
       <p className="source small muted">Bayerische Vermessungsverwaltung, PVGIS (European Commission). Shadows from nearby buildings, without trees.</p>
     </aside>
   );
 
-  if (stage === "send") return (
-    <aside className="panel tall quiz" key="send" ref={panel}>
-      <p className="count">Last step</p>
-      <h1>That is all we need</h1>
-      <p className="muted">An installer plans your system from this and sends you an offer.</p>
-      <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={() => go("sent")}>Send to an installer</Button></div>
-    </aside>
-  );
+  if (stage === "send") {
+    // Everything the homeowner told us, grouped as the questions were, each group with a way back to change it.
+    const no = "Not given", n = (v: number | null | undefined, unit: string) => (v ? `${Math.round(v).toLocaleString("en")} ${unit}` : no);
+    const label = <T extends readonly (readonly string[])[]>(list: T, v: string | null | undefined) => list.find((x) => x[0] === v)?.[1] ?? no;
+    const yes = (v: boolean | null | undefined, y = "Yes", nn = "No") => (v === true ? y : v === false ? nn : no);
+    const use = a.use_source === "exact" ? n(a.demand_kwh, "kWh a year") : a.use_source === "band" ? `${BANDS.find((x) => x[1] === a.demand_kwh)?.[0] ?? ""} kWh a year`
+      : a.use_source === "range" ? `${a.use_range.filter(Boolean).map((x) => x!.toLocaleString("en")).join(" – ")} kWh a year` : a.use_source === "payment" ? `${n(a.monthly_eur, "€ a month")} payment`
+      : a.use_source === "people" ? `${BY_PEOPLE.find((x) => x[1] === a.demand_kwh)?.[0] ?? ""} people, typical use` : a.use_source === "unknown" ? "Not known" : no;
+    const car = a.ev === false ? "No" : a.ev ? (a.ev_planned ? `Coming ${a.ev_when === "soon" ? "within a year" : a.ev_when === "later" ? "later" : "soon"}` : "Yes") : no;
+    const groups: [string, Stage, [string, string][]][] = [
+      ["Your roof", "roof", [["Priority area", `${Math.round(m2)} m²`]]],
+      ["About the roof", "roofinfo", [["Big trees nearby", yes(a.trees)], ["Renewed soon", a.roof_renovation === "unsure" ? "Not sure" : yes(a.roof_renovation === "yes" ? true : a.roof_renovation === "no" ? false : null)]]],
+      ["Solar already there", "solar", a.has_solar ? [["Solar", "Yes"], ["Marked area", `${Math.round(panelM2)} m²`], ["Size", n(a.solar_kwp, "kWp")], ["Year", a.solar_year ? String(a.solar_year) : no]] : [["Solar", yes(a.has_solar)]]],
+      ["Home battery", "battery", [["Battery", yes(a.has_storage)], ...(a.has_storage ? [["Size", n(a.battery_kwh, "kWh")] as [string, string]] : [])]],
+      ["Electricity", "use", [["Yearly use", use], ["Price", a.price_known ? `${a.price_ct_kwh} ct per kWh` : no]]],
+      ["Big electric users", "big", [["Has", a.big_users.length ? a.big_users.map((v) => label(BIG_USERS, v)).join(", ") : "None"]]],
+      ["Your house", "house", [["Built", label(BUILT, a.built)], ["Living area", n(a.living_m2, "m²")], ["Energy certificate", n(a.cert_kwh_m2, "kWh per m²")]]],
+      ["Heating", "heat", [["Heating", label(HEATING, a.heating)], ...(a.heating === "Heatpump" ? [["Its electricity", n(a.hp_kwh, "kWh a year")] as [string, string]] : []),
+        ...(FOSSIL.includes(a.heating ?? "") ? [["Heat pump", yes(a.wants_hp, "Interested", "Not interested")], [a.heating === "Oil" ? "Oil" : "Gas", a.heating === "Oil" ? n(a.oil_l, "litres a year") : n(a.heat_kwh, "kWh a year")]] as [string, string][] : [])]],
+      ["Electric car", "car", a.ev ? [["Car", car], ["How many", a.ev_count ? String(a.ev_count) : no], ["Charged at home", n(a.ev_kwh_month, "kWh a month")], ["Driving", n(a.ev_km, "km a year")]] : [["Car", car]]],
+      ...(a.ev ? [["Charging", "charge", [["Where", a.ev_charge_home === "most" ? "Mostly at home" : a.ev_charge_home === "half" ? "Half and half" : a.ev_charge_home === "little" ? "Mostly elsewhere" : no],
+        ["Home in the day", yes(a.ev_day, "Often", "Rarely")], ["Wallbox", yes(a.has_wallbox, "Already there", "Not yet")]]] as [string, Stage, [string, string][]]] : []),
+      ["What matters most", "goal", [["Priority", GOALS.find((x) => x[0] === a.goal)?.[1] ?? no]]],
+    ];
+    return (
+      <aside className="panel tall quiz" key="send" ref={panel}>
+        <p className="count">Overview</p>
+        <h1>Is everything right?</h1>
+        <p className="muted">An installer plans your system from this and sends you an offer. "Not given" is fine: they will ask you.</p>
+        <div className="overview">
+          {groups.map(([title, to, rows]) => <section key={to}>
+            <header><h2>{title}</h2><button type="button" className="textlink" onClick={() => { setFromOverview(true); go(to); }}>Change</button></header>
+            <dl>{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={v === no ? "none" : undefined}>{v}</dd></div>)}</dl>
+          </section>)}
+        </div>
+        <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={() => go("sent")}>Send to an installer</Button></div>
+      </aside>
+    );
+  }
 
   if (stage === "sent") return (
     <aside className="panel tall quiz" key="sent" ref={panel}>
@@ -192,7 +226,7 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
             <button type="button" className="textlink" onClick={() => answer({ use_source: "unknown", demand_kwh: null, use_range: [null, null] })}>Skip</button>
           </div>
         </>}
-        <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={next}>Next</Button></div>
+        <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={next}>{nextLabel}</Button></div>
       </>}
 
       {stage === "big" && page("Anything big that runs on electricity?", "Pick all that apply.", <div className="answers grid2">
