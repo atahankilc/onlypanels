@@ -30,6 +30,9 @@
 /* ---------- The desk: the homeowner's review stage, a wider column ---------- */
 .stage.plan { z-index: 4; }
 .stage.plan .pin { display: none; }
+/* Opening a request starts on the map's pick step while the camera flies to the home; there the desk would show for a moment as a
+   card over the map before the map slides right. It waits instead, and rises once the map has made room (styles.css, review). */
+.stage.plan.pick .panel.desk { visibility: hidden; }
 .stage.plan .panel.desk { width: calc(var(--left) - 24px); display: flex; flex-direction: column; overflow: hidden; padding: 20px 18px 14px; }
 .deskhead { display: flex; align-items: flex-start; gap: 14px; padding: 0 0 16px; }
 .deskhead .grow { flex: 1; min-width: 0; }
