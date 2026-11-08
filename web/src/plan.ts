@@ -8,7 +8,8 @@ import type { Obstacle } from "./roofObstacles";
 
 export type Inputs = { installer: string; demand_kwh: number | null; price_ct_kwh: number; heating: string | null; heat_kwh: number | null; hp_kwh?: number | null; has_solar: boolean; has_storage: boolean; ev: boolean; ev_km: number; ev_kwh_month?: number | null; ev_charge_home?: string | null; ev_day?: boolean | null; has_wallbox?: boolean | null;
   demand_source?: string | null; monthly_eur?: number | null; big_users?: string[]; living_m2?: number | null; living_from_model?: boolean; area_built?: string | null; area_built_share?: number | null; cert_kwh_m2?: number | null; built?: string | null; trees?: boolean | null; roof_renovation?: string | null; goal?: string | null;
-  solar_thermal?: boolean; owner?: string | null; backup?: boolean | null; home_day?: string | null; heat_dist?: string | null; boiler_age?: string | null; gas_eur?: number | null };
+  solar_thermal?: boolean; owner?: string | null; backup?: boolean | null; home_day?: string | null; heat_dist?: string | null; boiler_age?: string | null; gas_eur?: number | null;
+  mount?: string; area_m2?: number | null };
 export type Overrides = { modules?: number | null; battery_kwh?: number | null; wallbox?: boolean | null; heatpump?: boolean | null };
 /** One step of the engine's own decision, in order. Input keys match the request's facts, so their source can be shown. */
 export type TraceStep = { id: string; title: string; kind: "measured" | "learned" | "rule" | "physics" | "input"; by?: "engine" | "planner"; inputs: { key: string | null; label: string; value: string }[]; how: string; result: string; context?: string };
@@ -29,6 +30,7 @@ export type Request = {
   meterPhoto?: string; // the homeowner's photo of the meter cabinet, kept in the page and never sent to the engine
   checked?: string[]; // site checks the planner has ticked
   ref?: string; // the reference the homeowner was shown after sending, so a call can find the request
+  roofNumbers?: RoofNumbers | null; // the homeowner kept the home and sent only rounded roof numbers (share.ts)
   id: string; label: string; from: string; buildings: Selected[]; inputs: Inputs; sources: Record<string, Source>; overrides: Overrides;
   off: string[]; installed: string[]; walls: string[]; existing: Existing; status: "draft" | "sent";
   opened?: boolean; offer?: Offer; // opened by a planner, and what the sent offer holds: both go back to the homeowner
@@ -82,13 +84,15 @@ export function fromHomeowner(h: Handoff): Request {
   const thermal = !!a.has_solar && a.solar_kind === "thermal";
   return {
     meterPhoto: a.meter_photo ?? undefined,
-    id: h.ref ? `homeowner-${h.ref}` : "homeowner", ref: h.ref, label: buildings[0]?.label ?? "Home", from: "Homeowner", buildings, status: h.seed?.offer ? "sent" : "draft", opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? undefined,
+    id: h.ref ? `homeowner-${h.ref}` : "homeowner", ref: h.ref, label: buildings[0]?.label ?? (buildings.length ? "Home" : "Home not shared"),
+    roofNumbers: buildings.length ? null : h.roof ?? null, from: "Homeowner", buildings, status: h.seed?.offer ? "sent" : "draft", opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? undefined,
     inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating, heat_kwh: a.heat_kwh, hp_kwh: a.heating === "Heatpump" ? a.hp_kwh : null, has_solar: !!a.has_solar && !thermal, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM * (a.ev_count ?? 1),
       ev_kwh_month: a.ev && !a.ev_planned ? a.ev_kwh_month : null, ev_charge_home: car ? a.ev_charge_home : null, ev_day: car ? a.ev_day : null, has_wallbox: car ? a.has_wallbox : null,
       demand_source: a.use_source === "exact" ? "bill" : a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source, monthly_eur: a.use_source === "payment" ? a.monthly_eur : null,
       big_users: a.big_users, living_m2: a.living_m2 ?? modelM2(buildings), living_from_model: !a.living_m2 && !!modelM2(buildings), cert_kwh_m2: a.cert_kwh_m2, built: a.built, area_built: a.area?.built ?? null, area_built_share: a.area?.built_share ?? null, goal: a.goal,
-      solar_thermal: !!a.has_solar && (a.solar_kind === "thermal" || a.solar_kind === "both"), owner: a.owner ?? null, backup: a.backup ?? null, home_day: a.home_day ?? null, heat_dist: a.heat_dist ?? null, boiler_age: FOSSIL_HEAT.includes(a.heating ?? "") ? a.boiler_age ?? null : null, gas_eur: a.heating === "Gas" ? a.gas_eur ?? null : null },
-    sources: { demand_kwh: a.use_source === "exact" ? "customer" : "assumed", price_ct_kwh: a.price_known ? "customer" : "assumed", heating: source(a.heating), heat_kwh: a.heating === "Gas" && a.gas_eur ? "assumed" : source(a.heat_kwh), ev: source(a.ev), ev_km: car ? source(a.ev_km) : "customer", has_solar: source(a.has_solar), has_storage: source(a.has_storage) },
+      solar_thermal: !!a.has_solar && (a.solar_kind === "thermal" || a.solar_kind === "both"), owner: a.owner ?? null, backup: a.backup ?? null, home_day: a.home_day ?? null, heat_dist: a.heat_dist ?? null, boiler_age: FOSSIL_HEAT.includes(a.heating ?? "") ? a.boiler_age ?? null : null, gas_eur: a.heating === "Gas" ? a.gas_eur ?? null : null,
+      area_m2: !buildings.length && h.roof ? h.roof.m2 : null },
+    sources: { demand_kwh: a.use_source === "exact" ? "customer" : "assumed", price_ct_kwh: a.price_known ? "customer" : "assumed", heating: source(a.heating), heat_kwh: a.heating === "Gas" && a.gas_eur ? "assumed" : source(a.heat_kwh), ev: source(a.ev), ev_km: car ? source(a.ev_km) : "customer", has_solar: source(a.has_solar), has_storage: source(a.has_storage), ...(!buildings.length && h.roof ? { area_m2: "customer" as Source } : {}) },
     overrides: a.wants_hp === false ? { heatpump: false } : a.wants_hp ? { heatpump: true } : {},
     // The homeowner's marked area is a priority, not a limit: no roof is taken out for them, modules fill their cells first.
     priority: drawnOf(buildings, choice), taken: Object.fromEntries(Object.entries(choice.panels).filter(([, v]) => v.length)),

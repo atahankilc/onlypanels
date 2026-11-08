@@ -242,3 +242,8 @@
 .obstacles .textlink { padding-left: 0; }
 .sure { margin-left: 8px; padding: 1px 7px; border: 1px solid var(--hud-line); border-radius: 999px; font: 500 11px/1.4 var(--font-ui); font-style: normal; color: var(--hud-ink-2); }
 .sure.low { color: var(--hud-ink-3); }
+
+/* A request whose home stayed with the homeowner: no map, a plain note where it would be. */
+.nohome-stage { position: fixed; top: 8px; right: 8px; bottom: 8px; left: var(--left, 424px); display: grid; place-items: center; border-radius: 24px; background: var(--hud-bg-2, #1d1f24); border: 1px dashed var(--hud-line); }
+.nohome-stage > div { max-width: 380px; text-align: center; } .nohome-stage b { font-size: 16px; } .nohome-stage p { margin: 8px 0 0; color: var(--hud-ink-2); font-size: 13.5px; line-height: 1.5; }
+.nohome-roof { display: flex; gap: 24px; margin: 0; } .nohome-roof dt { color: var(--hud-ink-2); font-size: 12px; } .nohome-roof dd { margin: 2px 0 0; font: 600 15px var(--font-mono); }

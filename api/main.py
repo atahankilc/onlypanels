@@ -55,6 +55,10 @@ class Surface(BaseModel):
 class Inputs(BaseModel):
     installer: str = "2a8ba8e2"
     country: str = "Germany"
+    # Where the modules go and the usable area there. With measured surfaces those decide; without (the home was not shared,
+    # or the planner said "only 18 fit" or "use the garden"), the area limits the size.
+    mount: str = "roof"
+    area_m2: float | None = None
     demand_kwh: float | None = None
     price_ct_kwh: float = 32
     heating: str | None = None

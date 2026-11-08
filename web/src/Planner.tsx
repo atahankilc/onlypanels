@@ -14,6 +14,7 @@ import Obstacles from "./Obstacles";
 import { KIND, blockedOf, mergeCells } from "./roofObstacles";
 import { Options } from "./Options";
 import { Advisor } from "./Advisor";
+import type { RoofNumbers } from "./share";
 import { BatteryCurve } from "./BatteryCurve";
 import { Button, Check, Field, IconButton, Input, Segmented, Select, Slider } from "./ui";
 
@@ -51,11 +52,11 @@ const describe = (o: Overrides) => [
 const useDesign = (r: Request, roof: Spot[]) => {
   const [out, setOut] = useState<{ d: Design; panels: Record<string, number> } | null>(null);
   useEffect(() => {
-    if (!roof.length) return;
+    if (!roof.length && r.buildings.length) return; // a shared home waits for its roof; without one the answers carry the design
     let live = true;
     const t = setTimeout(() => design(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).then((x) => live && setOut(x)).catch(() => undefined), 120);
     return () => { live = false; clearTimeout(t); };
-  }, [r.inputs, r.overrides, r.off, roof, r.existing, r.strict]);
+  }, [r.inputs, r.overrides, r.off, roof, r.existing, r.strict, r.buildings.length]);
   return out;
 };
 
@@ -72,7 +73,7 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
   const update = (id: string, p: Partial<Request>) => setRequests((l) => l.map((r) => (r.id === id ? { ...r, ...p } : r)));
   useEffect(() => { fetch("/api/scores").then((r) => r.json()).then(setScores).catch(() => undefined); }, []);
   // Every homeowner request reaches the desk once, newest on top. One already on the desk keeps the planner's work.
-  useEffect(() => { setRequests((l) => handoffs.filter((h) => h.buildings.length).map(fromHomeowner).reduce((acc, r) => (acc.some((x) => x.id === r.id) ? acc : [r, ...acc]), l)); }, [handoffs]);
+  useEffect(() => { setRequests((l) => handoffs.filter((h) => h.buildings.length || h.shared?.home === false).map(fromHomeowner).reduce((acc, r) => (acc.some((x) => x.id === r.id) ? acc : [r, ...acc]), l)); }, [handoffs]);
   // Once a request is on the desk, trees from Bavaria's tree map go onto its sun, once: the yield, the design and the checks then carry them.
   const shading = useRef(new Set<string>());
   useEffect(() => {
@@ -164,7 +165,8 @@ const SOURCE_LONG: Record<Source, string> = { customer: "from the customer", ass
 
 function Workspace({ r, update, back, scores }: { r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null }) {
   const [tab, setTab] = useState<Tab>("design");
-  const [step, setStep] = useState<"pick" | "review">("pick");
+  const home = r.buildings.length > 0;
+  const [step, setStep] = useState<"pick" | "review">(home ? "pick" : "review");
   const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, mergeCells(r.taken, blockedOf(r.shaded ?? r.buildings, r.obstacles))), [r.shaded, r.buildings, r.installed, r.priority, r.taken, r.obstacles]); // trees reach the sun after arrival; kept obstacles block cells
   const [view, setView] = useState<View>({ layer: "photo", moment: null });
   const [face, setFace] = useState<Face | null>(null);
@@ -212,8 +214,9 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const send = () => { update(r.id, { status: "sent", ...(d ? { offer: offerOf(d, r) } : {}) }); back(); };
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
-    <HomeMap buildings={r.shaded ?? r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} blocked={blockedOf(r.shaded ?? r.buildings, r.obstacles)} obstacles={r.obstacles} hotObstacle={hotObs} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
+    {home ? <HomeMap buildings={r.shaded ?? r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} blocked={blockedOf(r.shaded ?? r.buildings, r.obstacles)} obstacles={r.obstacles} hotObstacle={hotObs} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
       panels={tab === "home" && view.layer === "sun" ? {} : out?.panels} panelW={LEFT} turn={turnTo(roof)} onReady={() => setStep("review")} />
+      : <NoHomeStage r={r} />}
     <aside className="panel tall desk">
       <header className="deskhead">
         <IconButton label="Back to requests" onClick={back}><Back /></IconButton>
@@ -230,7 +233,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         {!d && <p className="muted">The engine is working…</p>}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
         {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><Advisor key={JSON.stringify([r.inputs, r.overrides, r.off, r.strict])} d={d} ask={() => advise(r.inputs, r.overrides, roof, r.off, r.existing, r.strict)} use={(o, label) => setO(o, label)} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} /></>}
-        {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, { obstacles }); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
+        {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, { obstacles }); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "checks" && <>
           <h3>Confirm before sending</h3>
           {confirm.length ? <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm"><div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>{k === "demand_kwh" && r.inputs.demand_source && r.inputs.demand_source !== "bill" && r.inputs.demand_source !== "unknown" ? "Not from a bill. " : k === "heat_kwh" && r.inputs.gas_eur ? `Worked out from €${Math.round(r.inputs.gas_eur).toLocaleString("en")} of gas a year at ${GAS_CT} ct per kWh all in. ` : "Assumed: nobody gave this. "}{k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : k === "living_m2" ? "Estimated from the 3D model; the heat estimate, and so the heat pump, follows it." : k === "built" ? "The customer did not say; the census's most common period nearby stands in for the heat estimate." : "It changes the design."}</small></div>
@@ -245,7 +248,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         {d && tab === "offer" && <Offer r={r} d={d} first={first.current} roof={roof} panels={out?.panels ?? {}} toConfirm={confirm.length} allowed={allowed} setAllowed={(a) => update(r.id, { allowed: a } as Partial<Request>)} send={send}
           conditions={checks.filter((c) => !done.includes(c.id)).map((c) => c.title)}
           facts={[...relevant(r, d).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[r.sources[k]]] as [string, string, string]),
-            ...EXTRA.filter((k) => !r.sources[k] && sourceOf(r, k) && (r.inputs.ev || !k.startsWith("ev_") && k !== "has_wallbox")).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[sourceOf(r, k)!]] as [string, string, string]), ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"]]} />}
+            ...EXTRA.filter((k) => !r.sources[k] && sourceOf(r, k) && (r.inputs.ev || !k.startsWith("ev_") && k !== "has_wallbox")).map((k) => [FACT[k], fmt(r, k, d), SOURCE_LONG[sourceOf(r, k)!]] as [string, string, string]), home ? ["Roof", `${roof.length} measured ${roof.length === 1 ? "surface" : "surfaces"}`, "measured, Bavarian 3D buildings"] : ["Roof", r.roofNumbers ? roofWords(r.roofNumbers) : "not shared", r.roofNumbers ? "from the customer, rounded" : "to be confirmed"]]} />}
       </div>
       {/* As on the homeowner's pages: the way back and the one main action, always in reach. */}
       <div className="stick">
@@ -291,6 +294,19 @@ function Brief({ r, d, assumed, points, site, open }: { r: Request; d: Design; a
   </section>;
 }
 
+const roofWords = (n: RoofNumbers) => `about ${n.m2} m² of roof, ${n.facing === "flat" ? "flat" : `facing ${n.facing}, ${n.tilt}° steep`}`;
+
+/** Where the 3D home would stand: the homeowner kept it, so the desk says so and shows what came instead. */
+function NoHomeStage({ r }: { r: Request }) {
+  return <div className="nohome-stage"><div><b>Home not shared</b><p>{r.roofNumbers ? `The customer sent ${roofWords(r.roofNumbers)}, rounded so it points to no address.` : "The customer kept the address, the building and the roof to themselves."} The design runs from their answers.</p></div></div>;
+}
+function NoHomeRoof({ r }: { r: Request }) {
+  return r.roofNumbers
+    ? <><dl className="nohome-roof"><div><dt>Area</dt><dd>~{r.roofNumbers.m2} m²</dd></div><div><dt>Facing</dt><dd>{r.roofNumbers.facing}</dd></div><div><dt>Tilt</dt><dd>{r.roofNumbers.facing === "flat" ? "flat" : `~${r.roofNumbers.tilt}°`}</dd></div></dl>
+      <p className="small muted">Rounded by the customer's page. The area limits the solar size; the yield is a typical one until the roof is confirmed.</p></>
+    : <p className="small muted">The customer shared no roof. The solar size follows the household's needs alone, with no roof limit and a typical yield.</p>;
+}
+
 function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: HeatPlan | null, shade: Shade | null) {
   const list: { id: string; title: string; why: string }[] = [];
   const dist = r.inputs.heat_dist;
@@ -299,11 +315,15 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
     : dist === "radiators" ? "The customer heats with radiators. Check the flow temperature they need in winter; some may have to be larger."
     : dist === "both" ? "The customer has underfloor heating and radiators. The radiators set the flow temperature: check them."
     : "The customer did not say how the rooms are heated. Usually needs a site visit." });
+  const home = r.buildings.length > 0;
+  if (!home) list.unshift({ id: "noroof", title: r.roofNumbers ? "Roof not shared: confirm size and direction" : "Home not shared: ask for the roof", why: r.roofNumbers
+    ? `The customer kept the home and sent only rounded roof numbers: ${roofWords(r.roofNumbers)}. The design takes the area as its limit and a typical yield, not this roof's sun. Confirm size, direction and shade with them, or ask for the address.`
+    : "The customer kept the home and the roof to themselves. The design has no roof limit and a typical yield. Ask for the roof's size and direction, or the address." });
   const blind = roofOf(r.buildings, r.installed).filter((x) => x.s.kwh_per_kwp == null).length;
   if (blind) list.unshift({ id: "sun", title: `Sun data is missing for ${blind} ${blind === 1 ? "surface" : "surfaces"}`, why: "PVGIS did not answer. A typical yield stands in, so production is less certain. Reopen the request to try again." });
-  list.push(shadeCheck(shade));
+  if (home) list.push(shadeCheck(shade));
   const seen = (r.obstacles ?? []).filter((o) => o.on);
-  list.push({ id: "roof", title: "Check the roof for obstacles", why: r.obstacles
+  if (home) list.push({ id: "roof", title: "Check the roof for obstacles", why: r.obstacles
     ? `${seen.length ? `${seen.length} found on the aerial photo and kept clear (${[...new Set(seen.map((o) => KIND[o.kind].toLowerCase()))].join(", ")}). ` : "The aerial photo showed nothing on the roof. "}A photo misses what is small or hidden: check on site.`
     : "Roof windows, chimneys and dormers are not in the measured model. Let the photo check in Roof look for them, or look at the photo yourself." });
   list.push({ id: "state", title: "Check the roof's condition", why: "Age and load-bearing are not in our data." });
@@ -314,8 +334,10 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
     : { id: "who", title: "Who decides, and who owns the home?", why: "The customer did not say." });
   if (i.solar_thermal) list.push({ id: "thermal", title: "Hot water collectors on the roof", why: "The customer has solar collectors for hot water. Their area is left out; check where they sit and whether they stay." + (i.has_solar ? " The marked area also holds solar panels, so a size from the area is too high." : "") });
   if (i.backup) list.push({ id: "backup", title: "Backup power wanted", why: "Pick an inverter and battery that can run the home in an outage, with a backup box. About 1 in 7 past projects had one." });
-  list.push(monumentCheck(monument));
-  if (r.inputs.heating !== "Heatpump") list.push(heatPlanCheck(heatPlan, r.inputs.heating, d.heatpump.included));
+  if (home) {
+    list.push(monumentCheck(monument));
+    if (r.inputs.heating !== "Heatpump") list.push(heatPlanCheck(heatPlan, r.inputs.heating, d.heatpump.included));
+  } else list.push({ id: "place", title: "Trees, monument and heat plan need the address", why: "Shade from trees, monument protection and Munich's heat plan are looked up from the home. Check them once the customer shares the address." });
   list.push({ id: "grid", title: "Check the grid connection and meter cabinet", why: r.meterPhoto ? "The customer sent a photo of the meter cabinet, below. The grid connection is not in our data." : "Not in our data. No photo of the meter cabinet was sent." });
   // KfW 458 speed bonus (secondary sources, November 2026): oil, coal and electric storage heating at any age, gas once 20 years
   // in use, for owners living in the home. Its rate falls every half year from July 2026, so no figure is shown.
