@@ -1,22 +1,22 @@
-/* The voice, ported from Steward's Guide (frontend/src/building/hud.css): a column floating at the bottom left with
-   room around it (of the map, beside a side panel). Only the bubble, the chips and the dock's buttons have glass of
+/* The voice, ported from Steward's Guide (frontend/src/building/hud.css): a column at the bottom left, on the same left
+   edge and width as the panels above it (of the map, beside a side panel). Only the bubble, the chips and the dock's buttons have glass of
    their own. The map's With/Without switch sits at the bottom right, beside the map's buttons. Tokens from styles.css. */
-.guide { --btn-sm: 32px; position: fixed; z-index: 40; left: 32px; bottom: 28px; width: 360px; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; animation: guide-in 0.32s var(--ease); }
-.guide > * { pointer-events: auto; width: 100%; max-width: 360px; }
-.guide > .guide-bubble, .guide > .voice-error { width: fit-content; text-align: left; }
+.guide { --btn-sm: 32px; position: fixed; z-index: 40; left: 12px; bottom: 28px; width: 400px; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; animation: guide-in 0.32s var(--ease); }
+.guide > * { pointer-events: auto; width: 100%; max-width: 400px; }
+.guide > .guide-bubble, .guide > .voice-error { width: fit-content; align-self: flex-start; text-align: left; } /* its left edge on the panels' */
 .guide.homeowner { z-index: 60; } /* also over the start dialog, so it can help choose how to begin */
-body:has(.stage.review:not(.bare)) .guide.homeowner { left: calc(424px + 32px); }
-body:has(main.plan) .guide.planner { left: calc(548px + 32px); }
+body:has(.stage.review:not(.bare)) .guide.homeowner { left: calc(424px + 12px); }
+body:has(main.plan) .guide.planner { left: calc(548px + 12px); }
 body:has(.inbox-page) .guide.planner { left: 40px; }
 /* the request and price lists scroll their last rows clear of the dock */
 body:has(.guide.planner) .inbox-page { padding-bottom: 168px; }
 /* the map's hint moves right of the dock */
-body:has(.guide) .maphint { left: calc(var(--left, 424px) + 32px + 360px + 16px); }
+body:has(.guide) .maphint { left: calc(var(--left, 424px) + 12px + 400px + 16px); }
 @keyframes guide-in { from { opacity: 0; transform: translateY(8px); } }
 @keyframes hud-in { from { opacity: 0; transform: translateY(-4px); } }
 @keyframes hud-blink { 50% { opacity: 0.25; } }
 
-.guide-bubble { width: fit-content; max-width: min(100%, 360px); padding: 11px 15px; border: 1px solid var(--hud-line); border-radius: 20px; background: var(--hud-glass-2); -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4); box-shadow: var(--hud-shadow); animation: hud-in 0.2s var(--ease); }
+.guide-bubble { width: fit-content; max-width: min(100%, 400px); padding: 11px 15px; border: 1px solid var(--hud-line); border-radius: 20px; background: var(--hud-glass-2); -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4); box-shadow: var(--hud-shadow); animation: hud-in 0.2s var(--ease); }
 .guide-bubble.past { border-style: dashed; }
 .caption p { margin: 0; }
 .guide .who { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; color: var(--hud-ink-3); font: 500 10.5px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }
