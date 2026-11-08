@@ -21,7 +21,7 @@ import { AgentPanel } from "./Agent";
 import type { RoofNumbers } from "./share";
 import { BatteryCurve } from "./BatteryCurve";
 import { CostTab, PriceBook } from "./Costs";
-import { DeskSummary, keptBattery } from "./DeskSummary";
+import { DeskSummary, hpWhy, keptBattery } from "./DeskSummary";
 import { askAhead, askKey, keepAnswer, lastAnswer } from "./answers";
 import { EvidenceCard } from "./Evidence";
 import { Money, moneyAsk, moneyOf, useCosts, usePriceVersion } from "./money";
@@ -540,14 +540,6 @@ function monumentCheck(m: Monument | null): { id: string; title: string; why: st
   if (m.status === "none") return { id: "monument", title: "Check monument status", why: "No entry in the Bavarian monument list at this home or next to it. A hint, not a ruling: the lower monument authority decides." };
   return { id: "monument", title: "Check monument status", why: "The Bavarian monument map did not answer. Look the address up in the Bayerischer Denkmal-Atlas." };
 }
-
-/** Why the heat pump is in or out, in the customer's or the planner's terms. The engine adds one only when asked (D69). */
-const hpWhy = (r: Request, d: Design, o: Overrides) =>
-  d.heatpump.blocked || r.inputs.heating === "Heatpump" ? "already heats the home"
-    : d.heatpump.included ? (o.heatpump && r.inputs.wants_hp !== true ? "your choice" : "the customer asked for one")
-    : o.heatpump === false && r.inputs.wants_hp !== false ? "your choice"
-    : r.inputs.wants_hp === false ? "the customer does not want one"
-    : "only when the customer asks";
 
 function DesignTab({ d, first, r, setO, apply, lit, scores, review, energy }: { d: Design; first: Design | null; r: Request; setO: (c: Overrides, label?: string) => void; apply: (label: string, x: { inputs: Partial<Inputs>; overrides: Overrides }) => void; lit: string[]; scores: Scores | null; review: React.ReactNode; energy: React.ReactNode }) {
   const [text, setText] = useState(""), [said, setSaid] = useState("");
