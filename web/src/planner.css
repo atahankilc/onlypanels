@@ -379,3 +379,10 @@
 .chain.full small { grid-column: 2 / -1; margin-top: 2px; font-size: 12.5px; color: var(--hud-ink-2); }
 .chain.full .chain-now { grid-column: 3; }
 @media (prefers-reduced-motion: reduce) { .chain .now i { animation: none; border-right-color: var(--hud-route); } }
+/* The request and its chain are one row: one hover, one click target. */
+.reqlist > li:has(.reqrow) { border-radius: 14px; transition: background-color 0.15s; }
+.reqlist > li:has(.reqrow):hover { background: var(--hud-fill); }
+.reqlist > li .reqrow:hover { background: none; }
+.reqrow-chain { cursor: pointer; }
+.chain-found { color: var(--hud-ink); }
+.chain .wait .chain-found { color: inherit; }

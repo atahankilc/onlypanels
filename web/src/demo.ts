@@ -2,6 +2,7 @@
 // Each is a different case: answers known exactly, as a range or hardly at all. All arrive just sent, before any planner opened them.
 import { Answers, Choice, NO_ANSWERS, NO_CHOICE, Selected, SunSurface, areaAt, surfaceKey } from "./api";
 import { Handoff, design, fromHomeowner, loadHome, offerOf, roofOf } from "./plan";
+import { homeLoaded } from "./draftLog";
 
 type Marks = { cells?: number[]; panels?: number[] };
 type Seed = {
@@ -86,8 +87,10 @@ export function loadDemo(ready: (h: Sent) => void, settled: () => void) {
 
 async function build(seed: Seed): Promise<Sent | null> {
   try {
+    const t0 = performance.now();
     const buildings = (await Promise.all(seed.homes.map(([square, home]) => loadHome(square, home)))).flat();
     if (!buildings.length || buildings.some((b) => !b.sun)) return null; // a home without its parts or sun is not a request yet
+    homeLoaded(`homeowner-${seed.ref}`, performance.now() - t0); // the draft's chain shows it as its first step
     const at = buildings[0].origin, area = await areaAt(at[1], at[0]).catch(() => null);
     const choice: Choice = { ...NO_CHOICE, cells: {}, panels: {} };
     for (const b of buildings) for (const s of b.sun?.surfaces ?? []) {
