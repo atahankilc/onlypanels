@@ -39,7 +39,7 @@ async function ask(lat: number, lon: number, layer: string): Promise<Record<stri
   return (body.features ?? []).map((f: { properties?: Record<string, unknown> }) => f.properties ?? {});
 }
 
-async function at(lat: number, lon: number): Promise<HeatPlan> {
+export async function at(lat: number, lon: number): Promise<HeatPlan> {
   try {
     // A detail layer that fails only loses its sentence; the area type must answer.
     const [area, ...details] = await Promise.all([ask(lat, lon, AREA), ...DETAILS.map(([layer]) => ask(lat, lon, layer).catch(() => []))]);

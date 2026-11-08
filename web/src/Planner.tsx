@@ -1,7 +1,8 @@
 import { isValidElement, useEffect, useMemo, useRef, useState } from "react";
 import { GAS_CT, View, surfaceKey } from "./api";
-import { Monument, monumentOf } from "./monument";
-import { HeatPlan, heatPlanOf } from "./heatPlan";
+import { Monument, around as monumentAt, monumentOf } from "./monument";
+import { HeatPlan, at as heatPlanAt, heatPlanOf } from "./heatPlan";
+import { Place, searchPlace } from "./places";
 import { Shade, withTrees } from "./treeShade";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
@@ -179,10 +180,18 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const out = useDesign(r, roof);
   // Monument status from the Bavarian monument map, asked once per request by the page itself, never through our server.
   const [monument, setMonument] = useState<Monument | null>(null);
-  useEffect(() => { let live = true; setMonument(null); monumentOf(r.buildings).then((m) => live && setMonument(m)); return () => { live = false; }; }, [r.id]);
+  // Without a home but with an address, the page finds the address with Photon (EU), as the homeowner's search does, and asks the same maps at that point.
+  const [spot, setSpot] = useState<Place | null | undefined>(undefined); // undefined: not looked up (yet), null: not found
+  useEffect(() => {
+    let live = true; setSpot(undefined);
+    const address = addressOf(r);
+    if (!home && address) searchPlace(address).then((l) => live && setSpot(l[0] ?? null)).catch(() => live && setSpot(null));
+    return () => { live = false; };
+  }, [r.id]);
+  useEffect(() => { let live = true; setMonument(null); (home ? monumentOf(r.buildings) : spot ? monumentAt(spot.lat, spot.lon) : null)?.then((m) => live && setMonument(m)); return () => { live = false; }; }, [r.id, spot]);
   // Munich's heat plan at the home, asked the same way: by the page, from the city's map server.
   const [heatPlan, setHeatPlan] = useState<HeatPlan | null>(null);
-  useEffect(() => { let live = true; setHeatPlan(null); heatPlanOf(r.buildings).then((p) => live && setHeatPlan(p)); return () => { live = false; }; }, [r.id]);
+  useEffect(() => { let live = true; setHeatPlan(null); (home ? heatPlanOf(r.buildings) : spot ? heatPlanAt(spot.lat, spot.lon) : null)?.then((p) => live && setHeatPlan(p)); return () => { live = false; }; }, [r.id, spot]);
   const first = useRef<Design | null>(null);
   if (out && !first.current) first.current = out.d;
   const d = out?.d;
@@ -210,7 +219,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const toggle = (key: string) => { if (roof.some((x) => x.key === key)) mark(r.off.includes(key) ? "Roof surface added" : "Roof surface taken out"); if (roof.some((x) => x.key === key)) update(r.id, { off: r.off.includes(key) ? r.off.filter((k) => k !== key) : [...r.off, key] }); };
   const walls = r.buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => s.kind === "wall").map((s) => surfaceKey(b, s)));
   const chosen = [...walls, ...roof.filter((x) => !r.off.includes(x.key)).map((x) => x.key)];
-  const checks = d ? checkList(r, d, monument, heatPlan, r.shade ?? null) : [];
+  const checks = d ? checkList(r, d, monument, heatPlan, r.shade ?? null, spot) : [];
   const confirm = d ? toConfirm(r, d) : [];
   const warns = d ? d.review.filter((n) => n.level === "warn") : [];
   const left = confirm.length + checks.filter((c) => !done.includes(c.id)).length;
@@ -318,7 +327,7 @@ function NoHomeRoof({ r }: { r: Request }) {
     : <p className="small muted">The customer shared no roof. The solar size follows the household's needs alone, with no roof limit and a typical yield.</p>;
 }
 
-function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: HeatPlan | null, shade: Shade | null) {
+function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: HeatPlan | null, shade: Shade | null, spot?: Place | null) {
   const list: { id: string; title: string; why: string }[] = [];
   const dist = r.inputs.heat_dist;
   if (d.heatpump.included) list.push({ id: "flow", title: "Check radiators and flow temperature", why:
@@ -329,7 +338,7 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
   const home = r.buildings.length > 0;
   if (!home) list.unshift({ id: "noroof", title: r.roofNumbers ? (r.roofNumbers.told ? "Roof only described: confirm size and direction" : "Roof not shared: confirm size and direction") : "Home not shared: ask for the roof", why: r.roofNumbers
     ? `${r.roofNumbers.told ? "The customer described the roof" : "The customer kept the home and sent only rounded roof numbers"}: ${roofWords(r.roofNumbers)}. The design takes the area as its limit and ${r.roofNumbers.facing === "unknown" ? "a typical yield, as the direction is not known" : "PVGIS's yield for that direction and slope, without shade"}. Confirm size, direction and shade with them${addressOf(r) ? "" : ", or ask for the address"}.`
-    : "The customer kept the home and the roof to themselves. The design has no roof limit and a typical yield. Ask for the roof's size and direction, or the address." });
+    : addressOf(r) ? "The customer gave the address but no building and no roof. The design has no roof limit and a typical yield. Ask for the roof's size and direction." : "The customer kept the home and the roof to themselves. The design has no roof limit and a typical yield. Ask for the roof's size and direction, or the address." });
   const blind = roofOf(r.buildings, r.installed).filter((x) => x.s.kwh_per_kwp == null).length;
   if (blind) list.unshift({ id: "sun", title: `Sun data is missing for ${blind} ${blind === 1 ? "surface" : "surfaces"}`, why: "PVGIS did not answer. A typical yield stands in, so production is less certain. Reopen the request to try again." });
   if (home) list.push(shadeCheck(shade));
@@ -348,7 +357,11 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
   if (home) {
     list.push(monumentCheck(monument));
     if (r.inputs.heating !== "Heatpump") list.push(heatPlanCheck(heatPlan, r.inputs.heating, d.heatpump.included));
-  } else list.push({ id: "place", title: "Trees, monument and heat plan need the address", why: addressOf(r) ? `Shade from trees, monument protection and Munich's heat plan are looked up from the 3D home, which was not picked. Check them for ${addressOf(r)}.` : "Shade from trees, monument protection and Munich's heat plan are looked up from the home. Check them once the customer shares the address." });
+  } else if (spot) {
+    list.push({ id: "place", title: "Check trees that shade the roof", why: `The address was found on the map (${spot.label}), but trees are put on the roof's sun through the 3D home, which was not picked. Look at the photo of ${addressOf(r)}.` });
+    list.push(monumentCheck(monument));
+    if (r.inputs.heating !== "Heatpump") list.push(heatPlanCheck(heatPlan, r.inputs.heating, d.heatpump.included));
+  } else list.push({ id: "place", title: spot === undefined && addressOf(r) ? "Finding the address…" : "Trees, monument and heat plan need the address", why: addressOf(r) ? (spot === null ? `The address ${addressOf(r)} was not found in the region, so trees, monument protection and Munich's heat plan could not be looked up. Check them there yourself.` : `Looking up ${addressOf(r)} on the map.`) : "Shade from trees, monument protection and Munich's heat plan are looked up from the home. Check them once the customer shares the address." });
   list.push({ id: "grid", title: "Check the grid connection and meter cabinet", why: r.meterPhoto ? "The customer sent a photo of the meter cabinet, below. The grid connection is not in our data." : "Not in our data. No photo of the meter cabinet was sent." });
   // KfW 458 speed bonus (secondary sources, November 2026): oil, coal and electric storage heating at any age, gas once 20 years
   // in use, for owners living in the home. Its rate falls every half year from July 2026, so no figure is shown.

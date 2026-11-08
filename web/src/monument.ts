@@ -35,7 +35,7 @@ async function ask(lat: number, lon: number, layers: string): Promise<MonumentHi
 }
 
 /** What is listed at one point (a building, an ensemble) and which listed buildings stand within about 20 m. */
-async function around(lat: number, lon: number): Promise<Monument> {
+export async function around(lat: number, lon: number): Promise<Monument> {
   const dlat = NEAR_M / 111320, dlon = NEAR_M / (111320 * Math.cos((lat * Math.PI) / 180));
   try {
     const [here, ...ring] = await Promise.all([ask(lat, lon, "einzeldenkmalO,bauensembleO"),
