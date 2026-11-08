@@ -59,6 +59,11 @@ export function Amount({ prefix, suffix, className, value, ...rest }: Omit<Input
   </span>;
 }
 
+/** One answer among a few, as a tile: a coloured icon, a word, and at most a few words under it. Pressed, it takes its colour. */
+export function Tile({ icon, label, sub, color, pressed, onClick }: { icon: ReactNode; label: string; sub?: string; color: string; pressed: boolean; onClick: () => void }) {
+  return <button type="button" className="tile" aria-pressed={pressed} style={{ "--c": color } as React.CSSProperties} onClick={onClick}><i>{icon}</i><b>{label}</b>{sub && <small>{sub}</small>}</button>;
+}
+
 /** A modal over the page: title and close at the top, the content, the actions at the bottom. Esc or a click outside closes it. */
 export function Modal({ open, title, onClose, children, actions }: { open: boolean; title: ReactNode; onClose: () => void; children: ReactNode; actions?: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);

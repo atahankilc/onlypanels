@@ -77,3 +77,18 @@
 .modal-box > header h2 { margin: 0; font: 650 18px/1.25 var(--font-ui); letter-spacing: -0.01em; text-transform: none; color: var(--hud-ink); }
 .modal-body { overflow-y: auto; padding: 4px 22px 8px; }
 .modal-box > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px 20px; border-top: 1px solid var(--hud-line); }
+
+/* Tile: one answer among a few. The icon sits in a ring of the answer's colour; pressed, the tile takes that colour. */
+.tiles { display: grid; grid-auto-columns: 1fr; grid-auto-flow: column; gap: 10px; margin-top: 18px; }
+.tile { display: grid; justify-items: start; align-content: start; gap: 3px; min-height: 104px; padding: 14px; border: 1.5px solid var(--hud-line); border-radius: 16px; background: var(--hud-fill); color: var(--hud-ink); font: inherit; text-align: left; cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.15s; }
+.tile i { display: grid; place-items: center; width: 36px; height: 36px; margin-bottom: 8px; border-radius: 50%; border: 2px solid var(--c); color: var(--c); background: color-mix(in oklab, var(--c) 12%, transparent); transition: background 0.15s, color 0.15s; }
+.tile i svg { width: 18px; height: 18px; }
+.tile b { font: 650 16px/1.2 var(--font-ui); }
+.tile small { font-size: 12.5px; line-height: 1.35; color: var(--hud-ink-2); }
+.tile[aria-pressed="true"] { border-color: var(--c); background: color-mix(in oklab, var(--c) 14%, var(--hud-fill)); box-shadow: 0 8px 24px -14px var(--c); }
+.tile[aria-pressed="true"] i { background: var(--c); color: #0b0d10; }
+@media (hover: hover) { .tile:not([aria-pressed="true"]):hover { border-color: color-mix(in oklab, var(--c) 50%, var(--hud-line)); } }
+.tiles.yn .tile { min-height: 0; grid-template-columns: auto 1fr; align-items: center; column-gap: 12px; padding: 12px 14px; }
+.tiles.yn .tile i { margin: 0; }
+.tile:focus-visible { outline: 2px solid var(--hud-route); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .tile, .tile i { transition: none; } }

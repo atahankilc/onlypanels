@@ -99,7 +99,7 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
       if (a.battery_kwh != null) add(known, <>Size <b>{a.battery_kwh} kWh</b></>, YOU);
       else add(assumed, "Size not known: we use the size installers fit most often");
     }
-    add(later, "Sees what is already in the house beside the new system");
+    if (a.has_storage) add(later, "Lets the new solar charge your battery too");
   }
 
   if (stage === "use") {
