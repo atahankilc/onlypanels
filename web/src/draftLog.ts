@@ -27,7 +27,9 @@ export const homeLoaded = (id: string, ms: number) => { homes.set(id, ms); };
 export const arrived = (id: string, homeShort: string) => {
   if (logs.has(id)) return;
   const ms = homes.get(id);
-  logs.set(id, { t0: performance.now(), starts: {}, done: ms != null ? { home: { start: -ms, end: 0, short: homeShort, detail: homeShort } } : {} });
+  // The home step is always there, so every request's chain has the same columns: loaded before arrival when measured (the
+  // demo), else already in hand from the homeowner's page or their answers.
+  logs.set(id, { t0: performance.now(), starts: {}, done: { home: { start: -(ms ?? 0), end: 0, short: homeShort, detail: homeShort } } });
   tell();
 };
 /** A step began. Steps not marked begin at arrival. */

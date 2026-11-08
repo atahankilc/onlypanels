@@ -11,14 +11,14 @@ type Said = [short: string, detail: string];
 
 /** What each step found: a few words for the chain, a sentence for the hover. From the step's own answer, never made up. */
 export const chainText = {
-  home: (buildings: number, sides: number): string => `${buildings > 1 ? `${buildings} buildings, ` : ""}${sides} roof ${sides === 1 ? "side" : "sides"}`,
+  home: (buildings: number, sides: number): string => !buildings ? "answers only" : `${buildings > 1 ? `${buildings} buildings, ` : ""}${sides} roof ${sides === 1 ? "side" : "sides"}`,
   roof: (home: boolean, roof: Spot[]): Said => {
-    if (!home) return ["no home shared", "No home was shared: the roof comes from the answers."];
+    if (!home) return ["from the answers", "No 3D home was shared: the roof is the one the customer described, or a typical one."];
     const fits = roof.reduce((a, x) => a + x.fits, 0);
     return [`${fits} panels fit`, `Room for ${fits} panels on ${roof.length} roof ${roof.length === 1 ? "side" : "sides"}.`];
   },
   trees: (home: boolean, s: Shade): Said => {
-    if (!home) return ["no home shared", "No home was shared, so there are no trees to check."];
+    if (!home) return ["needs the home", "No 3D home was shared, so trees cannot be put on the roof's sun yet."];
     if (s.status === "unknown") return ["not read", "The tree map could not be read."];
     if (s.status === "none" || !s.surfaces.length) return ["no shade", s.trees ? `${s.trees} trees nearby, none takes sun from the roof.` : "No tree takes sun from the roof."];
     const worst = s.surfaces.reduce((a, x) => (x.lost > a.lost ? x : a)), pct = Math.round(worst.lost * 100);
