@@ -39,7 +39,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 ## Not done
 
 - Pitch deck, demo recording, final test-set run: not started
-- Questions-only path (D104) still shows an empty map frame and asks no address or roof by hand
+- Questions-only path (D104) asks no address or roof by hand; its map frame now invites the home instead
 - Team decisions in `docs/decisions.md` marked Proposed are not yet agreed
 - Every assumed value and default, with its source, is in `docs/assumptions.md`. Keep it current when a constant changes
 
