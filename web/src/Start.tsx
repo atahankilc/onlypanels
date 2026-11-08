@@ -9,6 +9,7 @@ const PROMISES: [string, string][] = [
   ["No location needed.", "Type an address or move the map. We never ask where you are."],
   ["Only Bavarian and EU data.", "Roof, sun and address come only from Bavaria and the EU."],
   ["You decide what goes.", "Before sending, leave out the address, the building or the roof shape."],
+  ["Sending your home makes the offer closer.", "Your installer then also checks trees that shade the roof, monument rules and the city's heat plan, without asking you."],
 ];
 
 export default function StartChoice({ onChoose }: { onChoose: (s: Start) => void }) {
