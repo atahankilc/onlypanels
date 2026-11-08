@@ -422,7 +422,7 @@ function PriorityNote({ r, d, roof, panels, set }: { r: Request; d: Design; roof
 /** The first ten seconds: what is proposed, why in three lines, and what is still open. Written from the engine's numbers by template, no language model. */
 function whyOf(r: Request, d: Design) {
   const s = d.similar, why: string[] = [];
-  why.push(d.pv.locked ? `Solar is fixed by you at ${d.pv.modules} modules.` : d.pv.capped ? `The roof limits solar to ${d.pv.modules} modules; the engine wanted more.` : `${d.energy.existing_kwp ? `Solar sized for the ${Math.max(0, d.energy.total_mwh - (d.energy.existing_mwh ?? 0)).toFixed(1)} MWh a year the existing ${d.energy.existing_kwp} kWp leaves of ${d.energy.total_mwh.toFixed(1)}` : `Solar sized for ${d.energy.total_mwh.toFixed(1)} MWh a year`}. In ${s.n} similar homes, experts chose ${s.kwp_low}–${s.kwp_high} kWp.`);
+  why.push(d.pv.locked ? `Solar is fixed by you at ${d.pv.modules} modules.` : d.pv.capped ? `The roof limits solar to ${d.pv.modules} modules; the engine wanted more.` : `${d.energy.existing_kwp ? `Solar sized for the ${Math.max(0, d.energy.total_mwh - (d.energy.existing_mwh ?? 0)).toFixed(1)} MWh a year the existing ${d.energy.existing_kwp} kWp leaves of ${d.energy.total_mwh.toFixed(1)}` : `Solar sized for ${d.energy.total_mwh.toFixed(1)} MWh a year`}.`); // what experts chose for similar homes is in the table above
   if (d.pv.max_modules) why.push(`${d.pv.modules} of ${d.pv.max_modules} modules that fit on the ${r.buildings.length ? "measured roof, best sun first" : `described roof (about ${Math.round(r.inputs.area_m2 ?? d.pv.max_modules * 2)} m² on the main side)`}. Makes about ${d.energy.production_mwh.toFixed(1)} MWh a year.`);
   why.push(d.battery.locked ? (d.battery.kwh ? `Battery set by you at ${d.battery.kwh} kWh.` : "No battery, your choice.") : d.battery.kwh ? `${d.battery.kwh} kWh battery: ${s.battery_rate}% of similar homes bought one${d.battery.unsure ? ", but this call is open" : ""}.` : r.inputs.has_storage ? `The home already has a battery${r.existing.battery_kwh ? ` of ${r.existing.battery_kwh} kWh` : ""}, so none is added; the new system charges it too.` : `No battery proposed, though ${s.battery_rate}% of similar homes bought one.`);
   if (r.inputs.goal) why.push(`The customer puts ${label(GOAL, r.inputs.goal).toLowerCase()} first; the engine leans on it.`);
@@ -541,6 +541,14 @@ function monumentCheck(m: Monument | null): { id: string; title: string; why: st
   return { id: "monument", title: "Check monument status", why: "The Bavarian monument map did not answer. Look the address up in the Bayerischer Denkmal-Atlas." };
 }
 
+/** Why the heat pump is in or out, in the customer's or the planner's terms. The engine adds one only when asked (D69). */
+const hpWhy = (r: Request, d: Design, o: Overrides) =>
+  d.heatpump.blocked || r.inputs.heating === "Heatpump" ? "already heats the home"
+    : d.heatpump.included ? (o.heatpump && r.inputs.wants_hp !== true ? "your choice" : "the customer asked for one")
+    : o.heatpump === false && r.inputs.wants_hp !== false ? "your choice"
+    : r.inputs.wants_hp === false ? "the customer does not want one"
+    : "only when the customer asks";
+
 function DesignTab({ d, first, r, setO, apply, lit, scores, review, energy }: { d: Design; first: Design | null; r: Request; setO: (c: Overrides, label?: string) => void; apply: (label: string, x: { inputs: Partial<Inputs>; overrides: Overrides }) => void; lit: string[]; scores: Scores | null; review: React.ReactNode; energy: React.ReactNode }) {
   const [text, setText] = useState(""), [said, setSaid] = useState("");
   const o = r.overrides, kwp = d.pv.kwp, s = d.similar;
@@ -567,7 +575,7 @@ function DesignTab({ d, first, r, setO, apply, lit, scores, review, energy }: { 
         <td><Select aria-label="Battery" value={o.battery_kwh == null ? "auto" : String(o.battery_kwh)} onChange={(e) => setO({ battery_kwh: e.target.value === "auto" ? null : Number(e.target.value) })}><option value="auto">Auto</option><option value="0">None</option>{[...d.battery.choices, ...(o.battery_kwh && !d.battery.choices.includes(o.battery_kwh) ? [o.battery_kwh] : [])].map((c) => <option key={c} value={c}>{c} kWh</option>)}</Select></td></tr>
       <tr><th scope="row">Wallbox</th><td>{d.wallbox.included ? "Included" : "None"}</td><td>{s.wallbox_rate}% have one</td>
         <td><Segmented wide label="Wallbox" value={three(o.wallbox)} onChange={(v) => setO({ wallbox: from3(v) })} options={[{ value: "auto", label: "Auto" }, { value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></td></tr>
-      <tr><th scope="row">Heat pump</th><td>{d.heatpump.included ? `${d.heatpump.kw} kW` : "None"}<small>{d.heatpump.blocked ? "already there" : "by rule"}</small></td><td>Too few sold</td>
+      <tr><th scope="row">Heat pump</th><td>{d.heatpump.included ? `${d.heatpump.kw} kW` : "None"}<small>{hpWhy(r, d, o)}</small></td><td>Too few sold<small>to compare</small></td>
         <td><Segmented wide label="Heat pump" value={three(o.heatpump)} onChange={(v) => setO({ heatpump: from3(v) })} options={[{ value: "auto", label: "Auto" }, { value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></td></tr>
     </tbody></table>
       <form className="askbox" onSubmit={(e) => { e.preventDefault(); if (text.trim()) ask(); }}>
@@ -586,7 +594,7 @@ function DesignTab({ d, first, r, setO, apply, lit, scores, review, energy }: { 
       <small className="muted">Written from the engine's numbers by template, not by a language model.</small>
     </Fold>
     {review}
-    <Fold title="What past projects support" summary={`Experts offered ${s.kwp_low}–${s.kwp_high} kWp for ${s.n} similar homes; ${s.battery_rate}% bought a battery`}>
+    <Fold title="What past projects support" summary="Where this draft sits among similar homes, and what would narrow the range">
       <EvidenceCard d={d} plain onForget={() => setO({}, "Learned offers forgotten")} />
     </Fold>
     {energy}

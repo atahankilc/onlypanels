@@ -11,7 +11,7 @@ export function BatteryCurve({ d, pick }: { d: Design; pick: (kwh: number) => vo
   if (rows.length < 2) return null;
   const now = d.battery.kwh;
   return <figure className="bcurve">
-    <figcaption><b>What each battery size does here</b><small>Share of the yearly need from own power, and the saving. Same home, roof and weather years. Click a size to use it.</small></figcaption>
+    <figcaption><b>What each battery size does here</b><small>Share of the yearly need from own power, and what the battery alone adds a year and when it pays for itself. Same home, roof and weather years. Click a size to use it.</small></figcaption>
     <div className="bcurve-cols" role="list">
       {rows.map((r, k) => {
         const gain = k ? r.own_pct - rows[k - 1].own_pct : 0;
@@ -21,11 +21,13 @@ export function BatteryCurve({ d, pick }: { d: Design; pick: (kwh: number) => vo
           <em>{r.own_pct}%</em>
           <i><b style={{ height: `${r.own_pct}%` }} /></i>
           <span>{r.kwh ? r.kwh : "none"}</span>
-          <small>€{r.saving_eur.toLocaleString("en")}</small>
+          {/* The battery's own money, as the Cost tab counts it. The whole system's saving was here before and read as a second
+              payback next to the desk's, which counts the whole system after upkeep. */}
+          {money && <small>{pay ? `+€${pay.year1_eur.toLocaleString("en")}` : r.kwh ? "" : "–"}</small>}
           {money && <small>{pay ? (pay.payback_years != null ? `${pay.payback_years}y` : "no") : r.kwh ? "" : "–"}</small>}
         </button>;
       })}
     </div>
-    <p className="small muted">kWh of battery under each column, yearly saving below it{money ? ", then the years it takes to pay for itself (Cost tab for prices)" : ""}. Estimates from real weather years, checked against HTW Berlin values.</p>
+    <p className="small muted">kWh of battery under each column{money ? "; below it, what the battery adds a year over none and the years it takes to pay for itself. The desk's payback above is the whole system's" : ""}. Estimates from real weather years, checked against HTW Berlin values.</p>
   </figure>;
 }
