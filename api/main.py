@@ -11,7 +11,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from reonic_engine import battery as batteries, lod2, site, sun, zensus
+from reonic_engine import battery as batteries, lod2, monument, site, sun, zensus
 from reonic_engine.data import load_dataset
 from reonic_engine.design import Engine, use_from_payment
 from reonic_engine.refine import refine
@@ -165,6 +165,12 @@ def site_search(q: str):
 def site_area(lat: float, lon: float):
     """What the 2022 census says about the homes around a point: most common build period and heating. Empty without the data."""
     return zensus.around(lon, lat) or {}
+
+
+@app.get("/api/site/monument")
+async def site_monument(lat: float, lon: float):
+    """Monument status at and around a building, from the Bavarian monument office's map service. A hint for the planner, not a ruling."""
+    return await asyncio.to_thread(monument.around, lat, lon)
 
 
 @app.get("/api/site/reverse")

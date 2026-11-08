@@ -42,7 +42,7 @@ Researched 2026-11-07. Status means the Reonic export we hold today. Web figures
 
 ## Now in use
 
-Address search (Nominatim), building shape and height (OpenStreetMap through OpenFreeMap), sun per surface with terrain horizon (PVGIS) and aerial photos in Bavaria (CC BY 4.0). Roof tags and nearby trees come from Overpass when it answers. Roof slope is still an estimate. Garden size is drawn by the homeowner, not detected.
+Address search (Nominatim), building shape and height (OpenStreetMap through OpenFreeMap), sun per surface with terrain horizon (PVGIS) and aerial photos in Bavaria (CC BY 4.0). Roof tags and nearby trees come from Overpass when it answers. Monument status comes from the BLfD's public map service for the planner's checks. Roof slope is still an estimate. Garden size is drawn by the homeowner, not detected.
 
 ## Priorities
 

@@ -1,5 +1,5 @@
 import { isValidElement, useEffect, useRef, useState } from "react";
-import { GAS_CT, View, surfaceKey } from "./api";
+import { GAS_CT, Monument, View, monumentOf, surfaceKey } from "./api";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
 import { Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, offerOf, refine, roofOf, turnTo } from "./plan";
@@ -156,6 +156,9 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const [face, setFace] = useState<Face | null>(null);
   const done = r.checked ?? [], setDone = (checked: string[]) => update(r.id, { checked });
   const out = useDesign(r, roof);
+  // Monument status from the Bavarian monument map, asked once per request; only the buildings' points leave the machine.
+  const [monument, setMonument] = useState<Monument | null>(null);
+  useEffect(() => { let live = true; setMonument(null); monumentOf(r.buildings).then((m) => live && setMonument(m)); return () => { live = false; }; }, [r.id]);
   const first = useRef<Design | null>(null);
   if (out && !first.current) first.current = out.d;
   const d = out?.d;
@@ -183,7 +186,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const toggle = (key: string) => { if (roof.some((x) => x.key === key)) mark(r.off.includes(key) ? "Roof surface added" : "Roof surface taken out"); if (roof.some((x) => x.key === key)) update(r.id, { off: r.off.includes(key) ? r.off.filter((k) => k !== key) : [...r.off, key] }); };
   const walls = r.buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => s.kind === "wall").map((s) => surfaceKey(b, s)));
   const chosen = [...walls, ...roof.filter((x) => !r.off.includes(x.key)).map((x) => x.key)];
-  const checks = d ? checkList(r, d) : [];
+  const checks = d ? checkList(r, d, monument) : [];
   const confirm = d ? toConfirm(r, d) : [];
   const warns = d ? d.review.filter((n) => n.level === "warn") : [];
   const left = confirm.length + checks.filter((c) => !done.includes(c.id)).length;
@@ -253,7 +256,7 @@ function Brief({ r, d, assumed, points, site, open }: { r: Request; d: Design; a
   </section>;
 }
 
-function checkList(r: Request, d: Design) {
+function checkList(r: Request, d: Design, monument: Monument | null) {
   const list: { id: string; title: string; why: string }[] = [];
   const dist = r.inputs.heat_dist;
   if (d.heatpump.included) list.push({ id: "flow", title: "Check radiators and flow temperature", why:
@@ -272,7 +275,7 @@ function checkList(r: Request, d: Design) {
     : { id: "who", title: "Who decides, and who owns the home?", why: "The customer did not say." });
   if (i.solar_thermal) list.push({ id: "thermal", title: "Hot water collectors on the roof", why: "The customer has solar collectors for hot water. Their area is left out; check where they sit and whether they stay." + (i.has_solar ? " The marked area also holds solar panels, so a size from the area is too high." : "") });
   if (i.backup) list.push({ id: "backup", title: "Backup power wanted", why: "Pick an inverter and battery that can run the home in an outage, with a backup box. About 1 in 7 past projects had one." });
-  list.push({ id: "monument", title: "Check monument status", why: "Not in our data." });
+  list.push(monumentCheck(monument));
   list.push({ id: "grid", title: "Check the grid connection and meter cabinet", why: r.meterPhoto ? "The customer sent a photo of the meter cabinet, below. The grid connection is not in our data." : "Not in our data. No photo of the meter cabinet was sent." });
   // KfW 458 speed bonus (secondary sources, November 2026): oil, coal and electric storage heating at any age, gas once 20 years
   // in use, for owners living in the home. Its rate falls every half year from July 2026, so no figure is shown.
@@ -284,6 +287,19 @@ function checkList(r: Request, d: Design) {
   list.push({ id: "grants", title: "Check grants", why: (speed ? `${speed} Only for owners living in the home; its rate falls every half year, check KfW 458. ` : "") + "Other grants depend on the customer." });
   list.push({ id: "meter", title: "Smart meter and grid feed limit", why: "Without a smart meter, a new system may feed at most 60% of its power to the grid." });
   return list;
+}
+
+/** What the Bavarian monument map says, worded as a check. Never a ruling: the lower monument authority decides. */
+function monumentCheck(m: Monument | null): { id: string; title: string; why: string } {
+  const named = (h: { name: string | null; address: string | null; id: string | null }) => [h.name, h.address].filter(Boolean).join(", ") + (h.id ? ` (${h.id})` : "");
+  const listed = m?.here.filter((h) => h.kind === "listed") ?? [], ensemble = m?.here.filter((h) => h.kind === "ensemble") ?? [];
+  const authority = "Ask the lower monument authority before planning further; panels usually need a permit and may have to stay out of sight.";
+  if (!m) return { id: "monument", title: "Check monument status", why: "Asking the Bavarian monument map…" };
+  if (m.status === "listed") return { id: "monument", title: "Listed building: permit needed", why: `The Bavarian monument list has this building: ${listed.map(named).join("; ")}.` + (ensemble.length ? ` It also lies in the ensemble ${ensemble.map(named).join("; ")}.` : "") + ` ${authority}` };
+  if (m.status === "ensemble") return { id: "monument", title: "In a protected ensemble: permit likely", why: `The home lies in the ensemble ${ensemble.map(named).join("; ")}. Solar visible from the street usually needs a permit. ${authority}` };
+  if (m.status === "near") return { id: "monument", title: "Listed building next door", why: `Within about 20 m: ${m.near.map(named).join("; ")}. Its setting can be protected, so panels in view of it may need a permit. Ask the lower monument authority.` };
+  if (m.status === "none") return { id: "monument", title: "Check monument status", why: "No entry in the Bavarian monument list at this home or next to it. A hint, not a ruling: the lower monument authority decides." };
+  return { id: "monument", title: "Check monument status", why: "The Bavarian monument map did not answer. Look the address up in the Bayerischer Denkmal-Atlas." };
 }
 
 function DesignTab({ d, first, r, setO, apply, lit, scores }: { d: Design; first: Design | null; r: Request; setO: (c: Overrides, label?: string) => void; apply: (label: string, x: { inputs: Partial<Inputs>; overrides: Overrides }) => void; lit: string[]; scores: Scores | null }) {
