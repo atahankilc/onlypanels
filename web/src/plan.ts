@@ -34,6 +34,7 @@ export type Request = {
   roofNumbers?: RoofNumbers | null; // the homeowner kept the home and sent only rounded roof numbers (share.ts)
   id: string; label: string; from: string; buildings: Selected[]; inputs: Inputs; sources: Record<string, Source>; overrides: Overrides;
   off: string[]; installed: string[]; walls: string[]; existing: Existing; status: "draft" | "sent";
+  receivedAt?: number; // when the homeowner sent it: the desk lists the longest waiting first
   opened?: boolean; offer?: Offer; // opened by a planner, and what the sent offer holds: both go back to the homeowner
   // The homeowner's drawing, per roof surface: the cells they marked as their priority, and those that already carry panels.
   // Modules fill the marked cells first; strict keeps them there even when the engine wants more.
@@ -57,7 +58,7 @@ export type Mine = { ref: string; label: string; sentAt: number; handoff: Handof
 /** Solar already on the building: size and year as the customer gave them, else the area they marked and the sun it gets. */
 export type Existing = { kwp: number | null; year: number | null; battery_kwh: number | null; m2?: number | null; kwh_per_kwp?: number | null; photo?: { has_solar: boolean; source?: Source } }; // photo: the area is what the aerial photo shows; holds what the customer said before, to go back to
 export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string; seed?: { opened?: boolean; offer?: Offer | null };
-  shared?: Shared; roof?: RoofNumbers | null }; // shared: what the homeowner chose to send (share.ts); roof: a few roof numbers instead of the home // seed: demo requests that arrive already opened or offered
+  shared?: Shared; roof?: RoofNumbers | null; sentAt?: number }; // sentAt: when the homeowner sent it; shared: what the homeowner chose to send (share.ts); roof: a few roof numbers instead of the home // seed: demo requests that arrive already opened or offered
 
 const FOSSIL_HEAT = ["Gas", "Oil", "OtherNonRenewable"];
 const REPLACEABLE_HEAT = [...FOSSIL_HEAT, "Electric"]; // heating the homeowner was asked to swap for a heat pump // heating with a boiler whose age the customer may give
@@ -95,7 +96,7 @@ export function fromHomeowner(h: Handoff): Request {
   return {
     meterPhoto: a.meter_photo ?? undefined,
     id: h.ref ? `homeowner-${h.ref}` : "homeowner", ref: h.ref, label: buildings[0]?.label ?? (buildings.length ? "Home" : a.address?.trim() || "Home not shared"),
-    roofNumbers: buildings.length ? null : h.roof ?? null, from: "Homeowner", buildings, status: h.seed?.offer ? "sent" : "draft", opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? undefined,
+    roofNumbers: buildings.length ? null : h.roof ?? null, receivedAt: h.sentAt ?? Date.now(), from: "Homeowner", buildings, status: h.seed?.offer ? "sent" : "draft", opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? undefined,
     inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating === "unknown" ? null : a.heating, heat_kwh: a.heat_kwh, oil_l: a.heating === "Oil" ? a.oil_l ?? null : null, hp_kwh: a.heating === "Heatpump" ? a.hp_kwh : null, has_solar: !!a.has_solar && !thermal, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM * (a.ev_count ?? 1),
       ev_kwh_month: a.ev && !a.ev_planned ? a.ev_kwh_month : null, ev_charge_home: car ? a.ev_charge_home : null, ev_day: car ? a.ev_day : null, has_wallbox: car ? a.has_wallbox : null, ev_when: a.ev_planned ? a.ev_when : null,
       demand_source: a.use_source === "exact" ? "bill" : a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source, monthly_eur: a.use_source === "payment" ? a.monthly_eur : null,

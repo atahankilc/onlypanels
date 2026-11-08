@@ -5,19 +5,27 @@ import { Button } from "./ui";
 const STEPS = ["Sent", "Being planned", "Offer ready"] as const;
 export const stepOf = (m: Mine) => (m.offer ? 2 : m.opened ? 1 : 0);
 export const day = (t: number) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+/** How long ago something was sent: minutes, hours for two days, then days. The planner's list says it the same way. */
+export const ago = (t: number) => {
+  const min = Math.max(0, Math.round((Date.now() - t) / 60000));
+  return min < 1 ? "just now" : min < 60 ? `${min} min ago` : min < 48 * 60 ? `${Math.round(min / 60)} h ago` : `${Math.round(min / 1440)} days ago`;
+};
+const When = ({ t }: { t: number }) => <time dateTime={new Date(t).toISOString()} title={new Date(t).toLocaleString("en-GB")}>sent {ago(t)}</time>;
+/** The homeowner's order: offers ready to read first, the latest on top; then those still being planned, the latest on top. */
+const byTurn = (l: Mine[]) => [...l].sort((a, b) => (b.offer ? 1 : 0) - (a.offer ? 1 : 0) || b.sentAt - a.sentAt);
 
 /** The homeowner's requests on the start page. A click opens the home on the map, with where the request is. */
 export default function Requests({ list, loading = 0, onOpen, gone }: { list: Mine[]; loading?: number; onOpen: (m: Mine) => void; gone?: boolean }) {
   return (
     <aside className={gone ? "panel requests gone" : "panel requests"} inert={gone}>
       <h2>Your requests</h2>
-      <ul>{list.map((m) => {
+      <ul>{byTurn(list).map((m) => {
         const at = stepOf(m);
         return <li key={m.ref}>
           <button type="button" className="req" onClick={() => onOpen(m)}>
             <span className="name">{m.label}</span>
             <span className={`state s${at}`}>{STEPS[at]}</span>
-            <small>{m.ref} · sent {day(m.sentAt)}</small>
+            <small>{m.ref} · <When t={m.sentAt} /></small>
           </button>
         </li>;
       })}
@@ -36,11 +44,11 @@ export function RequestPage({ list, loading = 0, onOpen, onNew }: { list: Mine[]
     <h1>{ready ? `${ready} ${ready === 1 ? "offer is" : "offers are"} ready` : list.length ? "Your installer is on it" : "Loading your requests"}</h1>
     <p className="muted">{list.length ? `${list.length} sent${waiting ? `, ${waiting} still being planned` : ""}. Open one to see where it is${ready ? " and your offer" : ""}.` : "One moment."}</p>
     <ul className="reqcards">
-      {list.map((m) => {
+      {byTurn(list).map((m) => {
         const at = stepOf(m), [street, town] = m.label.split(/, (.+)/);
         return <li key={m.ref}><button type="button" onClick={() => onOpen(m)}>
           <span className="reqcard-top"><b>{street || "Home not shared"}</b><span className={`state s${at}`}>{STEPS[at]}</span></span>
-          <small>{[town, m.ref, `sent ${day(m.sentAt)}`].filter(Boolean).join(" · ")}</small>
+          <small>{[town, m.ref].filter(Boolean).join(" · ")} · <When t={m.sentAt} /></small>
           <span className="reqcard-steps" aria-hidden="true">{STEPS.map((s, i) => <i key={s} className={i <= at ? "on" : ""} />)}</span>
         </button></li>;
       })}
