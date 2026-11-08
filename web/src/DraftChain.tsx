@@ -24,7 +24,7 @@ export const chainText = {
     const worst = s.surfaces.reduce((a, x) => (x.lost > a.lost ? x : a)), pct = Math.round(worst.lost * 100);
     return [`−${pct}% sun`, `${s.trees} ${s.trees === 1 ? "tree takes" : "trees take"} sun: up to ${pct}% of a year's sun on the ${worst.name}.`];
   },
-  engine: (system: string, own: number): Said => [system, `${system}, with ${own}% of the home's use from its own power.`],
+  engine: (system: string, own: number): Said => [`${own}% own power`, `${system}, with ${own}% of the home's use from its own power.`], // the system itself is in the row above
   review: (v: unknown): Said => {
     const r = v as { asks?: unknown[]; conditions?: unknown[] };
     const a = r.asks?.length ?? 0, c = r.conditions?.length ?? 0;
@@ -39,27 +39,29 @@ export const chainText = {
   },
 };
 
-/** Steps done in the order they finished, then the one working now, then those still to come. A demo request's home was loaded
- *  before it arrived; a homeowner's page loads it while they pick, so it has no home step. */
-const ordered = (done: Partial<Record<StepKey, Done>>) => {
-  const list = STEPS.filter((s) => s.key !== "home" || done.home);
-  const finished = list.filter((s) => done[s.key]).sort((a, b) => done[a.key]!.end - done[b.key]!.end);
-  const rest = list.filter((s) => !done[s.key]);
-  return [...finished.map((s) => ({ ...s, state: "done" as const, d: done[s.key]! })), ...rest.map((s, i) => ({ ...s, state: i === 0 ? ("now" as const) : ("wait" as const), d: null }))];
-};
+/** The steps in their fixed order, so every request's chain lines up with the one above it. A step is working from the moment it
+ *  began: the trees and the roof as the request arrives, the engine once the roof is in, the rules and the price once the engine
+ *  is, so steps that run side by side work side by side. A demo request's home was loaded before it arrived; a homeowner's page
+ *  loads it while they pick, so it has no home step. */
+const stepsOf = (log: { starts: Partial<Record<StepKey, number>>; done: Partial<Record<StepKey, Done>> }) =>
+  STEPS.filter((s) => s.key !== "home" || log.done.home).map((s) => {
+    const d = log.done[s.key] ?? null;
+    const begun = s.key === "trees" || s.key === "roof" || log.starts[s.key] != null;
+    return { ...s, d, state: d ? ("done" as const) : begun ? ("now" as const) : ("wait" as const) };
+  });
 
 export function DraftChain({ id, full }: { id: string; full?: boolean }) {
   const log = useDraftLog(id);
   if (!log) return null;
-  const steps = ordered(log.done);
+  const steps = stepsOf(log);
   const all = steps.every((s) => s.state === "done");
-  return <ol className={`chain${full ? " full" : ""}`} aria-label={all ? "How the draft was made" : "Making the draft"}>
+  return <ol className={`chain${full ? " full" : ""}`} style={{ "--steps": steps.length } as React.CSSProperties} aria-label={all ? "How the draft was made" : "Making the draft"}>
     {steps.map((s) => <li key={s.key} className={s.state} title={s.d ? `${s.label}: ${s.d.detail}` : `${s.label}: ${s.what}.`}>
       <i aria-hidden="true" />
       <span className="chain-label">{s.label}</span>
-      {s.d && !full && <span className="chain-found">{s.d.short}</span>}
-      {s.state === "now" && <span className="chain-now">working…</span>}
-      {full && <small>{s.d ? s.d.detail : `${s.what[0].toUpperCase()}${s.what.slice(1)}.`}</small>}
+      {full
+        ? <small>{s.d ? s.d.detail : `${s.what[0].toUpperCase()}${s.what.slice(1)}.`}</small>
+        : <span className="chain-found">{s.d ? s.d.short : s.state === "now" ? "working…" : "waiting"}</span>}
     </li>)}
   </ol>;
 }

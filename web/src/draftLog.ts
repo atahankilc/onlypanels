@@ -48,4 +48,5 @@ export const finished = (id: string, key: StepKey, short: string, detail = short
 };
 
 const subscribe = (f: () => void) => { listeners.add(f); return () => { listeners.delete(f); }; };
+export type DraftLog = Log;
 export const useDraftLog = (id: string) => useSyncExternalStore(subscribe, () => logs.get(id));
