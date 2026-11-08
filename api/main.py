@@ -183,3 +183,14 @@ async def site_solids(name: str = Path(pattern=SQUARE)):
     """Every building of a square with its measured roofs and walls, one per line: what the map draws once it has the blocks."""
     await built(name)
     return FileResponse(lod2.path(name, "solids"), media_type="text/plain")
+
+
+TREES = FilePath(__file__).resolve().parents[1] / "data" / "external" / "trees" / "squares"
+
+
+@app.get("/api/site/trees/{name}")
+def site_trees(name: str = Path(pattern=SQUARE)):
+    """Bavaria's single trees in one whole 2 km square (scripts/build_trees.py): east, north, height in decimetres from its corner.
+    The planner's shade check uses it once a request has arrived. A square with no file has no trees we know of."""
+    found = TREES / f"{name}.json"
+    return FileResponse(found, media_type="application/json") if found.exists() else []
