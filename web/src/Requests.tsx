@@ -5,7 +5,7 @@ export const stepOf = (m: Mine) => (m.offer ? 2 : m.opened ? 1 : 0);
 export const day = (t: number) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 
 /** The homeowner's requests on the start page. A click opens the home on the map, with where the request is. */
-export default function Requests({ list, onOpen, gone }: { list: Mine[]; onOpen: (m: Mine) => void; gone?: boolean }) {
+export default function Requests({ list, loading = 0, onOpen, gone }: { list: Mine[]; loading?: number; onOpen: (m: Mine) => void; gone?: boolean }) {
   return (
     <aside className={gone ? "panel requests gone" : "panel requests"} inert={gone}>
       <h2>Your requests</h2>
@@ -18,7 +18,10 @@ export default function Requests({ list, onOpen, gone }: { list: Mine[]; onOpen:
             <small>{m.ref} · sent {day(m.sentAt)}</small>
           </button>
         </li>;
-      })}</ul>
+      })}
+        {Array.from({ length: loading }, (_, i) => <li key={`loading${i}`} className="loading" aria-hidden="true"><span /><span /></li>)}
+      </ul>
+      {loading > 0 && <p className="small muted loadnote" role="status">{list.length ? `Loading ${loading} more…` : "Loading your requests…"}</p>}
     </aside>
   );
 }

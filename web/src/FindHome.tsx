@@ -20,7 +20,7 @@ function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real 
 
 const newRef = () => `R-${Math.random().toString(36).slice(2, 7).toUpperCase()}`; // a reference the homeowner can quote
 
-export default function FindHome({ dark, onSend, requests }: { dark: boolean; onSend: (h: Handoff) => void; requests: Mine[] }) {
+export default function FindHome({ dark, onSend, requests, loading = 0 }: { dark: boolean; onSend: (h: Handoff) => void; requests: Mine[]; loading?: number }) {
   const [q, setQ] = useState("");
   const [places, setPlaces] = useState<Place[] | null>(null);
   const [active, setActive] = useState(0);
@@ -175,7 +175,7 @@ export default function FindHome({ dark, onSend, requests }: { dark: boolean; on
 
       {/* One panel at a time on the start page: the requests, or the buildings being picked. A request opened from the list keeps
           the list on screen while the map's edge sweeps it away, instead of flashing that home's buildings as if just picked. */}
-      {(!buildings.length || fromList) && requests.length > 0 && <Requests list={requests} onOpen={openRequest} gone={move === "in"} />}
+      {(!buildings.length || fromList) && (requests.length > 0 || loading > 0) && <Requests list={requests} loading={loading} onOpen={openRequest} gone={move === "in"} />}
       {buildings.length > 0 && !fromList && <aside className={move === "in" ? "panel gone" : "panel"}>
         <h2>Selected buildings</h2>
         <ul className="picked">{homesIn(buildings).map((b, i) => <li key={b.home} onMouseEnter={() => setNear(b.home)} onMouseLeave={() => setNear(null)}>

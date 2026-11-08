@@ -52,7 +52,7 @@ const useDesign = (r: Request, roof: Spot[]) => {
 let kept: Request[] = [];
 
 
-export default function Planner({ dark, handoffs, onProgress }: { dark: boolean; handoffs: Handoff[]; onProgress?: (ref: string, p: Progress) => void }) {
+export default function Planner({ dark, handoffs, onProgress, loading = 0 }: { dark: boolean; handoffs: Handoff[]; onProgress?: (ref: string, p: Progress) => void; loading?: number }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [page, setPage] = useState<"requests" | "proof">("requests");
   const [requests, setRequests] = useState<Request[]>(() => kept);
@@ -74,7 +74,7 @@ export default function Planner({ dark, handoffs, onProgress }: { dark: boolean;
     <p className="muted">A draft is ready before you open a request. You check it, change it and send it.</p>
     <table className="inbox"><thead><tr><th>Home</th><th>From</th><th>AI draft</th><th>To check</th><th>Status</th></tr></thead>
       <tbody>{requests.map((r) => <Line key={r.id} r={r} open={() => setOpenId(r.id)} />)}</tbody></table>
-    {!requests.length && <p className="muted">Loading requests…</p>}
+    {loading > 0 && <p className="muted loadnote" role="status"><span className="spinner" aria-hidden="true" />{requests.length ? `Loading ${loading} more ${loading === 1 ? "request" : "requests"}…` : "Loading requests…"}</p>}
     </>}
   </main>;
 }

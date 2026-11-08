@@ -213,6 +213,16 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .requests .state.s1 { color: var(--hud-warn); }
 .requests .state.s2 { background: var(--hud-live); color: var(--hud-base); }
 .quiz .status { margin: 18px 0 4px; }
+/* Requests still loading: placeholder rows that shimmer, and a line saying how many are left. */
+.requests li.loading { display: grid; gap: 8px; padding: 14px 8px; }
+.requests li.loading span { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--hud-glass-2) 25%, var(--hud-line) 50%, var(--hud-glass-2) 75%); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
+.requests li.loading span:first-child { width: 70%; } .requests li.loading span:last-child { width: 45%; height: 10px; }
+.requests .loadnote { padding: 0 18px 14px; }
+.loadnote { display: flex; align-items: center; gap: 8px; }
+.spinner { width: 14px; height: 14px; border: 2px solid var(--hud-line); border-top-color: var(--hud-ink-2); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes spin { to { rotate: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .requests li.loading span, .spinner { animation: none; } }
 .requests .track { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 2px 0 12px; padding: 0; list-style: none; }
 .requests .track li { padding-top: 8px; border-top: 3px solid var(--hud-line); font-size: 12px; color: var(--hud-ink-3); }
 .requests .track li.past, .requests .track li.now { border-color: var(--hud-live); color: var(--hud-ink); }

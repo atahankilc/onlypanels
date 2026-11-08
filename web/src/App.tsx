@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import FindHome from "./FindHome";
 import { Mark } from "./icons";
-import { loadDemo } from "./demo";
+import { DEMO_COUNT, loadDemo } from "./demo";
 import { Handoff, Mine, Progress } from "./plan";
 import Planner from "./Planner";
 import { Button, Segmented } from "./ui";
@@ -16,7 +16,8 @@ export default function App() {
     if (h.ref) setMine((l) => [{ ref: h.ref!, label: h.buildings[0]?.label ?? "Home", sentAt, handoff: h, opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? null }, ...l.filter((x) => x.ref !== h.ref)].sort((a, b) => b.sentAt - a.sentAt));
   };
   // The demo starts with three requests on real homes, oldest first, as if their homeowners had sent them.
-  useEffect(() => { loadDemo().then((list) => [...list].sort((a, b) => a.sentAt - b.sentAt).forEach((h) => sent(h, h.sentAt))).catch(() => undefined); }, []);
+  const [loading, setLoading] = useState(DEMO_COUNT); // demo requests still on their way
+  useEffect(() => loadDemo((h) => sent(h, h.sentAt), () => setLoading((n) => Math.max(0, n - 1))), []);
   const progress = (ref: string, p: Progress) => setMine((l) => l.map((x) => (x.ref === ref ? { ...x, opened: x.opened || p.opened, offer: p.offer ?? x.offer } : x)));
   const [dark, setDark] = useState(localStorage.getItem("theme") !== "light");
   useEffect(() => { document.documentElement.dataset.theme = dark ? "dark" : "light"; localStorage.setItem("theme", dark ? "dark" : "light"); }, [dark]);
@@ -42,8 +43,8 @@ export default function App() {
           </div>}
         </div>
       </header>
-      <FindHome dark={dark} onSend={sent} requests={mine} />
-      {view === "planner" && <Planner dark={dark} handoffs={handoffs} onProgress={progress} />}
+      <FindHome dark={dark} onSend={sent} requests={mine} loading={loading} />
+      {view === "planner" && <Planner dark={dark} handoffs={handoffs} onProgress={progress} loading={loading} />}
     </div>
   );
 }

@@ -75,28 +75,31 @@ const SEEDS: Seed[] = [
 
 export type Sent = Handoff & { ref: string; sentAt: number };
 
-/** Loads the homes and builds what each homeowner sent. An offered one gets the engine's design for it, as the planner sent it. */
-export async function loadDemo(): Promise<Sent[]> {
-  const out = await Promise.all(SEEDS.map(async (seed): Promise<Sent | null> => {
-    try {
-      const buildings = (await Promise.all(seed.homes.map(([square, home]) => loadHome(square, home)))).flat();
-      const at = buildings[0].origin, area = await areaAt(at[1], at[0]).catch(() => null);
-      const choice: Choice = { ...NO_CHOICE, cells: {}, panels: {} };
-      for (const b of buildings) for (const s of b.sun?.surfaces ?? []) {
-        const m = seed.marks(b, s);
-        if (m?.cells) choice.cells[surfaceKey(b, s)] = m.cells;
-        if (m?.panels) choice.panels[surfaceKey(b, s)] = m.panels;
-      }
-      const h: Sent = { buildings, answers: { ...NO_ANSWERS, ...seed.answers, area }, choice, ref: seed.ref, sentAt: Date.now() - seed.hoursAgo * 3600000 };
-      if (seed.state === "opened") h.seed = { opened: true };
-      if (seed.state === "offer") {
-        const r = fromHomeowner(h), { d } = await design(r.inputs, r.overrides, roofOf(r.buildings, r.installed), r.off, r.existing);
-        h.seed = { opened: true, offer: offerOf(d) };
-      }
-      return h;
-    } catch {
-      return null;
+export const DEMO_COUNT = SEEDS.length;
+/** Loads the homes and builds what each homeowner sent, handing each over as soon as it is ready, so the list fills as it loads.
+ *  An offered one gets the engine's design for it, as the planner sent it. `settled` runs once per request, ready or failed. */
+export function loadDemo(ready: (h: Sent) => void, settled: () => void) {
+  SEEDS.forEach((seed) => build(seed).then((h) => h && ready(h)).finally(settled));
+}
+
+async function build(seed: Seed): Promise<Sent | null> {
+  try {
+    const buildings = (await Promise.all(seed.homes.map(([square, home]) => loadHome(square, home)))).flat();
+    const at = buildings[0].origin, area = await areaAt(at[1], at[0]).catch(() => null);
+    const choice: Choice = { ...NO_CHOICE, cells: {}, panels: {} };
+    for (const b of buildings) for (const s of b.sun?.surfaces ?? []) {
+      const m = seed.marks(b, s);
+      if (m?.cells) choice.cells[surfaceKey(b, s)] = m.cells;
+      if (m?.panels) choice.panels[surfaceKey(b, s)] = m.panels;
     }
-  }));
-  return out.filter((x): x is Sent => !!x);
+    const h: Sent = { buildings, answers: { ...NO_ANSWERS, ...seed.answers, area }, choice, ref: seed.ref, sentAt: Date.now() - seed.hoursAgo * 3600000 };
+    if (seed.state === "opened") h.seed = { opened: true };
+    if (seed.state === "offer") {
+      const r = fromHomeowner(h), { d } = await design(r.inputs, r.overrides, roofOf(r.buildings, r.installed), r.off, r.existing);
+      h.seed = { opened: true, offer: offerOf(d) };
+    }
+    return h;
+  } catch {
+    return null;
+  }
 }
