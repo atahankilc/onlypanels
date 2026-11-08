@@ -149,8 +149,9 @@ def _before(i, d):
     """The home without the new system: what it uses on the grid meter, with what it already has (an old system, old battery)."""
     e = d["energy"]
     moved = 0.0
-    if d["heatpump"]["included"] and i.get("heating") == "Electric" and i.get("heat_kwh"):
-        moved += i["heat_kwh"]  # electric heating today, on whichever meter: it was paid as electricity
+    if d["heatpump"]["included"] and i.get("heating") == "Electric":
+        # Electric heating today, on whichever meter: it was paid as electricity. Not given, the heat the design stood in with.
+        moved += i.get("heat_kwh") or (e.get("heat_mwh") or 15.0) * 1000
     if d["heatpump"]["included"] and "water" in (i.get("big_users") or []):
         moved += 2000  # an electric water heater moves to the heat pump (derive.HOT_WATER_KWH)
     sun = sun_shape(i.get("surfaces") or None, d["pv"].get("placed"))
@@ -313,18 +314,21 @@ def part_money(cost_eur, year1_eur, b, years=None):
 
 
 def battery_options(i, d, curve, b):
-    """Each battery size from the catalog: its price and what it adds over no battery, so cost joins the size decision."""
+    """Each battery size from the catalog: its price and what it adds a year over no battery, counted as the Cost tab counts
+    the battery (feed-in without the negative-price hours), so cost joins the size decision."""
     per_kwh = next(x for x in b["items"] if x["id"] == "battery")
     install = next(x for x in b["items"] if x["id"] == "battery_install")
-    zero = next((r for r in curve if r["kwh"] == 0), None)
-    if not zero:
+    if not d["pv"]["modules"] or not any(r["kwh"] == 0 for r in curve):
         return []
+    price = i.get("price_ct_kwh", 32.0)
+    kwp = d["pv"]["kwp"]
+    feed = _feed_ct(b, kwp) * (1 - _rate(b, "neg_price_share_pct") / 100)
     out = []
     for r in curve:
         if not r["kwh"]:
             continue
         cost = (per_kwh["fixed"] + per_kwh["per_unit"] * r["kwh"] + install["fixed"]) * (1 + per_kwh["vat"] / 100)
-        m = part_money(cost, r["saving_eur"] - zero["saving_eur"], b, years=BATTERY_LIFE)
+        m = part_money(cost, _battery_eur(i, _with_battery(i, d, r["kwh"]), price, feed), b, years=BATTERY_LIFE)
         out.append({"kwh": r["kwh"], **m})
     return out
 
@@ -339,6 +343,8 @@ def notes(i, d, money, batteries, heat=None):
     elif pb > 15:
         out.append({"code": "money_slow", "level": "warn", "on": "pv", "text": f"Pays back in about {pb:g} years, late in the system's life. A smaller system or no battery may suit a customer who looks at the money."})
     now = next((x for x in batteries if x["kwh"] == d["battery"]["kwh"]), None)
+    if d["battery"].get("locked"):
+        now, batteries = None, []  # the planner chose this battery: no one-click change against it
     if now and (now["payback_years"] is None or now["payback_years"] > BATTERY_LIFE):
         out.append({"code": "money_battery", "level": "warn" if i.get("goal") == "cost" else "note", "on": "battery",
                     "text": f"The {now['kwh']:g} kWh battery costs about €{now['cost_eur']:,} and adds about €{now['year1_eur']:,} a year: "
@@ -350,12 +356,12 @@ def notes(i, d, money, batteries, heat=None):
         out.append({"code": "money_battery_best", "level": "note", "on": "battery",
                     "text": f"By money alone, {best['kwh']:g} kWh does best here: about €{best['gain_eur']:,} over its {BATTERY_LIFE}-year life against €{now['gain_eur']:,} for {now['kwh']:g} kWh.",
                     "change": {"battery_kwh": best["kwh"]}})
-    if heat and heat.get("payback_years"):
+    if heat:
+        a_year = f"saves about €{heat['year1_eur']:,} a year" if heat["year1_eur"] >= 0 else f"costs about €{-heat['year1_eur']:,} more a year to run"
+        boiler = " It replaces a boiler that would need replacing too." if i.get("heating") in ("Gas", "Oil", "OtherNonRenewable") else ""
+        tail = f": about {heat['payback_years']:g} years to pay back." if heat.get("payback_years") else f": it does not pay back on money alone within {years} years.{boiler}"
         out.append({"code": "money_heatpump", "level": "note", "on": "heatpump",
-                    "text": f"The heat pump costs about €{heat['cost_eur']:,} after the grant and saves about €{heat['year1_eur']:,} a year against the {heat['fuel']}: about {heat['payback_years']:g} years to pay back."})
-    elif heat:
-        out.append({"code": "money_heatpump", "level": "note", "on": "heatpump",
-                    "text": f"The heat pump costs about €{heat['cost_eur']:,} after the grant and saves about €{heat['year1_eur']:,} a year: it does not pay back on money alone within {years} years. It replaces a boiler that would need replacing too."})
+                    "text": f"The heat pump costs about €{heat['cost_eur']:,} after the grant and {a_year} against the {heat['fuel']}{tail}"})
     return out
 
 
@@ -387,7 +393,7 @@ def standing(eur):
     return f"€{abs(round(eur)):,} {'ahead' if eur >= 0 else 'behind'}"
 
 
-NO_SIZE_PAYS = ("No size the engine tried pays back here within 20 years at these prices"
+NO_SIZE_PAYS = ("No size the engine tried pays back here within {years} years at these prices"
                 "{why}. Tell the customer before offering, or check the prices, the roof and the yearly use.")
 
 
@@ -395,7 +401,7 @@ MONEY_WORTH_EUR = 300
 MIN_MODULES = 6  # below this a roof system rarely pays its fixed costs (scaffolding, inverter, grid registration)  # a change for money must gain at least this over the years looked at, or the draft stays
 
 
-def best_for_money(design_fn, i, o, b, extras=None, qty=None, income=None, kids=False, base=None):
+def best_for_money(design_fn, i, o, b, extras=None, qty=None, income=None, kids=False, base=None, fast=False):
     """For a customer who puts low cost first: among battery sizes and module counts that experts use for similar homes,
     and that cost no more than the draft, the one that leaves the customer most ahead over the years looked at.
     design_fn(inputs, overrides) is the engine. Returns None when the draft is already the best or nothing is free to move."""
@@ -448,6 +454,8 @@ def best_for_money(design_fn, i, o, b, extras=None, qty=None, income=None, kids=
             edge += sf["max_modules"]
             if MIN_MODULES <= edge < m0:
                 ends.add(edge)
+        if fast:  # the review's what-if runs: the sizes next to the draft and the surface ends, not the whole range
+            near = {m for m in (m0 - 2, m0 + 2) if low <= m <= high}
         counts = sorted(near | ends | {m0})
     for m in counts:  # every pair: a cheaper battery can leave room in the budget for more modules
         for kb in sorted(set(sizes) | {kb0}):

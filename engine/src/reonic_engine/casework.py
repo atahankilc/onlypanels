@@ -74,7 +74,7 @@ def review(run, i, o, quick=None):
             # Stated as what the engine gives at each end, not as a trend: the learned battery size need not grow with use.
             asks.append({"fact": key, "question": question, "why": f"At {lo_words}: {sized(a)}. At {hi_words}: {sized(b)}. The draft: {sized(draft)}.", "low": a, "high": b})
         else:
-            steady.append({"fact": key, "text": f"{label}: from {lo_words} to {hi_words} the design stays the same ({a['modules']} to {b['modules']} modules)."})
+            steady.append({"fact": key, "text": f"{label}: from {lo_words} to {hi_words} the design stays the same" + (f" ({a['modules']} to {b['modules']} modules)." if a["modules"] or b["modules"] else ".")})
 
     edges = demand_edges({**i, "demand_assumed": i.get("demand_assumed") or not i.get("demand_kwh")})
     if edges:
@@ -95,7 +95,7 @@ def review(run, i, o, quick=None):
         km = i.get("ev_km") or TYPICAL_KM
         edge("ev_km", "Driving", "How far does the car go in a year, and how much of it is charged at home?",
              {"ev_km": round(km * 0.6, -2)}, {"ev_km": round(km * 1.4, -2)}, f"{round(km * 0.6, -2):,.0f} km", f"{round(km * 1.4, -2):,.0f} km")
-    if not i.get("home_day"):
+    if not i.get("home_day") and draft["modules"]:  # without solar, who is home in the day changes nothing
         _, a = go({"home_day": "most"}, why="Someone home in the day")
         _, b = go({"home_day": "rarely"}, why="Nobody home in the day")
         gap = a["own_power_pct"] - b["own_power_pct"]
@@ -150,6 +150,8 @@ def review(run, i, o, quick=None):
     asks.sort(key=lambda a: -abs(a["low"]["modules"] - a["high"]["modules"]) - (5 if a["low"]["battery_kwh"] != a["high"]["battery_kwh"] else 0))
     words = lambda c: ", ".join([f"{c['battery_kwh']:g} kWh battery" if c.get("battery_kwh") else "no battery"] if "battery_kwh" in c else [])
     headline = f"Send with {words(change)}" if change else ("Send the draft, after the questions below" if asks else "Send the draft as it is")
+    if not draft["modules"] and draft_d["pv"].get("max_modules") == 0:
+        headline = "No module fits: every roof surface is taken out" + ("; the heat pump stands on its own" if draft["heatpump_kw"] else "")
     if goal == "cost" and (draft_d.get("money_pick") or {}).get("none_pays"):
         headline = "No size pays back here: talk to the customer before sending"
     return {"headline": headline, "change": change, "after": after, "reasons": reasons, "asks": asks, "steady": steady,

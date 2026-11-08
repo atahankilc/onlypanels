@@ -130,6 +130,17 @@ class DesignRequest(BaseModel):
     overrides: Overrides = Overrides()
 
 
+class Money(BaseModel):
+    extras: dict[str, bool] = {}  # optional extras the planner ticked or unticked for this home
+    qty: dict[str, float] = {}  # quantities the planner set for this home (metres of cable, radiators)
+    income: str | None = None  # taxable household income band for the KfW income bonus: le30, le40, le50, le60, above
+    kids: bool = False  # a child under 18 in the household (moves the income bonus)
+
+
+class CostRequest(DesignRequest):
+    money: Money = Money()
+
+
 class RefineRequest(BaseModel):
     text: str
     mount: str = "roof"
@@ -164,8 +175,8 @@ def design(req: DesignRequest):
     curve = batteries.curve(i, d)
     money = costs.battery_options(i, d, curve, pricebook.book(i.get("installer"))) if d["pv"]["modules"] and not i.get("has_storage") else []
     need, car = need_of(d)
-    seen = evidence.evidence(engine().offers, i, d, need, car, approved=d.get("learned"))
-    return {**d, "alternatives": engine().alternatives(i, o, d), "battery_curve": curve, "battery_money": money, "evidence": seen, "assumed": assumed}
+    seen = evidence.evidence(engine().offers, i, d, need, car, approved=d.get("learned"), homes=set(engine().near(i["installer"], need, car).project_id))
+    return {**d, "alternatives": engine().alternatives(i, {**o, **d["engine_overrides"]}, d), "battery_curve": curve, "battery_money": money, "evidence": seen, "assumed": assumed}
 
 
 def need_of(d):
@@ -187,7 +198,8 @@ def learned(i, o, d):
     """The planner's usual change to drafts for homes like this one (learning.py), applied where the planner fixed nothing."""
     need, car = need_of(d)
     change = learning.usual_change(i["installer"], need, car, i.get("goal") == "cost")
-    moves = learning.adjusted(d, change, o, i) if change["enough"] else {}
+    # A low-cost customer's sizes are chosen by money (decided), so a planner's past offers do not move them as well.
+    moves = learning.adjusted(d, change, o, i) if change["enough"] and i.get("goal") != "cost" else {}
     if moves:
         was = d
         d = unlocked(engine().design(i, {**o, **moves}), o)
@@ -204,19 +216,20 @@ def learned(i, o, d):
 PICKS: dict[str, dict | None] = {}
 
 
-def decided(i, o):
+def decided(i, o, fast=False):
     """The engine's design. For a customer who puts low cost first, the battery and module count are then chosen by money
     (costs.best_for_money), within what experts use for similar homes and never dearer than the draft. A planner's own
     choice always stands; the locks the page shows stay the planner's."""
     d, moves = learned(i, o, engine().design(i, o))
+    d["engine_overrides"] = dict(moves)  # what the engine fixed beyond the planner's own choices: variants start from it
     if i.get("goal") != "cost":
         return d
     book = pricebook.book(i.get("installer"))
-    key = json.dumps([i, o, moves, [(x["id"], x["fixed"], x["per_unit"], x["vat"], x["when"]) for x in book["items"]], {k: v["value"] for k, v in book["rates"].items()}], sort_keys=True, default=str)
+    key = json.dumps([fast, i, o, moves, [(x["id"], x["fixed"], x["per_unit"], x["vat"], x["when"]) for x in book["items"]], {k: v["value"] for k, v in book["rates"].items()}], sort_keys=True, default=str)
     if key not in PICKS:  # the search runs the engine about 35 times: the design and cost views share one answer
         if len(PICKS) > 64:
             PICKS.clear()
-        PICKS[key] = costs.best_for_money(engine().design, i, o, book, base=d)
+        PICKS[key] = costs.best_for_money(engine().design, i, o, book, base=d, fast=fast)
     pick = PICKS[key]
     if not pick:
         return d
@@ -227,41 +240,47 @@ def decided(i, o):
         d.update(keep)
         d["trace"] += extra[0]
         d["review"] += extra[1]
+        # The search compared sizes on a quick estimate; say the chosen one's money as the Cost tab counts it.
+        exact = costs.evaluate(i, d, book, light=True)
+        pick = {**pick, "gain_eur": exact["gain_eur"], "pays_eur": exact["pays_eur"], "payback_years": exact["payback_years"]}
+    d["engine_overrides"] = {**moves, **pick["overrides"]}
     d["money_pick"] = pick
+    years = int(book["rates"]["years"]["value"])
     words = lambda m, kb: f"{m} modules, {'no battery' if not kb else f'{kb:g} kWh battery'}"
     why = ": the system already on the roof covers much of the use" if i.get("existing_kwp") or i.get("has_solar") else ""
     if pick["kept"]:
         how = f"Tried {pick['tried']} battery sizes and module counts experts use for similar homes, and the sizes where a weaker roof surface begins, none dearer than the draft."
-        result = (f"The draft is the least bad: {costs.standing(pick['gain_eur'])} after 20 years." if pick["none_pays"]
-                  else f"The draft already leaves the customer most ahead: {costs.standing(pick['gain_eur'])} after 20 years.")
+        result = (f"The draft is the least bad: {costs.standing(pick['gain_eur'])} after {years} years." if pick["none_pays"]
+                  else f"Among sizes no dearer than the draft, the draft leaves the customer most ahead: {costs.standing(pick['gain_eur'])} after {years} years.")
     else:
         dr = pick["draft"]
         how = (f"Tried {pick['tried']} battery sizes and module counts experts use for similar homes, and the sizes where a weaker roof surface begins, none dearer than the draft, "
                f"priced with the price book and the same hourly estimate. Draft: {words(dr['modules'], dr['battery_kwh'])}, €{pick['draft_pays_eur']:,}, "
-               f"{costs.standing(pick['draft_gain_eur'])} after 20 years.")
-        result = f"{words(d['pv']['modules'], d['battery']['kwh'])}: €{pick['pays_eur']:,}, about {costs.standing(pick['gain_eur'])} after 20 years."
+               f"{costs.standing(pick['draft_gain_eur'])} after {years} years.")
+        result = f"{words(d['pv']['modules'], d['battery']['kwh'])}: €{pick['pays_eur']:,}, about {costs.standing(pick['gain_eur'])} after {years} years."
         d["review"].append({"code": "money_pick", "level": "note", "on": "battery", "text": f"The customer puts low cost first, so the engine chose by money: {result} The draft was {words(dr['modules'], dr['battery_kwh'])}, {costs.standing(pick['draft_gain_eur'])}."})
     if pick["none_pays"]:
-        d["review"].append({"code": "money_none_pays", "level": "warn", "on": "pv", "text": costs.NO_SIZE_PAYS.format(why=why)})
+        d["review"].append({"code": "money_none_pays", "level": "warn", "on": "pv", "text": costs.NO_SIZE_PAYS.format(why=why, years=years)})
     d["trace"].append({"id": "money", "title": "Chosen by money", "kind": "rule", "inputs": [{"key": "goal", "label": "Customer's priority", "value": "low cost"}], "how": how, "result": result})
     return d
 
 
 @app.post("/api/review")
-def review_request(req: DesignRequest):
+def review_request(req: CostRequest):
     """The planner's review, by fixed rules over the engine: what follows from the answers, which unsure answers move the
     design, and one change that fits the customer. No language model; the same request always gives the same review."""
     as_request = lambda inputs, overrides: DesignRequest(inputs=Inputs(**inputs), overrides=Overrides(**overrides))
     full = lambda inputs, overrides: design(as_request(inputs, overrides))
     # The edges go through the same decision as the draft, so a low-cost customer's edges are chosen by money too.
-    quick = lambda inputs, overrides: decided(prepared(as_request(inputs, overrides))[0], overrides)
+    quick = lambda inputs, overrides: decided(prepared(as_request(inputs, overrides))[0], overrides, fast=True)
     i, o = prepared(req)[0], req.overrides.model_dump()
     out = casework.review(full, i, o, quick)  # with a payment already turned into kWh
     # What the draft costs and the rules that touch it, so the review says it next to the design: money, grants, what to do.
     d = decided(i, o)
-    m = costs.evaluate(i, d, pricebook.book(i.get("installer")))
+    mm = req.money
+    m = costs.evaluate(i, d, pricebook.book(i.get("installer")), mm.extras, mm.qty, mm.income, mm.kids)  # as the Cost tab, with the planner's ticks
     live = [r for r in m["rules"] if r["applies"]]
-    out["money"] = {"pays_eur": m["pays_eur"], "gross_eur": m["gross_eur"], "payback_years": m["payback_years"], "gain_eur": m["gain_eur"],
+    out["money"] = {"years": int(m["assumptions"]["years"]), "pays_eur": m["pays_eur"], "gross_eur": m["gross_eur"], "payback_years": m["payback_years"], "gain_eur": m["gain_eur"],
                     "draft_2027_payback_years": (m["draft_2027"] or {}).get("payback_years"), "grant": m["grant"],
                     "counted": [{"title": r["title"], "effect": r["effect"], "status": r["status"]} for r in live if r["effect"]],
                     "todo": [{"title": r["title"], "action": r["action"], "status": r["status"]} for r in live if r["action"] and r["id"] not in ("vat0", "kfw_270", "munich_pv", "negative_prices")]}
@@ -422,17 +441,6 @@ def site_trees(name: str = Path(pattern=SQUARE)):
 
 
 # Money: the price book the planner keeps, and what a design costs and pays back (pricebook.py, costs.py).
-class Money(BaseModel):
-    extras: dict[str, bool] = {}  # optional extras the planner ticked or unticked for this home
-    qty: dict[str, float] = {}  # quantities the planner set for this home (metres of cable, radiators)
-    income: str | None = None  # taxable household income band for the KfW income bonus: le30, le40, le50, le60, above
-    kids: bool = False  # a child under 18 in the household (moves the income bonus)
-
-
-class CostRequest(DesignRequest):
-    money: Money = Money()
-
-
 class PriceItem(BaseModel):
     name: str | None = None
     tech: str | None = None
@@ -501,9 +509,10 @@ def cost_view(req: CostRequest):
     heat = None
     if d["heatpump"]["included"]:
         heat = costs.heat_pump_money(i, d, engine().design(i, {**o, "heatpump": False}), b, m.extras, m.qty, m.income, m.kids)
+    base = {**o, **d["engine_overrides"]}
     variants = [{"id": a["id"], "title": a["title"], "overrides": a["overrides"],
-                 **costs.summary(costs.evaluate(i, engine().design(i, {**o, **a["overrides"]}), b, m.extras, m.qty, m.income, m.kids))}
-                for a in engine().alternatives(i, o, d)]
+                 **costs.summary(costs.evaluate(i, engine().design(i, {**base, **a["overrides"]}), b, m.extras, m.qty, m.income, m.kids))}
+                for a in engine().alternatives(i, base, d)]
     return {**money, "battery_options": options, "heatpump_money": heat, "variants": variants,
             "notes": costs.notes(i, d, money, options, heat), "design": {"kwp": d["pv"]["kwp"], "modules": d["pv"]["modules"], "battery_kwh": d["battery"]["kwh"]}}
 
