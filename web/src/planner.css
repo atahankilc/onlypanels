@@ -233,3 +233,12 @@
 .advisor ul, .advisor ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .advisor h4 { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--hud-ink-2); }
 .advisor-actions { display: flex; align-items: center; gap: 8px; }
+
+/* Obstacles found on the roof photo: a short line, then one row per find, each kept or switched off. */
+.obstacles { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.obstacles > p { margin: 0; }
+.obstacles .tasks { align-self: stretch; }
+.obstacles .btn .spinner { margin-right: 8px; }
+.obstacles .textlink { padding-left: 0; }
+.sure { margin-left: 8px; padding: 1px 7px; border: 1px solid var(--hud-line); border-radius: 999px; font: 500 11px/1.4 var(--font-ui); font-style: normal; color: var(--hud-ink-2); }
+.sure.low { color: var(--hud-ink-3); }

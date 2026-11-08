@@ -19,6 +19,7 @@ from reonic_engine import battery as batteries, lod2, sun
 from reonic_engine.data import load_dataset
 from reonic_engine.design import Engine, use_from_payment
 from reonic_engine.advise import advise
+from reonic_engine import obstacles
 from reonic_engine.refine import refine
 
 load_dotenv(FilePath(__file__).resolve().parent.parent / ".env")  # ANTHROPIC_API_KEY for the planner's sentences; without it, rules
@@ -120,6 +121,19 @@ def design(req: DesignRequest):
     o = req.overrides.model_dump()
     d = engine().design(i, o)
     return {**d, "alternatives": engine().alternatives(i, o, d), "battery_curve": batteries.curve(i, d), "assumed": assumed}
+
+
+class ObstaclesRequest(BaseModel):
+    roofs: list[list[list[float]]]  # one home's roof rings, [lon, lat] points
+
+
+@app.post("/api/obstacles")
+async def roof_obstacles(req: ObstaclesRequest):
+    """What sits on the roofs that the 3D model lacks, found on the public aerial photo. For the planner to confirm."""
+    try:
+        return await asyncio.to_thread(obstacles.find, req.roofs)
+    except Exception as e:  # the demo must survive a failed look
+        return {"obstacles": [], "source": "failed", "reason": str(e)[:200]}
 
 
 @app.post("/api/advise")

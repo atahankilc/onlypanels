@@ -10,6 +10,8 @@ import { Change, ChangeCard, Trace, touched } from "./Trace";
 import "./planner.css";
 import ProofPage from "./Proof";
 import Offer from "./Offer";
+import Obstacles from "./Obstacles";
+import { KIND, blockedOf, mergeCells } from "./roofObstacles";
 import { Options } from "./Options";
 import { Advisor } from "./Advisor";
 import { BatteryCurve } from "./BatteryCurve";
@@ -107,7 +109,7 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
 }
 
 function Line({ r, open }: { r: Request; open: () => void }) {
-  const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, r.taken), [r.shaded, r.buildings, r.installed, r.priority, r.taken]); // trees reach the sun after arrival
+  const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, mergeCells(r.taken, blockedOf(r.shaded ?? r.buildings, r.obstacles))), [r.shaded, r.buildings, r.installed, r.priority, r.taken, r.obstacles]); // trees reach the sun after arrival; kept obstacles block cells
   const out = useDesign(r, roof);
   // The same count Checks shows: only facts this design uses.
   const assumed = out ? toConfirm(r, out.d).length : Object.values(r.sources).filter((s) => s === "assumed").length;
@@ -163,9 +165,10 @@ const SOURCE_LONG: Record<Source, string> = { customer: "from the customer", ass
 function Workspace({ r, update, back, scores }: { r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null }) {
   const [tab, setTab] = useState<Tab>("design");
   const [step, setStep] = useState<"pick" | "review">("pick");
-  const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, r.taken), [r.shaded, r.buildings, r.installed, r.priority, r.taken]); // trees reach the sun after arrival
+  const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, mergeCells(r.taken, blockedOf(r.shaded ?? r.buildings, r.obstacles))), [r.shaded, r.buildings, r.installed, r.priority, r.taken, r.obstacles]); // trees reach the sun after arrival; kept obstacles block cells
   const [view, setView] = useState<View>({ layer: "photo", moment: null });
   const [face, setFace] = useState<Face | null>(null);
+  const [hotObs, setHotObs] = useState<number | null>(null); // the obstacle under the pointer in the list, lit on the model
   const done = r.checked ?? [], setDone = (checked: string[]) => update(r.id, { checked });
   const out = useDesign(r, roof);
   // Monument status from the Bavarian monument map, asked once per request by the page itself, never through our server.
@@ -209,7 +212,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const send = () => { update(r.id, { status: "sent", ...(d ? { offer: offerOf(d, r) } : {}) }); back(); };
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
-    <HomeMap buildings={r.shaded ?? r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
+    <HomeMap buildings={r.shaded ?? r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} blocked={blockedOf(r.shaded ?? r.buildings, r.obstacles)} obstacles={r.obstacles} hotObstacle={hotObs} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
       panels={tab === "home" && view.layer === "sun" ? {} : out?.panels} panelW={LEFT} turn={turnTo(roof)} onReady={() => setStep("review")} />
     <aside className="panel tall desk">
       <header className="deskhead">
@@ -227,7 +230,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         {!d && <p className="muted">The engine is working…</p>}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
         {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><Advisor key={JSON.stringify([r.inputs, r.overrides, r.off, r.strict])} d={d} ask={() => advise(r.inputs, r.overrides, roof, r.off, r.existing, r.strict)} use={(o, label) => setO(o, label)} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} /></>}
-        {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && <><h3>Roof</h3><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
+        {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, { obstacles }); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "checks" && <>
           <h3>Confirm before sending</h3>
           {confirm.length ? <ul className="tasks">{confirm.map((k) => <li key={k} className="confirm"><div><b>{FACT[k]}: {fmt(r, k, d)}</b><small>{k === "demand_kwh" && r.inputs.demand_source && r.inputs.demand_source !== "bill" && r.inputs.demand_source !== "unknown" ? "Not from a bill. " : k === "heat_kwh" && r.inputs.gas_eur ? `Worked out from €${Math.round(r.inputs.gas_eur).toLocaleString("en")} of gas a year at ${GAS_CT} ct per kWh all in. ` : "Assumed: nobody gave this. "}{k === "demand_kwh" ? "Solar and battery follow it." : k === "heat_kwh" ? "It sizes the heat pump." : k === "price_ct_kwh" ? "It sets the saving." : k === "living_m2" ? "Estimated from the 3D model; the heat estimate, and so the heat pump, follows it." : k === "built" ? "The customer did not say; the census's most common period nearby stands in for the heat estimate." : "It changes the design."}</small></div>
@@ -299,7 +302,10 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
   const blind = roofOf(r.buildings, r.installed).filter((x) => x.s.kwh_per_kwp == null).length;
   if (blind) list.unshift({ id: "sun", title: `Sun data is missing for ${blind} ${blind === 1 ? "surface" : "surfaces"}`, why: "PVGIS did not answer. A typical yield stands in, so production is less certain. Reopen the request to try again." });
   list.push(shadeCheck(shade));
-  list.push({ id: "roof", title: "Check the roof for obstacles", why: "Roof windows, chimneys and dormers are not in the measured model. See the photo in Roof." });
+  const seen = (r.obstacles ?? []).filter((o) => o.on);
+  list.push({ id: "roof", title: "Check the roof for obstacles", why: r.obstacles
+    ? `${seen.length ? `${seen.length} found on the aerial photo and kept clear (${[...new Set(seen.map((o) => KIND[o.kind].toLowerCase()))].join(", ")}). ` : "The aerial photo showed nothing on the roof. "}A photo misses what is small or hidden: check on site.`
+    : "Roof windows, chimneys and dormers are not in the measured model. Let the photo check in Roof look for them, or look at the photo yourself." });
   list.push({ id: "state", title: "Check the roof's condition", why: "Age and load-bearing are not in our data." });
   const i = r.inputs;
   list.push(i.owner === "shared" ? { id: "who", title: "Owners' association must agree", why: "The customer shares the home with other owners. Solar on a shared roof needs their decision first." }

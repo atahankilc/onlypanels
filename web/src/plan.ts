@@ -4,6 +4,7 @@ import type { Shade } from "./treeShade";
 import { P2, P3, toLocal } from "./geometry";
 import type { RoofNumbers, Shared } from "./share";
 import { ordered } from "./panels";
+import type { Obstacle } from "./roofObstacles";
 
 export type Inputs = { installer: string; demand_kwh: number | null; price_ct_kwh: number; heating: string | null; heat_kwh: number | null; hp_kwh?: number | null; has_solar: boolean; has_storage: boolean; ev: boolean; ev_km: number; ev_kwh_month?: number | null; ev_charge_home?: string | null; ev_day?: boolean | null; has_wallbox?: boolean | null;
   demand_source?: string | null; monthly_eur?: number | null; big_users?: string[]; living_m2?: number | null; living_from_model?: boolean; area_built?: string | null; area_built_share?: number | null; cert_kwh_m2?: number | null; built?: string | null; trees?: boolean | null; roof_renovation?: string | null; goal?: string | null;
@@ -34,6 +35,7 @@ export type Request = {
   // The homeowner's drawing, per roof surface: the cells they marked as their priority, and those that already carry panels.
   // Modules fill the marked cells first; strict keeps them there even when the engine wants more.
   priority?: Record<string, number[]>; taken?: Record<string, number[]>; strict?: boolean;
+  obstacles?: Obstacle[]; // found on the aerial photo by a vision model; the planner keeps or switches off each one
 };
 /** What the homeowner sees once the planner sends the offer: the system and the engine's estimate. With it, what the
  *  homeowner may try (the planner's allowed changes and the catalog's battery sizes) and the request as the planner left
