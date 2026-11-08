@@ -33,10 +33,10 @@ Scored once on 276 held-out test projects (`uv run python scripts/final_test.py`
 |---|---|---|---|
 | Solar, mean error | 2.65 kWp | 3.06 kWp | 4.02 kWp |
 | Solar, within 20% of the expert | 49% | 44% | 31% |
-| Battery, mean error | 2.72 kWh | 3.03 kWh | 3.56 kWh |
+| Battery, mean error | 2.66 kWh | 3.03 kWh | 3.56 kWh |
 | Whole set right (battery, wallbox, heat pump) | 64% | 63% | 63% |
 
-The test scores match the dev scores, so the work did not overfit. Experts disagree with themselves too: where one home has several options, a third differ in solar size, by 2.9 kWp on average. On 192 unseen homes the engine reacts like a planner: adding a car never shrinks solar, and the roof limit always holds.
+The test scores match the dev scores, so the work did not overfit. Experts disagree with themselves too: where one home has several options, a third differ in solar size, by 2.9 kWp on average. On 192 unseen homes the engine reacts like a planner: adding a car never shrinks solar or the battery, more use never shrinks the battery, and the roof limit always holds.
 
 ## Setup
 

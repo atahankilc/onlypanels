@@ -138,7 +138,9 @@ class Engine:
         # More demand may never shrink a system: enforced, so refinement stays sensible.
         self.kwp = HistGradientBoostingRegressor(monotonic_cst={"demand_mwh": 1}, **TREE).fit(x[pv], train.kwp[pv])
         xb = x.assign(kwp=train.kwp.values)
-        self.battery = HistGradientBoostingRegressor(monotonic_cst={"kwp": 1}, **TREE).fit(xb[b], train.battery_kwh[b])
+        # More use may never shrink the battery either: unconstrained, the model gave a smaller battery to a home that uses more,
+        # which a planner reads as a bug (dev: battery error 2.73 → 2.75 kWh, exact size 38.7% → 38.4%; scripts/evaluate.py).
+        self.battery = HistGradientBoostingRegressor(monotonic_cst={"kwp": 1, "demand_mwh": 1}, **TREE).fit(xb[b], train.battery_kwh[b])
         self.has_battery = HistGradientBoostingClassifier(**TREE).fit(xb, b)
         self.catalog = battery_catalog(options)
         self.train = train[pv].copy()

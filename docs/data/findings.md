@@ -94,7 +94,7 @@ From `uv run python scripts/evaluate.py`: 5-fold cross-validation grouped by cus
 | Battery as catalog choice | 2.68 | 2.95 | 43.2% |
 | Installer's most common battery | 2.89 | 2.82 | **44.7%** |
 | **Planner fixes PV (true kWp)** | given | **2.43** | 27.9% |
-| **Engine** (behind the UI: battery pulled to the installer's usual size within 2 kWh, no price input) | **2.63** | 2.73 | 38.7% |
+| **Engine** (behind the UI: battery pulled to the installer's usual size within 2 kWh, no price input, battery never shrinks with more use) | **2.63** | 2.75 | 38.4% |
 
 What this shows:
 
@@ -105,7 +105,7 @@ What this shows:
 - **"No battery" is rarely found:** recall is 5% to 10%.
 - **Heat pump rule:** finds 7 of 8 dev projects, but only 37% of its recommendations match a sold heat pump.
 
-Sensible reaction checks on 192 unseen homes: adding a car never shrinks PV (100%) and grows it in 97.4%; never shrinks the battery (98.4%); a heat pump never shrinks PV (100%); more PV never shrinks the battery (100%); area limits hold (100%).
+Sensible reaction checks on 192 unseen homes: adding a car never shrinks PV (100%) and grows it in 97.4%; never shrinks the battery (100%, 98.4% before the battery model was made monotonic in use, D126); a heat pump never shrinks PV (100%); more PV never shrinks the battery (100%); area limits hold (100%).
 
 ## Test split: final numbers
 
@@ -115,12 +115,12 @@ Scored once on 2026-11-08 with `uv run python scripts/final_test.py`: every meth
 |---|---|---|---|---|---|---|
 | kWp mean error | 2.65 | 2.58 | 2.84 | 2.60 (coupled) | 3.06 | 4.02 |
 | kWp within 20% | 49% | 50% | 47% | 49% (coupled) | 44% | 31% |
-| Battery mean error, kWh | 2.72 | 2.82 | 2.38 | 2.42 (planner fixes PV) | 3.03 | 3.56 |
-| Battery size exact, closest option | 38% | 37% | 44% | 43% (installer mode) | 34% | 24% |
+| Battery mean error, kWh | 2.66 | 2.79 | 2.19 | 2.42 (planner fixes PV) | 3.03 | 3.56 |
+| Battery size exact, closest option | 40% | 37% | 50% | 43% (installer mode) | 34% | 24% |
 | Whole set right (battery, wallbox, heat pump) | 64% | 68% | 53% | 63% (median) | 63% | 63% |
 | Wallbox right | 77% | 76% | 79% | 77% (median) | 77% | 77% |
 
-Test matches dev (engine kWp mean error 2.63, within 20% 49% on dev), so the dev work did not overfit. The engine clearly beats the median and the rule of thumb on size, ties the plain learned models on solar, and is a little behind the best single method on battery. Heat pumps: 6 in the test split; every method finds 4 of them (the heat pump is a rule, D10), too few to compare.
+Test matches dev (engine kWp mean error 2.63, within 20% 49% on dev), so the dev work did not overfit. Scored a second time on 8 November after D126 (battery model monotonic in yearly use): only the engine's battery moved, from 2.72 to 2.66 kWh and from 38% to 40% exact; on dev it moved the other way, from 2.73 to 2.75 kWh, so the change is about even and is kept for sense, not for score. The engine clearly beats the median and the rule of thumb on size, ties the plain learned models on solar, and is a little behind the best single method on battery. Heat pumps: 6 in the test split; every method finds 4 of them (the heat pump is a rule, D10), too few to compare.
 
 ## "No battery" decisions
 
