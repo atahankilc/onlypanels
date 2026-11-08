@@ -1,11 +1,11 @@
 import { isValidElement, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { GAS_CT, View, surfaceKey } from "./api";
+import { GAS_CT, NO_CHOICE, View, paintChoice, surfaceKey } from "./api";
 import { Monument, around as monumentAt, monumentOf } from "./monument";
 import { HeatPlan, at as heatPlanAt, heatPlanOf } from "./heatPlan";
 import { Place, searchPlace } from "./places";
 import { Shade, withTrees } from "./treeShade";
-import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
+import HomeMap, { Face, SUN_HIGH, SUN_LOW, Tool } from "./HomeMap";
 import { Back } from "./icons";
 import { Design, Handoff, Inputs, Overrides, existingArea, Progress, Request, Source, Spot, design, designBody, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
 import { Change, ChangeCard, Trace, touched } from "./Trace";
@@ -345,6 +345,18 @@ function Workspace({ r, update, back, scores, veiled = false, leaving = false, o
 
   const setI = (change: Partial<Inputs>, by: Source = "planner", label?: string) => { mark(label ?? `${Object.keys(change).map((k) => FACT[k] ?? k).join(", ")} changed`); update(r.id, { inputs: { ...r.inputs, ...change }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(change).filter((k) => k in FACT).map((k) => [k, by])) } }); };
   const setO = (change: Overrides, label?: string) => { mark(label ?? describe(change)); update(r.id, { overrides: { ...r.overrides, ...change } }); };
+  // The planner draws where modules may go, with the homeowner's tools: the drawn area becomes the request's marked area and
+  // the design keeps to it, so drawing over modules takes them off and drawing free roof gives it back. Each stroke is one
+  // change with its card and undo; the desk and the model follow it at once.
+  const [tool, setTool] = useState<Tool | null>(null);
+  useEffect(() => { if (tab !== "home") setTool(null); }, [tab]);
+  // A roof side not drawn on is open to modules as a whole, so the tool starts from all its cells, not from none.
+  const markedAll = useMemo(() => Object.fromEntries(r.buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((x) => x.kind === "roof")
+    .map((x) => [surfaceKey(b, x), r.priority?.[surfaceKey(b, x)] ?? x.year.map((_, n) => n)]))), [r.buildings, r.priority]);
+  const paint = (cells: Record<string, number[]>, on: boolean, start: boolean) => {
+    if (start) mark(on ? "Area added for modules" : "Area taken out of the modules");
+    update(r.id, { priority: paintChoice(r.buildings, { ...NO_CHOICE, cells: markedAll, panels: r.taken ?? {} }, cells, on, "cells").cells, strict: true });
+  };
   const toggle = (key: string) => { if (roof.some((x) => x.key === key)) mark(r.off.includes(key) ? "Roof surface added" : "Roof surface taken out"); if (roof.some((x) => x.key === key)) update(r.id, { off: r.off.includes(key) ? r.off.filter((k) => k !== key) : [...r.off, key] }); };
   const walls = r.buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => s.kind === "wall").map((s) => surfaceKey(b, s)));
   const chosen = [...walls, ...roof.filter((x) => !r.off.includes(x.key)).map((x) => x.key)];
@@ -385,6 +397,7 @@ function Workspace({ r, update, back, scores, veiled = false, leaving = false, o
 
   return <main className={`stage ${step} plan${leaving ? " leaving" : ""}`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
     {home ? <HomeMap buildings={view.layer === "sun" && !showTrees ? r.buildings : r.shaded ?? r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} obstacles={r.obstacles} hotObstacle={hotObs} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"} trees={trees} showTrees={showTrees}
+      marked={tool ? markedAll : undefined} tool={tool ?? undefined} onPaint={tool ? paint : undefined}
       panels={out?.panels} panelW={LEFT} turn={turnTo(roof, out?.panels)} onReady={() => setStep("review")} />
       : <NoHomeStage r={r} />}
     {home && step === "review" && <SunView view={view} setView={setView} buildings={r.shaded ?? r.buildings}
@@ -410,7 +423,12 @@ function Workspace({ r, update, back, scores, veiled = false, leaving = false, o
         {d && tab === "overview" && <><DeskSummary r={r} d={d} costs={costs} go={setTab} /><ConfirmCard r={r} d={d} confirm={confirm} setI={setI} confirmFacts={(keys) => update(r.id, { sources: { ...r.sources, ...Object.fromEntries(keys.map((k) => [k, "planner" as Source])) } })} more={() => setTab("home")} /><Brief points={warns.length} site={tasks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /></>}
         {d && tab === "design" && <><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
             energy={<Fold title="Energy in a year" summary={`Makes ${d.energy.production_mwh.toFixed(1)} MWh against ${d.energy.total_mwh.toFixed(1)} MWh needed; ${d.energy.self_sufficiency_pct}% from own power`}><Energy d={d} inputs={r.inputs} measured={home} /></Fold>} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /></>}
-        {tab === "home" && <><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} auto={photo} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, withPhotoSolar(r, obstacles)); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
+        {tab === "home" && <><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><div className="drawtools" role="group" aria-label="Where modules go">
+          <Button aria-pressed={tool === "draw"} onClick={() => setTool(tool === "draw" ? null : "draw")}>Draw an area</Button>
+          <Button aria-pressed={tool === "surface"} onClick={() => setTool(tool === "surface" ? null : "surface")}>Whole surface</Button>
+          {r.strict && <Button variant="plain" onClick={() => { mark("Whole roof allowed again"); update(r.id, { priority: undefined, strict: false }); }}>Use the whole roof</Button>}
+          <small>{tool ? "On the model: draw around modules to take them off, or around free roof to give it to them. The design follows each stroke." : "Choose a tool to change where modules go on the model."}</small>
+        </div><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} auto={photo} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, withPhotoSolar(r, obstacles)); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "cost" && (pricing ? <PriceBook installer={r.inputs.installer} close={() => setPricing(false)} />
           : <CostTab c={costs} failed={costsFailed} money={moneyOf(r)} setMoney={(money: Money) => update(r.id, { money } as Partial<Request>)} sent={r.status === "sent"}
             use={(change: Record<string, unknown>, label: string) => setO(change as Overrides, label)} prices={() => setPricing(true)} />)}

@@ -459,3 +459,8 @@
 .found h4 { display: flex; justify-content: space-between; margin: 0; font-size: 13px; color: var(--hud-ink-2); } .found h4 small { font-weight: 400; color: var(--hud-ink-3); }
 .found ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .found li { display: grid; gap: 2px; max-width: none; margin: 0; } .found li b { font-size: 13px; font-weight: 600; color: var(--hud-ink); } .found li small { font-size: 12px; line-height: 1.4; color: var(--hud-ink-3); }
+
+/* The planner's drawing tools in the Home tab's roof section (draw1). */
+.drawtools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.drawtools .btn[aria-pressed="true"] { background: var(--hud-solid); color: var(--hud-solid-ink); }
+.drawtools small { flex-basis: 100%; font-size: 12.5px; line-height: 1.35; color: var(--hud-ink-2); }
