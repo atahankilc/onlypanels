@@ -72,3 +72,12 @@ export function Modal({ open, title, onClose, children, actions }: { open: boole
     </div>}
   </dialog>;
 }
+
+/** A section that opens on demand: its title and a one-line summary stay visible, the rest folds away. */
+export function Fold({ title, summary, open, children }: { title: ReactNode; summary?: ReactNode; open?: boolean; children: ReactNode }) {
+  return <details className="fold" open={open}>
+    <summary><span className="fold-head"><b>{title}</b>{summary && <small>{summary}</small>}</span>
+      <svg className="fold-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></summary>
+    <div className="fold-body">{children}</div>
+  </details>;
+}

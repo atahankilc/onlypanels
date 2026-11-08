@@ -84,3 +84,18 @@ select.control { -webkit-appearance: none; appearance: none; padding-right: 38px
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23A2A6AE' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 14px center; background-size: 14px; }
 select.control option { background: var(--hud-base); color: var(--hud-ink); }
+
+.fold, .panel .fold { margin: 0; border: 1px solid var(--hud-line); border-radius: 16px; background: color-mix(in srgb, var(--hud-fill) 40%, transparent); }
+.fold > summary, .panel .fold > summary { display: flex; align-items: center; gap: 12px; padding: 13px 14px 13px 16px; list-style: none; cursor: pointer; border-radius: 16px; color: inherit; font-size: inherit; transition: background-color 0.15s; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary:hover { background: var(--hud-fill); }
+.fold > summary:focus-visible { outline: 2px solid var(--hud-route); }
+.fold-head { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fold-head b { font: 600 14px/1.3 var(--font-ui); color: var(--hud-ink); }
+.fold-head small { font-size: 12.5px; line-height: 1.35; color: var(--hud-ink-2); }
+.fold-chev { flex: none; color: var(--hud-ink-3); transition: rotate 0.2s var(--ease); }
+.fold[open] > summary .fold-chev { rotate: 180deg; }
+.fold[open] > summary { border-bottom: 1px solid var(--hud-line); border-radius: 16px 16px 0 0; }
+.fold-body { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px; animation: rise 0.2s var(--ease); }
+.fold-body > h3:first-child { margin-top: 0; }
+.fold[open] > summary .fold-head small { display: none; }

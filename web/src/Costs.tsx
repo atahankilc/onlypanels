@@ -2,7 +2,7 @@
 // when it pays back and how. Every number is the API's (costs.py); the planner edits prices and ticks extras here.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Book, Costs, Money, PriceItem, addItem, eur, getBook, standing, resetItem, resetRates, setItem, setRates, years } from "./money";
-import { Amount, Button, Check, Field, IconButton, Input, Modal, Select } from "./ui";
+import { Amount, Button, Check, Field, Fold, IconButton, Input, Modal, Select } from "./ui";
 import { Back, Info, Plus } from "./icons";
 import { RatesIcon, TECH_ICON } from "./techIcons";
 import "./money.css";
@@ -53,7 +53,7 @@ export function CostTab({ c, failed, money, setMoney, use, prices, sent }: TabPr
     {c.solar_ct_kwh != null && <p className="small muted">Each kWh from the panels costs about {c.solar_ct_kwh} ct over {n} years, against {c.price_ct_kwh} ct from the grid.</p>}
     <Payback c={c} />
 
-    <h3>What it costs</h3>
+    <Fold title="What it costs" summary={`${eur(c.gross_eur)} for ${c.lines.length} parts: ${groups.map((t) => `${TECH[t].toLowerCase()} ${eur(c.by_tech[t] ?? 0)}`).join(", ")}${c.grant ? `, less ${eur(c.grant.eur)} grant` : ""}`}>
     <table className="grid money-lines"><thead><tr><th>Part</th><th>Qty</th><th>Price</th></tr></thead><tbody>
       {groups.map((t) => [
         <tr key={`g-${t}`} className="group"><th colSpan={2} scope="rowgroup">{TECH[t]}</th><td>{eur(c.by_tech[t] ?? 0)}</td></tr>,
@@ -64,11 +64,12 @@ export function CostTab({ c, failed, money, setMoney, use, prices, sent }: TabPr
       {c.grant && <tr className="total"><th scope="row" colSpan={2}>The homeowner pays</th><td>{eur(c.pays_eur)}</td></tr>}
     </tbody></table>
     <div className="money-actions"><Button onClick={prices}>Edit prices or add a part</Button></div>
+    </Fold>
 
-    {c.extras.length > 0 && <><h3>Extras for this home</h3>
-      <p className="small muted">Site work experts add when the home needs it. Ticked by default when this installer adds it to at least half of its offers.</p>
+    {c.extras.length > 0 && <Fold title="Extras for this home" summary={(() => { const on = c.extras.filter((x) => x.on); return on.length ? `${on.length} of ${c.extras.length} ticked, ${eur(on.reduce((a, x) => a + x.net, 0))} net` : `None of ${c.extras.length} ticked`; })()}>
+      <p className="small muted">Site work added when the home needs it. Ticked by default when we add it to at least half of our offers.</p>
       <ul className="tasks">{c.extras.map((x) => <li key={x.id}><Check checked={x.on} onChange={(v) => setMoney({ ...money, extras: { ...(money.extras ?? {}), [x.id]: v } })}>
-        <b>{x.name} · {eur(x.net)}</b><small>{TECH[x.tech]}{x.share != null ? ` · in ${Math.round(x.share * 100)}% of this installer's offers` : ""}{x.unit !== "job" ? ` · ${qtyText(x)}` : ""}</small></Check></li>)}</ul></>}
+        <b>{x.name} · {eur(x.net)}</b><small>{TECH[x.tech]}{x.share != null ? ` · in ${Math.round(x.share * 100)}% of past offers` : ""}{x.unit !== "job" ? ` · ${qtyText(x)}` : ""}</small></Check></li>)}</ul></Fold>}
 
     <Rules rules={c.rules} />
 
@@ -77,12 +78,12 @@ export function CostTab({ c, failed, money, setMoney, use, prices, sent }: TabPr
       <div className="facts"><Field label="Taxable household income"><Select value={money.income ?? ""} onChange={(e) => setMoney({ ...money, income: e.target.value || null })}>{INCOME.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
         <div className="fact"><span>&nbsp;</span><Check checked={!!money.kids} onChange={(v) => setMoney({ ...money, kids: v })}>Child under 18 at home</Check></div></div></>}
 
-    {c.battery_options.length > 0 && <><h3>Battery sizes in money</h3>
+    {c.battery_options.length > 0 && <Fold title="Battery sizes in money" summary={(() => { const best = [...c.battery_options].sort((a, b) => b.gain_eur - a.gain_eur)[0]; return `${c.battery_options.length} sizes; by money alone ${best.kwh} kWh gains most, ${standing(best.gain_eur)}`; })()}>
       <p className="small muted">What each size from the catalog costs and adds a year over no battery, over its 15-year life. Click to use it.</p>
       <table className="grid money-batt"><thead><tr><th>Size</th><th>Costs</th><th>Adds a year</th><th>Pays back</th><th>Gain</th></tr></thead><tbody>
         {c.battery_options.map((o) => <tr key={o.kwh} className={o.kwh === c.design.battery_kwh ? "on" : ""} onClick={() => !sent && use({ battery_kwh: o.kwh }, `Battery set to ${o.kwh} kWh`)}>
           <th scope="row">{o.kwh} kWh</th><td>{eur(o.cost_eur)}</td><td>{eur(o.year1_eur)}</td><td>{o.payback_years != null ? `${o.payback_years} y` : "no"}</td><td>{eur(o.gain_eur)}</td></tr>)}
-      </tbody></table></>}
+      </tbody></table></Fold>}
 
     {c.heatpump_money && <p className="small muted">Heat pump on its own (against the same home keeping its {c.heatpump_money.fuel}, solar re-sized): {eur(c.heatpump_money.cost_eur)} after the grant, {signed(c.heatpump_money.year1_eur)} a year, {c.heatpump_money.payback_years ? `pays back in about ${c.heatpump_money.payback_years} years` : "does not pay back on money alone"}.</p>}
 
@@ -96,14 +97,15 @@ function Rules({ rules }: { rules: Costs["rules"] }) {
   const [open, setOpen] = useState<string | null>(null);
   const shown = rules.filter((r) => r.applies);
   if (!shown.length) return null;
-  return <><h3>Rules and grants for this home</h3>
-    <p className="small muted">What German law, KfW and Munich mean for this system as of November 2026. Their money is already in the numbers above. Click one for what to do.</p>
+  const draft = shown.filter((r) => r.status === "draft").length;
+  return <Fold title="Rules and grants for this home" summary={`${shown.length} apply${draft ? `, ${draft} of them draft law` : ""}; their money is already in the numbers`}>
+    <p className="small muted">What German law, KfW and Munich mean for this system as of November 2026. Click one for what to do.</p>
     <ul className="rules">{shown.map((r) => <li key={r.id} className={r.status}>
       <button type="button" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>
         <em>{STATUS[r.status]}</em><b>{r.title}</b>{r.effect && <span>{r.effect}</span>}
       </button>
       {open === r.id && <div><p>{r.text}</p>{r.action && <p><b>To do:</b> {r.action}</p>}<small>{r.source}</small></div>}
-    </li>)}</ul></>;
+    </li>)}</ul></Fold>;
 }
 
 /** Money over the years, one bar a year: below the line while the system is being paid off, above once it has paid back. */

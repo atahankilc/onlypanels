@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { askKey, keepAnswer, lastAnswer } from "./answers";
 import { Design, Overrides, Request, Spot, designBody } from "./plan";
-import { Button, Input } from "./ui";
+import { Button, Fold, Input } from "./ui";
 import { moneyAsk, moneyOf, usePriceVersion } from "./money";
 
 type Result = { modules: number; kwp: number; battery_kwh: number; heatpump_kw: number; wallbox: boolean; production_mwh: number; own_power_pct: number; saving_eur_year: number; need_mwh?: number };
@@ -99,7 +99,9 @@ export function AgentPanel({ r, roof, use }: { r: Request; d: Design; roof: Spot
 
   const applied = (c: Overrides) => Object.entries(c).every(([k, v]) => (r.overrides as Record<string, unknown>)[k] === v);
   const fromAnswers = review?.facts.filter((f) => f.level !== "warn" && f.id !== "demand_edges") ?? [];
-  return <section className="agent" aria-label="Review">
+  // Folded on the desk: the review's own headline, with how many questions it has for the customer, stays in sight.
+  const asks = review?.asks.length ?? 0;
+  return <Fold title="Review" summary={!review ? (failed ? "Could not run" : "Working…") : `${review.headline}${asks ? ` · ${asks} ${asks === 1 ? "question" : "questions"} for the customer` : ""}`}><section className="agent" aria-label="Review">
     <div className="agent-head"><b>Review</b><span className="agent-tag">{!review && !failed ? "working" : "rules over the engine, no AI"}</span></div>
     {failed && <p className="small muted">The review could not run. The design is unchanged.</p>}
     {!review && !failed && <p className="small muted agent-wait"><span className="spinner" aria-hidden="true" />Trying the answers that were guessed…</p>}
@@ -140,5 +142,5 @@ export function AgentPanel({ r, roof, use }: { r: Request; d: Design; roof: Spot
       <Input aria-label="Ask Claude" placeholder="Ask Claude, e.g. what if they skip the battery?" value={text} onChange={(e) => setText(e.target.value)} disabled={busy} />
       <Button type="submit" disabled={busy || !text.trim()}>Ask</Button>
     </form>
-  </section>;
+  </section></Fold>;
 }

@@ -25,9 +25,10 @@ import { DeskSummary } from "./DeskSummary";
 import { askAhead, askKey, keepAnswer, lastAnswer } from "./answers";
 import { EvidenceCard } from "./Evidence";
 import { Money, moneyAsk, moneyOf, useCosts, usePriceVersion } from "./money";
-import { Button, Check, Field, IconButton, Input, Segmented, Select, Slider } from "./ui";
+import { Button, Check, Field, Fold, IconButton, Input, Segmented, Select, Slider } from "./ui";
 import { setDeskContext, setOpenContext, useVoiceActions } from "./voiceBus";
 import VoiceDock from "./Voice";
+import { ago } from "./Requests";
 
 const LEFT = 548; // the desk's column: the homeowner's, widened for tables
 /** An address as the homeowner view writes it: the street large, the town under it. */
@@ -132,7 +133,7 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
       {/* The planner's pages, in the top bar as the app's menu. In the body so the top bar's fade does not cover it. */}
       {createPortal(<nav className="pagenav" aria-label="Planner pages"><Segmented variant="glass" label="Page" value={page} onChange={setPage} options={[{ value: "requests", label: "Requests" }, { value: "prices", label: "Prices" }]} /></nav>, document.body)}
       {page === "prices" ? <PriceBook /> : <>
-        <ul className="reqlist">{requests.map((r) => <Line key={r.id} r={r} open={() => setOpenId(r.id)} />)}
+        <ul className="reqlist">{byTurn(requests).map((r) => <Line key={r.id} r={r} open={() => setOpenId(r.id)} />)}
           {Array.from({ length: loading }, (_, i) => <li key={`loading${i}`} className="loading" aria-hidden="true"><span /><span /></li>)}
         </ul>
         {loading > 0 && <p className="small muted loadnote" role="status"><span className="spinner" aria-hidden="true" />{requests.length ? `Loading ${loading} more ${loading === 1 ? "request" : "requests"}…` : "Loading requests…"}</p>}
@@ -141,20 +142,23 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
   </main><VoiceDock /></>;
 }
 
+/** The planner's queue: requests waiting for an offer first, the longest waiting on top; sent offers below, the latest first. */
+const byTurn = (l: Request[]) => [...l].sort((a, b) => (a.status === "sent" ? 1 : 0) - (b.status === "sent" ? 1 : 0)
+  || (a.status === "sent" ? (b.receivedAt ?? 0) - (a.receivedAt ?? 0) : (a.receivedAt ?? 0) - (b.receivedAt ?? 0)));
 function Line({ r, open }: { r: Request; open: () => void }) {
   const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, mergeCells(r.taken, blockedOf(r.shaded ?? r.buildings, r.obstacles))), [r.shaded, r.buildings, r.installed, r.priority, r.taken, r.obstacles]); // trees reach the sun after arrival; kept obstacles block cells
   const out = useDesign(r, roof);
   // Once the draft is in, the review and the price are asked ahead, so the request opens on them without waiting.
   useEffect(() => { if (!out) return; const ask = moneyAsk(r, roof); askAhead("review", "/api/review", ask); askAhead("costs", "/api/costs", ask); }, [out, r, roof]);
   // The same count Checks shows: only facts this design uses.
-  const assumed = out ? toConfirm(r, out.d).length : Object.values(r.sources).filter((s) => s === "assumed").length;
+  const assumed = out ? toConfirm(r, out.d).length : null; // counted once the draft is in, so the number never jumps
   const [street, town] = splitLabel(r.label), sent = r.status === "sent";
   const asking = useAsks(r.ref ?? "-").filter((x) => !x.answered).length;
   return <li>
     <button type="button" className="reqrow" onClick={open}>
-      <span className="reqrow-home"><b>{street}{asking > 0 && <span className="reqrow-ask">{asking === 1 ? "Question" : `${asking} questions`}</span>}</b><small>{[town, r.from, r.ref].filter(Boolean).join(" · ")}</small></span>
+      <span className="reqrow-home"><b>{street}{asking > 0 && <span className="reqrow-ask">{asking === 1 ? "Question" : `${asking} questions`}</span>}</b><small>{[town, r.from, r.ref].filter(Boolean).join(" · ")}{r.receivedAt && <> · <time dateTime={new Date(r.receivedAt).toISOString()} title={new Date(r.receivedAt).toLocaleString("en-GB")}>{ago(r.receivedAt)}</time></>}</small></span>
       <span className="reqrow-draft">{out ? summary(out.d) : <span className="muted">Drafting…</span>}</span>
-      <span className={`reqrow-todo${!sent && assumed ? " open" : ""}`}>{sent ? "" : assumed ? `${assumed} to confirm` : "Ready to send"}</span>
+      <span className={`reqrow-todo${!sent && assumed ? " open" : ""}`}>{sent || assumed === null ? "" : assumed ? `${assumed} to confirm` : "Ready to send"}</span>
       <span className={`reqstate ${sent ? "is-sent" : r.opened ? "is-open" : "is-new"}`}>{sent ? "Offer sent" : r.opened ? "In progress" : "New"}</span>
     </button>
   </li>;
@@ -337,7 +341,8 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         {!d && <p className="muted">The engine is working…</p>}
         {asks.map((x) => <AskCard key={x.id} x={x} tried={() => tryAsk(x)} done={() => answer(r.ref ?? "-", x.id)} />)}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
-        {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} measured={home} /></>}
+        {d && tab === "design" && <><Brief d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
+            energy={<Fold title="Energy in a year" summary={`Makes ${d.energy.production_mwh.toFixed(1)} MWh against ${d.energy.total_mwh.toFixed(1)} MWh needed; ${d.energy.self_sufficiency_pct}% from own power`}><Energy d={d} inputs={r.inputs} measured={home} /></Fold>} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /></>}
         {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, withPhotoSolar(r, obstacles)); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "cost" && (pricing ? <PriceBook installer={r.inputs.installer} close={() => setPricing(false)} />
           : <CostTab c={costs} failed={costsFailed} money={moneyOf(r)} setMoney={(money: Money) => update(r.id, { money } as Partial<Request>)} sent={r.status === "sent"}
@@ -387,17 +392,19 @@ function PriorityNote({ r, d, roof, panels, set }: { r: Request; d: Design; roof
 }
 
 /** The first ten seconds: what is proposed, why in three lines, and what is still open. Written from the engine's numbers by template, no language model. */
-function Brief({ r, d, assumed, points, site, open }: { r: Request; d: Design; assumed: number; points: number; site: number; open: () => void }) {
+function whyOf(r: Request, d: Design) {
   const s = d.similar, why: string[] = [];
   why.push(d.pv.locked ? `Solar is fixed by you at ${d.pv.modules} modules.` : d.pv.capped ? `The roof limits solar to ${d.pv.modules} modules; the engine wanted more.` : `${d.energy.existing_kwp ? `Solar sized for the ${Math.max(0, d.energy.total_mwh - (d.energy.existing_mwh ?? 0)).toFixed(1)} MWh a year the existing ${d.energy.existing_kwp} kWp leaves of ${d.energy.total_mwh.toFixed(1)}` : `Solar sized for ${d.energy.total_mwh.toFixed(1)} MWh a year`}. In ${s.n} similar homes, experts chose ${s.kwp_low}–${s.kwp_high} kWp.`);
   if (d.pv.max_modules) why.push(`${d.pv.modules} of ${d.pv.max_modules} modules that fit on the ${r.buildings.length ? "measured roof, best sun first" : `described roof (about ${Math.round(r.inputs.area_m2 ?? d.pv.max_modules * 2)} m² on the main side)`}. Makes about ${d.energy.production_mwh.toFixed(1)} MWh a year.`);
   why.push(d.battery.locked ? (d.battery.kwh ? `Battery set by you at ${d.battery.kwh} kWh.` : "No battery, your choice.") : d.battery.kwh ? `${d.battery.kwh} kWh battery: ${s.battery_rate}% of similar homes bought one${d.battery.unsure ? ", but this call is open" : ""}.` : r.inputs.has_storage ? `The home already has a battery${r.existing.battery_kwh ? ` of ${r.existing.battery_kwh} kWh` : ""}, so none is added; the new system charges it too.` : `No battery proposed, though ${s.battery_rate}% of similar homes bought one.`);
   if (r.inputs.goal) why.push(`The customer puts ${label(GOAL, r.inputs.goal).toLowerCase()} first; the engine leans on it.`);
+  return why;
+}
+
+function Brief({ d, assumed, points, site, open }: { d: Design; assumed: number; points: number; site: number; open: () => void }) {
   const items = [assumed && `${assumed} assumed ${assumed === 1 ? "fact" : "facts"} to confirm`, points && `${points} review ${points === 1 ? "point" : "points"}`, site && `${site} site ${site === 1 ? "check" : "checks"}`].filter(Boolean);
   return <section className="brief">
     <b>{d.pv.kwp.toFixed(1)} kWp · {d.battery.kwh ? `${d.battery.kwh} kWh battery` : "no battery"}{d.wallbox.included ? " · wallbox" : ""}{d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}</b>
-    <ul>{why.map((w) => <li key={w}>{w}</li>)}</ul>
-    <small>Written from the engine's numbers by template, not by a language model.</small>
     {items.length > 0 && <Button variant="plain" onClick={open}>Open: {items.join(" · ")} →</Button>}
   </section>;
 }
@@ -507,7 +514,7 @@ function monumentCheck(m: Monument | null): { id: string; title: string; why: st
   return { id: "monument", title: "Check monument status", why: "The Bavarian monument map did not answer. Look the address up in the Bayerischer Denkmal-Atlas." };
 }
 
-function DesignTab({ d, first, r, setO, apply, lit, scores }: { d: Design; first: Design | null; r: Request; setO: (c: Overrides, label?: string) => void; apply: (label: string, x: { inputs: Partial<Inputs>; overrides: Overrides }) => void; lit: string[]; scores: Scores | null }) {
+function DesignTab({ d, first, r, setO, apply, lit, scores, review, energy }: { d: Design; first: Design | null; r: Request; setO: (c: Overrides, label?: string) => void; apply: (label: string, x: { inputs: Partial<Inputs>; overrides: Overrides }) => void; lit: string[]; scores: Scores | null; review: React.ReactNode; energy: React.ReactNode }) {
   const [text, setText] = useState(""), [said, setSaid] = useState("");
   const o = r.overrides, kwp = d.pv.kwp, s = d.similar;
   const three = (v: boolean | null | undefined) => (v == null ? "auto" : v ? "yes" : "no");
@@ -520,14 +527,13 @@ function DesignTab({ d, first, r, setO, apply, lit, scores }: { d: Design; first
   }).catch(() => setSaid("The change could not be applied."));
   const engine = scores?.scores[`engine ${r.inputs.installer}`];
   const changed = first && summary(first) !== summary(d);
+  const why = whyOf(r, d);
   return <>
     {changed && <p className="delta"><span>AI draft</span> {summary(first)}<br /><span>Now</span> {summary(d)}</p>}
     {d.review.filter((n) => n.level === "warn").map((n) => <p key={n.code} className="flag">{n.text}</p>)}
-    <EvidenceCard d={d} onForget={() => setO({}, "Learned offers forgotten")} />
-    <Options d={d} pick={(a) => setO(a.overrides, `Option: ${a.title.toLowerCase()}`)} />
-    <Validate r={r} d={d} />
-    {!r.inputs.has_storage && <BatteryCurve d={d} pick={(kwh) => setO({ battery_kwh: kwh })} />}
-    <table className="grid"><thead><tr><th /><th>Proposal</th><th>Similar homes</th><th>Your decision</th></tr></thead><tbody>
+    <section className="syscard" aria-label="The system">
+      <header><h3>The system</h3><small>Auto follows the engine; your choice stays until you set it back.</small></header>
+      <table className="grid"><thead><tr><th /><th>Proposal</th><th>Similar homes</th><th>Your decision</th></tr></thead><tbody>
       <tr><th scope="row">Solar</th><td>{d.pv.modules} modules<small>{kwp.toFixed(1)} kWp{d.pv.capped ? " · roof limit" : ""}</small></td><td>{s.kwp_low}–{s.kwp_high} kWp<small>{s.n} homes</small></td>
         <td><div className="lock"><Slider min={Math.min(4, d.pv.modules)} max={Math.max(d.pv.max_modules ?? 40, d.pv.modules + 10, 4)} value={o.modules ?? d.pv.modules} onChange={(e) => setO({ modules: Number(e.target.value) })} /><Button disabled={o.modules == null} onClick={() => setO({ modules: null })}>Auto</Button></div></td></tr>
       <tr><th scope="row">Battery</th><td>{r.inputs.has_storage ? "Already there" : d.battery.kwh ? `${d.battery.kwh} kWh` : "None"}{!r.inputs.has_storage && <small>{d.battery.locked ? `your choice · engine ${d.battery.probability}% for one` : `${d.battery.probability}% likely`}</small>}</td><td>{s.battery_rate}% have one<small>often {s.battery_common.join(", ")} kWh</small></td>
@@ -537,14 +543,27 @@ function DesignTab({ d, first, r, setO, apply, lit, scores }: { d: Design; first
       <tr><th scope="row">Heat pump</th><td>{d.heatpump.included ? `${d.heatpump.kw} kW` : "None"}<small>{d.heatpump.blocked ? "already there" : "by rule"}</small></td><td>Too few sold</td>
         <td><Segmented wide label="Heat pump" value={three(o.heatpump)} onChange={(v) => setO({ heatpump: from3(v) })} options={[{ value: "auto", label: "Auto" }, { value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></td></tr>
     </tbody></table>
-    <form className="askbox" onSubmit={(e) => { e.preventDefault(); if (text.trim()) ask(); }}>
+      <form className="askbox" onSubmit={(e) => { e.preventDefault(); if (text.trim()) ask(); }}>
       <Input aria-label="What changed?" placeholder="What changed? e.g. they are buying an electric car" value={text} onChange={(e) => setText(e.target.value)} /><Button type="submit">Apply</Button>
     </form>
-    {said && <p className="small muted">{said}</p>}
-    <h3>How the engine decided</h3>
-    <Trace steps={d.trace} sources={r.sources} lit={lit} />
-    {d.review.filter((n) => n.level === "note").map((n) => <p key={n.code} className="small muted">{n.text}</p>)}
-    {engine && <p className="small muted trust">How far to trust a first draft: on {Math.round(engine.n)} past projects at this installer, it landed within 20% of the expert's size {Math.round(engine.kwp_within20 * 100)}% of the time. That is why you decide.</p>}
+      {said && <p className="small muted">{said}</p>}
+    </section>
+    <Options d={d} pick={(a) => setO(a.overrides, `Option: ${a.title.toLowerCase()}`)} />
+    {!r.inputs.has_storage && <BatteryCurve d={d} pick={(kwh) => setO({ battery_kwh: kwh })} />}
+    <Fold title="Why this design" summary={why[0]}>
+      <ul className="why">{why.map((w) => <li key={w}>{w}</li>)}</ul>
+      <h3>How the engine decided</h3>
+      <Trace steps={d.trace} sources={r.sources} lit={lit} />
+      {d.review.filter((n) => n.level === "note").map((n) => <p key={n.code} className="small muted">{n.text}</p>)}
+      {engine && <p className="small muted trust">How far to trust a first draft: on {Math.round(engine.n)} past projects at this installer, it landed within 20% of the expert's size {Math.round(engine.kwp_within20 * 100)}% of the time. That is why you decide.</p>}
+      <small className="muted">Written from the engine's numbers by template, not by a language model.</small>
+    </Fold>
+    {review}
+    <Fold title="What past projects support" summary={`Experts offered ${s.kwp_low}–${s.kwp_high} kWp for ${s.n} similar homes; ${s.battery_rate}% bought a battery`}>
+      <EvidenceCard d={d} plain onForget={() => setO({}, "Learned offers forgotten")} />
+    </Fold>
+    {energy}
+    <Validate r={r} d={d} />
   </>;
 }
 

@@ -21,7 +21,7 @@ const LEVEL = {
   narrow: ["Well known", "The facts that move size most are known: the draft can be offered as it is."],
 } as const;
 
-export function EvidenceCard({ d, onForget }: { d: Design; onForget?: () => void }) {
+export function EvidenceCard({ d, onForget, plain }: { d: Design; onForget?: () => void; plain?: boolean }) {
   const e = evidenceOf(d);
   const [total, setTotal] = useState<{ offers: number; changed: number } | null>(null);
   useEffect(() => { fetch("/api/approved").then((r) => r.json()).then(setTotal).catch(() => undefined); }, [d]);
@@ -31,8 +31,8 @@ export function EvidenceCard({ d, onForget }: { d: Design; onForget?: () => void
   const [title, text] = LEVEL[e.level];
   const missing = e.known.filter((f) => !f.known);
   const a = e.approved;
-  return <section className={`evidence ${e.level}`} aria-label="What the data supports">
-    <header><b>What past projects support</b><span className="evidence-level">{title}</span></header>
+  return <section className={`evidence ${e.level}${plain ? " plain" : ""}`} aria-label="What the data supports">
+    <header>{!plain && <b>What past projects support</b>}<span className="evidence-level">{title}</span></header>
     <p className="small muted">{text}</p>
     <div className="evidence-bar" role="img" aria-label={`Experts offered ${k.low} to ${k.high} kWp for ${e.homes} similar homes; the draft is ${d.pv.kwp.toFixed(1)} kWp`}>
       <i className="band" style={{ left: x(k.low), width: `calc(${x(Math.min(k.high, k.roof ?? k.high))} - ${x(k.low)})` }} />

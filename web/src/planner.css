@@ -311,3 +311,17 @@
 
 /* The planner's pages as the app's menu: centred in the top bar, on the logo's line. */
 .pagenav { position: fixed; z-index: 6; top: 16px; left: 50%; translate: -50% 0; }
+
+/* Design tab: the system first, in one card; the reasons fold below. */
+.syscard { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 16px; border: 1px solid var(--hud-line-2); border-radius: 18px; background: var(--hud-fill); }
+.syscard > header { display: flex; flex-direction: column; gap: 2px; }
+.syscard > header h3 { margin: 0; padding: 0; border: 0; font: 650 16px/1.25 var(--font-ui); color: var(--hud-ink); }
+.syscard > header small { font-size: 12.5px; color: var(--hud-ink-2); }
+.syscard .grid { margin: 0; }
+.syscard .askbox { margin: 0; }
+.fold .why { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.5; color: var(--hud-ink); }
+.fold .why li { max-width: none; margin: 0 0 4px; }
+.fold .agent { border: 0; padding: 0; margin: 0; background: none; }
+.fold .agent > .agent-head { display: none; }
+.fold-body > h3 { margin-top: 4px; padding-top: 14px; }
+.fold-body > h3:first-child { padding-top: 0; border-top: 0; }

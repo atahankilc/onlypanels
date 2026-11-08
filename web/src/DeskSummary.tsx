@@ -13,7 +13,7 @@ export function DeskSummary({ r, d, costs, go }: { r: Request; d: Design; costs:
     { t: "solar", Icon: SolarIcon, label: "Solar", on: d.pv.modules > 0, value: one(d.pv.kwp), unit: "kWp", sub: `${d.pv.modules} modules${d.pv.capped ? ", roof full" : ""}` },
     { t: "battery", Icon: BatteryIcon, label: "Battery", on: !!(d.battery.kwh || there), value: d.battery.kwh || there ? String(d.battery.kwh || there) : "None", unit: d.battery.kwh || there ? "kWh" : "", sub: there ? "already in the home" : d.battery.kwh ? `${e.self_use_pct}% of solar used` : "left out" },
     { t: "wallbox", Icon: WallboxIcon, label: "Wallbox", on: d.wallbox.included, value: d.wallbox.included ? "Yes" : "None", unit: "", sub: d.wallbox.included ? `${one(e.ev_mwh)} MWh for the car` : r.inputs.ev ? "car, no wallbox yet" : "no car" },
-    { t: "heatpump", Icon: HeatIcon, label: "Heat pump", on: d.heatpump.included, value: d.heatpump.included ? String(d.heatpump.kw) : "None", unit: d.heatpump.included ? "kW" : "", sub: d.heatpump.included ? `${one(e.hp_mwh)} MWh of power a year` : d.heatpump.blocked ? "not possible here" : "left out" },
+    { t: "heatpump", Icon: HeatIcon, label: "Heat pump", on: d.heatpump.included, value: d.heatpump.included ? String(d.heatpump.kw) : d.heatpump.blocked || r.inputs.heating === "Heatpump" ? "There" : "None", unit: d.heatpump.included ? "kW" : "", sub: d.heatpump.included ? `${one(e.hp_mwh)} MWh of power a year` : d.heatpump.blocked || r.inputs.heating === "Heatpump" ? "already heats the home" : "left out" },
   ];
   // Need and output on one scale: the bar is the larger of the two.
   const top = Math.max(e.total_mwh, e.production_mwh, 0.1);
