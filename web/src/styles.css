@@ -337,7 +337,8 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .share-note { margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; background: var(--hud-fill); color: var(--hud-ink-2); }
 
 /* ---------- questions only: no map at all, the questions in the middle, the earlier requests one click away ---------- */
-.stage.bare .map3d, .stage.bare .sunlight, .stage.bare .sheet, .stage.bare .rim, .stage.bare .mapctl, .stage.bare .maphint, .stage.bare .tools { display: none; }
+.stage.bare .map3d { visibility: hidden; clip-path: inset(0 0 0 0 round 0); } /* hidden, not removed: the map keeps its size and is ready the moment it is wanted */
+.stage.bare .sunlight, .stage.bare .sheet, .stage.bare .rim, .stage.bare .mapctl, .stage.bare .maphint, .stage.bare .tools { display: none; }
 .stage.bare .panel.quiz { left: 50% !important; right: auto !important; width: min(460px, calc(100% - 24px)); transform: translateX(-50%); }
 
 .startswitch { position: absolute; z-index: 1; left: 12px; bottom: 16px; }
@@ -361,3 +362,6 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 @media (prefers-reduced-motion: reduce) { .reqcards .loading span { animation: none; } }
 .panel.quiz > h2.ask { margin: 20px 0 0; padding: 0; }
 .panel.quiz > h2.ask.gap { margin-top: 26px; }
+
+/* With map / without map: the whole page cross-fades (document.startViewTransition in FindHome). */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.35s; animation-timing-function: var(--ease); }

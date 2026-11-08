@@ -1,3 +1,4 @@
+import { flushSync } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { Answers, NO_ANSWERS, Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, chosenKeys, homeParts, homesIn, NO_CHOICE, Choice, sunOf, areaAt, markedOf, markedM2, paintChoice, panelsOf, panelsM2 } from "./api";
 import { P2, P3, toLocal } from "./geometry";
@@ -23,6 +24,12 @@ function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real 
 // The start choice is a preference of this browser, nothing about a home.
 const START_KEY = "start-choice";
 const savedStart = (): Start | null => { try { const v = localStorage.getItem(START_KEY); return v === "map" || v === "form" ? v : null; } catch { return null; } };
+/** Between the two ways of answering: the page cross-fades instead of sweeping, where the browser can. */
+const swap = (fn: () => void) => {
+  const d = document as Document & { startViewTransition?: (f: () => void) => unknown };
+  if (!d.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) { fn(); return; }
+  d.startViewTransition(() => flushSync(fn));
+};
 const saveStart = (s: Start) => { try { localStorage.setItem(START_KEY, s); } catch { /* private mode: asked again next time */ } };
 
 const newRef = () => `R-${Math.random().toString(36).slice(2, 7).toUpperCase()}`; // a reference the homeowner can quote
@@ -35,20 +42,20 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const [error, setError] = useState("");
   const [focus, setFocus] = useState<P2 | null>(null);
   const [buildings, setBuildings] = useState<Selected[]>([]);
-  const [step, setStep] = useState<Step>("pick");
+  const formFirst = useState(() => savedStart() === "form")[0]; // a browser that chose no map opens straight on it, no sweep
+  const [step, setStep] = useState<Step>(formFirst ? "review" : "pick");
   const [move, setMove] = useState<"in" | "out" | null>(null); // while the map's edge sweeps between the steps: see .curtain
   const [waiting, setWaiting] = useState(false);
   const [open, setOpen] = useState<string | null>(null); // the building shown in detail
   const [near, setNear] = useState<string | null>(null); // the building under the pointer in the list
   const [face, setFace] = useState<Face | null>(null); // the roof surface under the pointer, on the map or in the list
   const [look, setLook] = useState<{ id: string } | null>(null);
-  const [stage, setStage] = useState<Stage>("roof");
+  const [stage, setStage] = useState<Stage>(formFirst ? "where" : "roof");
   const [view, setView] = useState<View>(PHOTO); // what the roof page paints on the surfaces: photo or sunlight
   const [ref, setRef] = useState(newRef);
   const [fromList, setFromList] = useState(false); // the home on screen is a sent request opened from the list
   // Map or questions only: asked once, then kept in this browser. Nothing shows on the map until chosen.
-  const [start, setStart] = useState<Start | null>(() => (savedStart() === "map" ? "map" : null));
-  useEffect(() => { if (savedStart() === "form") begin("form"); }, []);
+  const [start, setStart] = useState<Start | null>(() => savedStart());
   const [offerPanels, setOfferPanels] = useState<Record<string, number> | null>(null); // the offer's modules, or the variant being tried, on the roof
   const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
   const [choice, setChoice] = useState<Choice>(NO_CHOICE);
@@ -136,7 +143,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const begin = (s: Start) => {
     setStart(s); saveStart(s);
     if (s === "map") setStage("roof");
-    if (s === "form") { setFormView(null); setBuildings([]); setStage("where"); setOpen(null); setStep("review"); setMove("in"); }
+    if (s === "form") { setFormView(null); setBuildings([]); setStage("where"); setOpen(null); setStep("review"); setMove(null); }
   };
   // Questions only: no map behind the questions. Its frame asks once more for the home, keeping every answer.
   // Questions only: no map at all, the questions in the middle. A sent request with a home still opens on the map.
@@ -144,9 +151,9 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   // Without the map, the requests come first when there are any; "New request" opens the questions.
   const [formView, setFormView] = useState<"list" | "form" | null>(null);
   const listing = bare && stage !== "sent" && (formView ?? (requests.length || loading ? "list" : "form")) === "list";
-  const addHome = () => { setStart("map"); saveStart("map"); setStage("roof"); setFace(null); setStep("pick"); setMove("out"); };
+  const addHome = () => { setStart("map"); saveStart("map"); setStage("roof"); setFace(null); setStep("pick"); setMove(null); };
   /** Map or questions, switched at once from either side. Answers already given stay. */
-  const switchTo = (s: Start) => { if (s === start) return; if (s === "form") begin("form"); else addHome(); };
+  const switchTo = (s: Start) => { if (s === start) return; swap(() => (s === "form" ? begin("form") : addHome())); };
   /** Back from the first page: the map's picking step, or the start choice for questions only. */
   const backToPick = () => { if (start === "form" && requests.length) { setFormView("list"); return; } setFace(null); setStep("pick"); setMove("out"); if (start === "form") setStart(null); };
 
@@ -169,7 +176,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
     if (!clearAfter.current) return;
     clearAfter.current = false;
     setStage("roof"); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef()); setFromList(false); setShared(SHARE_ALL);
-    if (savedStart() === "form") begin("form"); // the next request starts the way this browser chose
+    if (savedStart() === "form") swap(() => begin("form")); // the next request starts the way this browser chose
   };
 
   return (
@@ -184,7 +191,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
         <IconButton variant="glass" size="lg" label="Undo" disabled={!undo.length} onClick={stepBack}><Undo /></IconButton>
       </div>}
       {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
-      {step === "pick" && !move && start === null && <StartChoice onChoose={begin} />}
+      {step === "pick" && !move && start === null && <StartChoice onChoose={(s) => swap(() => begin(s))} />}
       {listing && !move && <RequestPage list={requests} loading={loading} onNew={() => { setFormView("form"); setStage("where"); }}
         onOpen={(m) => { if (!m.handoff.buildings.length) { openRequest(m); return; } setStep("pick"); setTimeout(() => openRequest(m), 0); }} />}
       {bare && !move && stage !== "sent" && <div className="startswitch"><Segmented label="With or without the map" variant="glass" size="lg" value="form" onChange={switchTo} options={[{ value: "map", label: "With map" }, { value: "form", label: "Without map" }]} /></div>}
