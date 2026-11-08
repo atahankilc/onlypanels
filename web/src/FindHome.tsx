@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Answers, NO_ANSWERS, Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, chosenKeys, homeParts, homesIn, NO_CHOICE, Choice, sunOf, areaAt, markedOf, markedM2, paintChoice, panelsOf, panelsM2 } from "./api";
 import { P2, P3, toLocal } from "./geometry";
 import { Handoff, Mine } from "./plan";
-import Requests from "./Requests";
+import Requests, { RequestPage } from "./Requests";
 import HomeMap, { Face, Picked, Step, Tool, letter } from "./HomeMap";
 import { Close, Search, Undo } from "./icons";
 import Review, { Stage } from "./Review";
@@ -136,17 +136,19 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const begin = (s: Start) => {
     setStart(s); saveStart(s);
     if (s === "map") setStage("roof");
-    if (s === "form") { setBuildings([]); setStage("where"); setOpen(null); setStep("review"); setMove("in"); }
+    if (s === "form") { setFormView(null); setBuildings([]); setStage("where"); setOpen(null); setStep("review"); setMove("in"); }
   };
   // Questions only: no map behind the questions. Its frame asks once more for the home, keeping every answer.
   // Questions only: no map at all, the questions in the middle. A sent request with a home still opens on the map.
   const bare = start === "form" && step === "review" && buildings.length === 0;
-  const [listOpen, setListOpen] = useState(false); // the earlier requests, over the questions
+  // Without the map, the requests come first when there are any; "New request" opens the questions.
+  const [formView, setFormView] = useState<"list" | "form" | null>(null);
+  const listing = bare && stage !== "sent" && (formView ?? (requests.length || loading ? "list" : "form")) === "list";
   const addHome = () => { setStart("map"); saveStart("map"); setStage("roof"); setFace(null); setStep("pick"); setMove("out"); };
   /** Map or questions, switched at once from either side. Answers already given stay. */
-  const switchTo = (s: Start) => { setListOpen(false); if (s === start) return; if (s === "form") begin("form"); else addHome(); };
+  const switchTo = (s: Start) => { if (s === start) return; if (s === "form") begin("form"); else addHome(); };
   /** Back from the first page: the map's picking step, or the start choice for questions only. */
-  const backToPick = () => { setFace(null); setStep("pick"); setMove("out"); if (start === "form") setStart(null); };
+  const backToPick = () => { if (start === "form" && requests.length) { setFormView("list"); return; } setFace(null); setStep("pick"); setMove("out"); if (start === "form") setStart(null); };
 
   /** After sending: back to the map, ready for another home. The request stays in the list with its progress. */
   /** A sent request, opened from the start page: its home on the map and where it is, read only. */
@@ -183,14 +185,9 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
       </div>}
       {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
       {step === "pick" && !move && start === null && <StartChoice onChoose={begin} />}
-      {bare && !move && <nav className="formbar" aria-label="How you answer">
-        <Segmented label="With or without the map" value="form" onChange={switchTo} options={[{ value: "map", label: "With map" }, { value: "form", label: "Without map" }]} />
-        {(requests.length > 0 || loading > 0) && <Button aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>Your requests</Button>}
-      </nav>}
-      {bare && listOpen && <div className="formlist" onClick={(e) => e.target === e.currentTarget && setListOpen(false)}>
-        <div><Requests list={requests} loading={loading} onOpen={(m) => { setListOpen(false); if (!m.handoff.buildings.length) { openRequest(m); return; } setStep("pick"); setTimeout(() => openRequest(m), 0); }} />
-          <Button size="lg" wide onClick={() => setListOpen(false)}>Close</Button></div>
-      </div>}
+      {listing && !move && <RequestPage list={requests} loading={loading} onNew={() => { setFormView("form"); setStage("where"); }}
+        onOpen={(m) => { if (!m.handoff.buildings.length) { openRequest(m); return; } setStep("pick"); setTimeout(() => openRequest(m), 0); }} />}
+      {bare && !move && stage !== "sent" && <div className="startswitch"><Segmented label="With or without the map" variant="glass" size="lg" value="form" onChange={switchTo} options={[{ value: "map", label: "With map" }, { value: "form", label: "Without map" }]} /></div>}
       {step === "pick" && start === "map" && !move && !buildings.length && <div className="startswitch"><Segmented label="With or without the map" variant="glass" size="lg" value="map" onChange={switchTo} options={[{ value: "map", label: "With map" }, { value: "form", label: "Without map" }]} /></div>}
       {step === "pick" && start === "map" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
@@ -225,7 +222,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
       </aside>}
       </Curtain>}
 
-      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && moved()}><Review refId={ref} onPanels={setOfferPanels} progress={requests.find((m) => m.ref === ref)} done={newRequest} stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={backToPick} request={request} shared={shared} setShared={setShared} /></div>}
+      {(step === "review" || move === "out") && !listing && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && moved()}><Review refId={ref} onPanels={setOfferPanels} progress={requests.find((m) => m.ref === ref)} done={newRequest} stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={backToPick} request={request} shared={shared} setShared={setShared} /></div>}
     </main>
   );
 }

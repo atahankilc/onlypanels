@@ -1,5 +1,6 @@
 import Explore from "./Explore";
 import { Mine } from "./plan";
+import { Button } from "./ui";
 
 const STEPS = ["Sent", "Being planned", "Offer ready"] as const;
 export const stepOf = (m: Mine) => (m.offer ? 2 : m.opened ? 1 : 0);
@@ -25,6 +26,28 @@ export default function Requests({ list, loading = 0, onOpen, gone }: { list: Mi
       {loading > 0 && <p className="small muted loadnote" role="status">{list.length ? `Loading ${loading} more…` : "Loading your requests…"}</p>}
     </aside>
   );
+}
+
+/** Without the map: the requests first, as a page of their own, and a way to start a new one. */
+export function RequestPage({ list, loading = 0, onOpen, onNew }: { list: Mine[]; loading?: number; onOpen: (m: Mine) => void; onNew: () => void }) {
+  const waiting = list.filter((m) => !m.offer).length, ready = list.length - waiting;
+  return <aside className="panel tall quiz reqpage" aria-label="Your requests">
+    <p className="count">Your requests</p>
+    <h1>{ready ? `${ready} ${ready === 1 ? "offer is" : "offers are"} ready` : list.length ? "Your installer is on it" : "Loading your requests"}</h1>
+    <p className="muted">{list.length ? `${list.length} sent${waiting ? `, ${waiting} still being planned` : ""}. Open one to see where it is${ready ? " and your offer" : ""}.` : "One moment."}</p>
+    <ul className="reqcards">
+      {list.map((m) => {
+        const at = stepOf(m), [street, town] = m.label.split(/, (.+)/);
+        return <li key={m.ref}><button type="button" onClick={() => onOpen(m)}>
+          <span className="reqcard-top"><b>{street || "Home not shared"}</b><span className={`state s${at}`}>{STEPS[at]}</span></span>
+          <small>{[town, m.ref, `sent ${day(m.sentAt)}`].filter(Boolean).join(" · ")}</small>
+          <span className="reqcard-steps" aria-hidden="true">{STEPS.map((s, i) => <i key={s} className={i <= at ? "on" : ""} />)}</span>
+        </button></li>;
+      })}
+      {Array.from({ length: loading }, (_, i) => <li key={`loading${i}`} className="loading" aria-hidden="true"><span /><span /></li>)}
+    </ul>
+    <Button variant="solid" size="lg" wide onClick={onNew}>New request</Button>
+  </aside>;
 }
 
 /** Where one request is, and the offer once the planner sends it. */
