@@ -737,7 +737,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     m.on("move", () => liftPins.current());
     m.on("rotate", () => { if (needle.current) needle.current.style.rotate = `${-m.getBearing()}deg`; setBearing(m.getBearing()); });
 
-    m.once("load", () => { if (!live.current.onReady) locateMe(); });
+    // No location is asked by itself: the browser's prompt would come before the homeowner chose how to start. The locate button asks.
     let renderer: THREE.WebGLRenderer;
     const camera = new THREE.Camera();
     const shaper = new Worker(new URL("./solids.worker.ts", import.meta.url), { type: "module" });

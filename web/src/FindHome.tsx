@@ -7,6 +7,7 @@ import HomeMap, { Face, Picked, Step, Tool, letter } from "./HomeMap";
 import { Close, Search, Undo } from "./icons";
 import Review, { Stage } from "./Review";
 import SunView from "./SunView";
+import StartChoice, { Start } from "./Start";
 import { Button, IconButton } from "./ui";
 
 const PHOTO: View = { layer: "photo", moment: null }; // every page but the roof page shows the photo
@@ -39,6 +40,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const [view, setView] = useState<View>(PHOTO); // what the roof page paints on the surfaces: photo or sunlight
   const [ref, setRef] = useState(newRef);
   const [fromList, setFromList] = useState(false); // the home on screen is a sent request opened from the list
+  const [start, setStart] = useState<Start | null>(null); // map or questions only; nothing shows on the map until chosen
   const [offerPanels, setOfferPanels] = useState<Record<string, number> | null>(null); // the offer's modules, or the variant being tried, on the roof
   useEffect(() => { if (stage === "sent" && !requests.some((m) => m.ref === ref)) onSend({ buildings, answers, choice, ref }); }, [stage]); // what the homeowner produced goes to the planner
   const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
@@ -120,6 +122,14 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   }, [waiting, measuring]);
   const goTo = (id: string) => { setOpen(id); setLook({ id }); };
 
+  const begin = (s: Start) => {
+    setStart(s);
+    if (s === "map") setStage("roof");
+    if (s === "form") { setBuildings([]); setStage("solar"); setOpen(null); setStep("review"); setMove("in"); }
+  };
+  /** Back from the first page: the map's picking step, or the start choice for questions only. */
+  const backToPick = () => { setFace(null); setStep("pick"); setMove("out"); if (start === "form") setStart(null); };
+
   /** After sending: back to the map, ready for another home. The request stays in the list with its progress. */
   /** A sent request, opened from the start page: its home on the map and where it is, read only. */
   const openRequest = (m: Mine) => {
@@ -131,7 +141,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   // so the first question does not flash up on the way out. Meanwhile the start page shows the list, not a picked home.
   const clearAfter = useRef(false);
   const newRequest = () => {
-    setFace(null); setStep("pick"); setMove("out"); setTool(null); setUndo([]); setBuildings([]); setFromList(true);
+    setFace(null); setStep("pick"); setMove("out"); setTool(null); setUndo([]); setBuildings([]); setFromList(true); setStart(null);
     clearAfter.current = true;
   };
   const moved = () => {
@@ -153,7 +163,8 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
         <IconButton variant="glass" size="lg" label="Undo" disabled={!undo.length} onClick={stepBack}><Undo /></IconButton>
       </div>}
       {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
-      {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
+      {step === "pick" && !move && start === null && <StartChoice onChoose={begin} />}
+      {step === "pick" && start === "map" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
       {(step === "pick" || move === "in") && <Curtain move={move} done={moved}>
       <div className="finder">
@@ -186,7 +197,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
       </aside>}
       </Curtain>}
 
-      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && moved()}><Review refId={ref} onPanels={setOfferPanels} progress={requests.find((m) => m.ref === ref)} done={newRequest} stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={() => { setFace(null); setStep("pick"); setMove("out"); }} /></div>}
+      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && moved()}><Review refId={ref} onPanels={setOfferPanels} progress={requests.find((m) => m.ref === ref)} done={newRequest} stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={backToPick} /></div>}
     </main>
   );
 }

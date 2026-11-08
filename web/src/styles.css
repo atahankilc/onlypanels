@@ -306,3 +306,21 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .photo-ask { padding: 14px 0 4px; border-top: 1px solid var(--hud-line); margin-top: 8px; }
 .photo-ask h2 { margin: 0 0 4px; font: 600 15px/1.3 var(--font-ui); color: var(--hud-ink); }
 .photo-preview { display: block; width: 100%; max-height: 220px; object-fit: contain; margin: 10px 0; border-radius: 10px; background: rgba(0, 0, 0, 0.3); }
+
+/* ---------- start: map or questions, over a quiet map (Start.tsx) ---------- */
+.start-veil { position: absolute; z-index: 4; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(10, 11, 13, 0.55); animation: fade 0.4s var(--ease); }
+.start { width: min(520px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 28px 28px 22px; border: 1px solid var(--hud-line); border-radius: 28px; background: var(--hud-panel); box-shadow: var(--lift); animation: rise 0.5s var(--ease) 0.1s backwards; }
+.start .eyebrow { margin: 0 0 10px; font: 500 10.5px/1.4 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--hud-ink-3); }
+.start h1 { font-size: 26px; text-wrap: balance; }
+.start-reads { list-style: none; margin: 14px 0 18px; padding: 0; border-top: 1px solid var(--hud-line); }
+.start-reads li { display: grid; grid-template-columns: 76px 1fr; gap: 12px; margin: 0; padding: 9px 0; border-bottom: 1px solid var(--hud-line); }
+.start-reads b { font: 500 11px/1.9 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--hud-live); }
+.start-reads span { color: var(--hud-ink); }
+.start-safe { margin: 0 0 20px; padding: 14px 16px; border-radius: 16px; background: var(--hud-fill); }
+.start-safe h2 { margin-bottom: 8px; color: var(--hud-ink); }
+.start-safe ul { padding-left: 16px; color: var(--hud-ink-2); }
+.start-safe li:last-child { margin-bottom: 0; }
+.start-go { display: grid; gap: 8px; }
+.start-foot { margin: 10px 0 0; text-align: center; }
+.start-src { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--hud-line); font-size: 11px; color: var(--hud-ink-3); }
+@keyframes fade { from { opacity: 0; } }

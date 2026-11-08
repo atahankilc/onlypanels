@@ -31,7 +31,9 @@ export type Stage = "roof" | "solar" | "battery" | "use" | "big" | "house" | "he
 // Every household sees the same pages, so the count never moves. A battery without solar is rare, but one tap answers it.
 // Charging habits only follow a car, now or soon.
 const PAGES: Stage[] = ["roof", "solar", "battery", "use", "big", "house", "heat", "car", "charge", "goal", "send"];
-const flowFor = (a: Answers): Stage[] => PAGES.filter((p) => p !== "charge" || a.ev);
+// Without a home on the map there is no roof to mark: questions only start at existing solar.
+const pagesFor = (mapped: boolean) => (mapped ? PAGES : PAGES.filter((p) => p !== "roof"));
+const flowFor = (a: Answers, mapped = true): Stage[] => pagesFor(mapped).filter((p) => p !== "charge" || a.ev);
 
 type Props = {
   stage: Stage; setStage: (s: Stage) => void; answers: Answers; setAnswers: (a: Answers) => void; refId: string; progress?: Mine; done: () => void; onPanels?: (p: Record<string, number> | null) => void;
@@ -42,7 +44,8 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   const all = buildings.flatMap((b) => b.sun?.surfaces ?? []);
   const loading = buildings.some((b) => b.sun === undefined), failed = buildings.some((b) => b.sun === null);
 
-  const at_ = Math.max(0, PAGES.indexOf(stage));
+  const mapped = buildings.length > 0, pages = pagesFor(mapped);
+  const at_ = Math.max(0, pages.indexOf(stage));
   // The electricity page shows one way of answering at a time: the number, a range, and as a last resort the household size.
   const [way, setWay] = useState<"exact" | "range" | "people" | "payment">(a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source === "people" || a.use_source === "unknown" ? "people" : a.use_source === "payment" ? "payment" : "exact");
   // Gas can be given in kWh or as what is paid a year; the euros are turned into kWh at Munich's all-in gas price.
@@ -53,7 +56,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
     setFace(null);
     setStage(next);
   };
-  const flow = flowFor(a), here = Math.max(0, flow.indexOf(stage));
+  const flow = flowFor(a, mapped), here = Math.max(0, flow.indexOf(stage));
   // Changing an answer from the overview brings you straight back to it.
   const [fromOverview, setFromOverview] = useState(false);
   const next = () => go(fromOverview ? "send" : flow[here + 1]);
@@ -78,7 +81,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   </div>;
   /** A page: the question, its answers, and what an answer opened. Next shows once something is open. */
   const page = (title: string, line: string | null, body: React.ReactNode, more: React.ReactNode = null) => <>
-    <p className="count">Question {at_ + 1} of {PAGES.length - 1}</p>
+    <p className="count">Question {at_ + 1} of {pages.length - 1}</p>
     <h1>{title}</h1>
     {line && <p className="muted">{line}</p>}
     {body}
@@ -119,7 +122,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
       : a.use_source === "people" ? `${BY_PEOPLE.find((x) => x[1] === a.demand_kwh)?.[0] ?? ""} people, typical use` : a.use_source === "unknown" ? "Not known" : no;
     const car = a.ev === false ? "No" : a.ev ? (a.ev_planned ? `Coming ${a.ev_when === "soon" ? "within a year" : a.ev_when === "later" ? "later" : "soon"}` : "Yes") : no;
     const groups: [string, Stage, [string, string][]][] = [
-      ["Your roof", "roof", [["Priority area", `${Math.round(m2)} m²`]]],
+      ...(mapped ? [["Your roof", "roof", [["Priority area", `${Math.round(m2)} m²`]]] as [string, Stage, [string, string][]]] : []),
       ["Solar already there", "solar", a.has_solar ? [["Solar", "Yes"], ["Makes", label(SOLAR_KIND, a.solar_kind)], ["Marked area", `${Math.round(panelM2)} m²`], ["Size", n(a.solar_kwp, "kWp")], ["Year", a.solar_year ? String(a.solar_year) : no]] : [["Solar", yes(a.has_solar)]]],
       ["Home battery", "battery", [["Battery", yes(a.has_storage)], ...(a.has_storage ? [["Size", n(a.battery_kwh, "kWh")] as [string, string]] : [])]],
       ["Electricity", "use", [["Yearly use", use], ["Price", a.price_known ? `${a.price_ct_kwh} ct per kWh` : no], ["Home in the day", label(HOME_DAY, a.home_day)]]],
@@ -205,7 +208,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
       </>)}
 
       {stage === "use" && <>
-        <p className="count">Question {at_ + 1} of {PAGES.length - 1}</p>
+        <p className="count">Question {at_ + 1} of {pages.length - 1}</p>
         <h1>How much electricity do you use a year?</h1>
         {way === "exact" && <>
           <p className="muted">It is on your yearly bill.</p>
