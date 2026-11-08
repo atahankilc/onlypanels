@@ -63,6 +63,8 @@ class Inputs(BaseModel):
     monthly_eur: float | None = None
     big_users: list[str] | None = None  # pool, sauna, ac, water
     living_m2: float | None = None
+    living_from_model: bool | None = None  # the area is the 3D model's estimate, not the customer's
+    cert_kwh_m2: float | None = None  # from the energy certificate, heat a year per m²
     built: str | None = None  # before1979, 1979to1994, 1995to2009, since2010
     trees: bool | None = None
     roof_renovation: str | None = None  # yes, no, unsure

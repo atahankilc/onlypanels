@@ -34,6 +34,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 
 - Pitch deck, demo recording, final test-set run: not started
 - Team decisions in `docs/decisions.md` marked Proposed are not yet agreed
+- Every assumed value and default, with its source, is in `docs/assumptions.md`. Keep it current when a constant changes
 
 ## Next steps
 

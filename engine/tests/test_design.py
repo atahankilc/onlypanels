@@ -156,3 +156,9 @@ def test_more_answers_from_the_homeowner(engine):
     assert engine.design({**roof, "goal": "environment"})["pv"]["kwp"] >= engine.design(roof)["pv"]["kwp"]
     notes = {n["code"] for n in engine.design({**HOME, "trees": True, "roof_renovation": "yes", "goal": "cost"})["review"]}
     assert {"trees", "roof_renovation", "goal"} <= notes
+
+
+def test_energy_certificate_comes_before_the_build_period(engine):
+    gas = {**HOME, "heating": "Gas", "living_m2": 100, "built": "before1979"}
+    cert = engine.design({**gas, "cert_kwh_m2": 60}, {"heatpump": True})
+    assert cert["energy"]["hp_mwh"] < engine.design(gas, {"heatpump": True})["energy"]["hp_mwh"]

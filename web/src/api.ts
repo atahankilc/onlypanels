@@ -21,8 +21,23 @@ export const surfaceName = (s: SunSurface) => (s.kind === "roof" ? (s.tilt < 8 ?
 export const polyOf = (b: Selected, s: SunSurface) => (s.kind === "roof" ? s.index : (b.real?.roofs.length ?? 0) + s.index);
 
 /** What the design engine needs from the household, named as it names them. Null is not answered yet. */
-export type Answers = { demand_kwh: number | null; price_ct_kwh: number; has_solar: boolean | null; solar_kwp: number | null; solar_year: number | null; has_storage: boolean | null; battery_kwh: number | null; heating: string | null; heat_kwh: number | null; oil_l: number | null; hp_kwh: number | null; wants_hp: boolean | null; ev: boolean | null; ev_planned: boolean; ev_km: number | null; ev_count: number | null; ev_kwh_month: number | null; ev_when: "soon" | "later" | null; ev_charge_home: "most" | "half" | "little" | null; ev_day: boolean | null; has_wallbox: boolean | null; use_source: "band" | "range" | "exact" | "people" | "payment" | "unknown" | null; price_known: boolean; monthly_eur: number | null; big_users: string[]; living_m2: number | null; built: string | null; trees: boolean | null; roof_renovation: "yes" | "no" | "unsure" | null; goal: "cost" | "independence" | "environment" | null; use_range: [number | null, number | null] };
-export const NO_ANSWERS: Answers = { demand_kwh: null, price_ct_kwh: 32, has_solar: null, solar_kwp: null, solar_year: null, has_storage: null, battery_kwh: null, heating: null, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null, ev: null, ev_planned: false, ev_km: null, ev_count: null, ev_kwh_month: null, ev_when: null, ev_charge_home: null, ev_day: null, has_wallbox: null, use_source: null, price_known: false, monthly_eur: null, big_users: [], living_m2: null, built: null, trees: null, roof_renovation: null, goal: null, use_range: [null, null] };
+export type Answers = { demand_kwh: number | null; price_ct_kwh: number; has_solar: boolean | null; solar_kwp: number | null; solar_year: number | null; has_storage: boolean | null; battery_kwh: number | null; heating: string | null; heat_kwh: number | null; oil_l: number | null; hp_kwh: number | null; wants_hp: boolean | null; ev: boolean | null; ev_planned: boolean; ev_km: number | null; ev_count: number | null; ev_kwh_month: number | null; ev_when: "soon" | "later" | null; ev_charge_home: "most" | "half" | "little" | null; ev_day: boolean | null; has_wallbox: boolean | null; use_source: "band" | "range" | "exact" | "people" | "payment" | "unknown" | null; price_known: boolean; monthly_eur: number | null; big_users: string[]; living_m2: number | null; built: string | null; cert_kwh_m2: number | null; trees: boolean | null; roof_renovation: "yes" | "no" | "unsure" | null; goal: "cost" | "independence" | "environment" | null; use_range: [number | null, number | null] };
+// Munich's basic supply (SWM M-Strom), per kWh with VAT, since 1 February 2026. The prototype is Munich only.
+export const PRICE_CT = 32.4;
+/** A rough living area from the measured model: footprint × full floors (eave height ÷ 3 m), half a floor more under a pitched roof,
+ *  × 0.8 for walls and stairs. Only a starting point the customer can correct. */
+export const modelM2 = (buildings: Selected[]) => {
+  let sum = 0;
+  for (const b of buildings) {
+    const roofs = b.real?.roofs ?? [];
+    if (!roofs.length) continue;
+    const footprint = roofs.reduce((s, r) => s + Math.abs(r.ring.reduce((t, p, i) => { const q = r.ring[(i + 1) % r.ring.length]; return t + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2, 0);
+    const zs = roofs.flatMap((r) => r.ring.map((p) => p[2])), eave = Math.min(...zs), top = Math.max(...zs);
+    sum += footprint * (Math.max(1, Math.floor(eave / 3 + 0.3)) + (top - eave > 2 ? 0.5 : 0)) * 0.8;
+  }
+  return sum ? Math.round(sum / 5) * 5 : null;
+};
+export const NO_ANSWERS: Answers = { demand_kwh: null, price_ct_kwh: PRICE_CT, has_solar: null, solar_kwp: null, solar_year: null, has_storage: null, battery_kwh: null, heating: null, heat_kwh: null, oil_l: null, hp_kwh: null, wants_hp: null, ev: null, ev_planned: false, ev_km: null, ev_count: null, ev_kwh_month: null, ev_when: null, ev_charge_home: null, ev_day: null, has_wallbox: null, use_source: null, price_known: false, monthly_eur: null, big_users: [], living_m2: null, built: null, cert_kwh_m2: null, trees: null, roof_renovation: null, goal: null, use_range: [null, null] };
 export type View = { layer: "photo" | "sun"; moment: { month: number; hour: number } | null };
 /** Every free roof starts wholly chosen, walls start free: we have no measure of what a surface yields once obstacles are known, so nothing is ruled out for the user.
  *  What the homeowner draws is kept per surface as the sample cells they marked; a surface not listed is as it started, so a building added later starts the same way.

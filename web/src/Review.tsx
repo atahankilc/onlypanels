@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Answers, Selected } from "./api";
+import { Answers, PRICE_CT, Selected, modelM2 } from "./api";
 import { Face } from "./HomeMap";
 import { Button, Field, Input } from "./ui";
 
@@ -35,7 +35,7 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
   const at_ = Math.max(0, PAGES.indexOf(stage));
   // The electricity page shows one way of answering at a time: the number, a range, and as a last resort the household size.
   const [way, setWay] = useState<"exact" | "range" | "people" | "payment">(a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source === "people" || a.use_source === "unknown" ? "people" : a.use_source === "payment" ? "payment" : "exact");
-  const priceField = () => numberField(optional("Price per kWh (cents), from your bill"), a.price_known ? a.price_ct_kwh : null, (v) => setAnswers({ ...a, price_ct_kwh: v ?? 32, price_known: v != null }), "32 if you skip");
+  const priceField = () => numberField(optional("Price per kWh (cents), from your bill"), a.price_known ? a.price_ct_kwh : null, (v) => setAnswers({ ...a, price_ct_kwh: v ?? PRICE_CT, price_known: v != null }), `${PRICE_CT} if you skip (Munich basic supply)`);
   const noIdea = <button type="button" className="textlink" onClick={() => setWay("people")}>I have no idea</button>;
   const go = (next: Stage) => {
     setFace(null);
@@ -204,7 +204,8 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
         <div className="answers grid2">
           {BUILT.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.built === v} onClick={() => setAnswers({ ...a, built: v })}>{label}</Button>)}
         </div>
-        {numberField(optional("Living area (m²)"), a.living_m2, (living_m2) => setAnswers({ ...a, living_m2 }))}
+        {numberField(optional("Living area (m²)"), a.living_m2, (living_m2) => setAnswers({ ...a, living_m2 }), modelM2(buildings) ? `About ${modelM2(buildings)} from the 3D model` : undefined)}
+        {numberField(optional("Energy certificate (kWh per m² a year)"), a.cert_kwh_m2, (cert_kwh_m2) => setAnswers({ ...a, cert_kwh_m2 }), "If you have one")}
       </div>)}
 
       {stage === "heat" && page("How do you heat your home?", null, <div className="answers grid2">
@@ -239,10 +240,7 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
             <Button size="lg" wide aria-pressed={a.ev_when === "later"} onClick={() => setAnswers({ ...a, ev_when: "later" })}>Later</Button>
           </div>
         </>}
-        <h2>How many?</h2>
-        <div className="pair">
-          {[1, 2].map((n) => <Button key={n} size="lg" wide aria-pressed={a.ev_count === n} onClick={() => setAnswers({ ...a, ev_count: n })}>{n === 1 ? "One" : "Two"}</Button>)}
-        </div>
+        {numberField(optional("How many electric cars?"), a.ev_count, (ev_count) => setAnswers({ ...a, ev_count: ev_count && ev_count > 0 ? Math.round(ev_count) : null }), "1 if you skip")}
         {!a.ev_planned && numberField(optional("Charged at home a month (kWh)"), a.ev_kwh_month, (ev_kwh_month) => setAnswers({ ...a, ev_kwh_month }), "From your wallbox or car app")}
         {numberField(optional(a.ev_planned ? "Kilometres a year you expect, all cars" : "Or: kilometres a year, all cars"), a.ev_km, (ev_km) => setAnswers({ ...a, ev_km }), `${(11300 * (a.ev_count ?? 1)).toLocaleString("en")} if you skip`)}
       </>)}

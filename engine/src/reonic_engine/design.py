@@ -202,9 +202,12 @@ class Engine:
         mount = MOUNTS[i.get("mount", "roof")]
         heat_type = i.get("heating")
         heat_mwh = i.get("heat_kwh") and i["heat_kwh"] / 1000
-        heat_from_house = False
-        if not heat_mwh and i.get("living_m2") and i.get("built") in HEAT_KWH_PER_M2:
-            heat_mwh, heat_from_house = i["living_m2"] * HEAT_KWH_PER_M2[i["built"]] / 1000, True
+        # No gas or oil figure: the energy certificate's value per m², else the build period's, times the living area.
+        heat_from_house = None
+        if not heat_mwh and i.get("living_m2") and i.get("cert_kwh_m2"):
+            heat_mwh, heat_from_house = i["living_m2"] * i["cert_kwh_m2"] / 1000, f"its energy certificate, {_num(i['cert_kwh_m2'], 0)} kWh per m²"
+        elif not heat_mwh and i.get("living_m2") and i.get("built") in HEAT_KWH_PER_M2:
+            heat_mwh, heat_from_house = i["living_m2"] * HEAT_KWH_PER_M2[i["built"]] / 1000, f"built {BUILT_LABEL[i['built']]}, at {HEAT_KWH_PER_M2[i['built']]} kWh per m²"
 
         # Heat pump: rule, too few sold systems to learn from.
         # Heat pump: a rule, too few sold systems to learn from. It enters only when the customer or planner asks (D69).
@@ -347,7 +350,7 @@ class Engine:
         if i.get("roof_renovation") in ("yes", "unsure"):
             review.append({"code": "roof_renovation", "level": "warn", "on": "pv", "text": "The customer plans to renew the roof soon" + (" or is not sure" if i["roof_renovation"] == "unsure" else "") + ". Renew it before the panels go on."})
         if heat_from_house and hp_wanted:
-            review.append({"code": "heat_from_house", "level": "note", "on": "heatpump", "text": f"Heat use estimated from the house: {_num(i['living_m2'], 0)} m², built {BUILT_LABEL[i['built']]}, at {HEAT_KWH_PER_M2[i['built']]} kWh per m². Ask for the gas or oil bill."})
+            review.append({"code": "heat_from_house", "level": "note", "on": "heatpump", "text": f"Heat use estimated from the house: {_num(i['living_m2'], 0)} m²" + (" (from the 3D model)" if i.get("living_from_model") else "") + f", {heat_from_house}. Ask for the gas or oil bill."})
         if big:
             review.append({"code": "big_users", "level": "note", "on": "pv", "text": f"{_num(big)} MWh added for what the customer runs on electricity ({', '.join(i['big_users'])}), since the yearly use is not from the bill."})
         if goal in GOAL_LABEL:
