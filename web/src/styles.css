@@ -411,6 +411,8 @@ html[data-vt="out"]::view-transition-new(root) { z-index: 1; animation-name: vt-
 .intro div { display: grid; gap: 2px; }
 .intro b { font-size: 16px; line-height: 1.25; font-weight: 650; color: var(--hud-ink); }
 .intro span { font-size: 13px; line-height: 1.4; color: var(--hud-ink-2); }
+/* The electricity page: how the use is known, as one switch above the answer. */
+.quiz .ways { margin: 10px 0 14px; }
 /* The roof page's two map tools, as a short legend. */
 .quiz .howto { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
 .quiz .howto li { display: flex; align-items: center; gap: 12px; }

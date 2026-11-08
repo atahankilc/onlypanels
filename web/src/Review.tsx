@@ -6,7 +6,7 @@ import { Shared, forInstaller, m2Words } from "./share";
 import SendView from "./SendView";
 import { Ctx, Known, factsFor } from "./Known";
 import { Status, day, stepOf } from "./Requests";
-import { Button, Check, Field, Input } from "./ui";
+import { Button, Check, Field, Input, Segmented } from "./ui";
 import { Info, Layers, Lock, Pencil, Skip, Spark } from "./icons";
 
 import { BANDS, BIG_USERS, BOILER_AGE, BUILT, BY_PEOPLE, FACING, FOSSIL, GOALS, HEAT_DIST, HEATING, HOME_DAY, KWH_PER_LITRE_OIL, OWNER, REPLACEABLE, SIZE, SLOPE, SOLAR_KIND, SPAN, TYPICAL_KM, clean, number } from "./questions";
@@ -41,13 +41,12 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   const [gasWay, setGasWay] = useState<"kwh" | "eur">(a.gas_eur ? "eur" : "kwh");
   const [priceOpen, setPriceOpen] = useState(a.price_known);
   const priceField = () => !priceOpen ? <button type="button" className="textlink lone" onClick={() => setPriceOpen(true)}>My price per kWh is not {PRICE_CT} ct</button> : numberField(optional("Price per kWh (cents), from your bill"), a.price_known ? a.price_ct_kwh : null, (v) => setAnswers({ ...a, price_ct_kwh: v ?? PRICE_CT, price_known: v != null }), `${PRICE_CT} if you skip (Munich basic supply)`, SPAN.price_ct_kwh);
-  /** Switching how to answer drops what was given the other way: "I don't know it exactly" means the number typed before is not sent. */
+  /** Switching how to answer drops what was given the other way: moving off "Bill" means the number typed before is not sent. */
   const switchWay = (to: typeof way) => {
     setWay(to);
     const kept = to === "range" ? ["band", "range"] : to === "people" ? ["people", "unknown"] : [to];
     if (a.use_source && !kept.includes(a.use_source)) setAnswers({ ...a, use_source: null, demand_kwh: null, monthly_eur: null, use_range: [null, null] });
   };
-  const noIdea = <button type="button" className="textlink" onClick={() => switchWay("people")}>I have no idea</button>;
   const go = (next: Stage) => {
     setFace(null);
     setStage(next);
@@ -283,6 +282,8 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
       {stage === "use" && <>
         <p className="count">Question {at_ + 1} of {total}</p>
         <h1>How much electricity do you use a year?</h1>
+        <div className="ways"><Segmented wide label="How you know it" value={way} onChange={switchWay}
+          options={[{ value: "exact", label: "Bill" }, { value: "payment", label: "Monthly" }, { value: "range", label: "Range" }, { value: "people", label: "People" }]} /></div>
         {way === "exact" && <>
           <p className="muted">It is on your yearly bill.</p>
           <div className="answers">
@@ -290,21 +291,12 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
               onChange={(e) => setAnswers({ ...a, demand_kwh: number(e.target.value), use_source: e.target.value ? "exact" : null })} />{a.use_source === "exact" && warn(a.demand_kwh, SPAN.demand_kwh)}</Field>
             {priceField()}
           </div>
-          <div className="switches">
-            <button type="button" className="textlink" onClick={() => switchWay("range")}>I don't know it exactly</button>
-            {noIdea}
-          </div>
-          <button type="button" className="textlink lone" onClick={() => switchWay("payment")}>I only know my monthly payment</button>
         </>}
         {way === "payment" && <>
-          <p className="muted">The amount you pay each month for electricity. We work out the use from it.</p>
+          <p className="muted">What you pay each month. We work out the use from it.</p>
           <div className="answers">
             {numberField("Monthly payment (€)", a.monthly_eur, (monthly_eur) => setAnswers({ ...a, monthly_eur, use_source: monthly_eur ? "payment" : null, demand_kwh: null }), undefined, SPAN.monthly_eur)}
             {priceField()}
-          </div>
-          <div className="switches">
-            <button type="button" className="textlink" onClick={() => switchWay("exact")}>I know the yearly use</button>
-            {noIdea}
           </div>
         </>}
         {way === "range" && <>
@@ -321,18 +313,10 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
               setAnswers({ ...a, use_range: range, demand_kwh: lo && hi ? Math.round((lo + hi) / 2) : lo || hi || null });
             }} />{warn(a.use_range[k], SPAN.use_range)}</Field>)}
           </div></div>}
-          <div className="switches">
-            <button type="button" className="textlink" onClick={() => switchWay("exact")}>I know the number</button>
-            {noIdea}
-          </div>
         </>}
         {way === "people" && <>
-          <p className="muted">Then how many people live here? We start from a typical home of that size.</p>
+          <p className="muted">How many people live here? We start from a typical home of that size.</p>
           <div className="answers people">{BY_PEOPLE.map(([label, kwh]) => <Button key={label} size="lg" wide aria-pressed={a.use_source === "people" && a.demand_kwh === kwh} onClick={() => answer({ demand_kwh: kwh, use_source: "people", use_range: [null, null] })}>{label}</Button>)}</div>
-          <div className="switches">
-            <button type="button" className="textlink" onClick={() => switchWay("range")}>Back to ranges</button>
-            <button type="button" className="textlink" onClick={() => answer({ use_source: "unknown", demand_kwh: null, use_range: [null, null] })}>Skip</button>
-          </div>
         </>}
         <div className="more">
           <h2>Is someone home during the day on weekdays?</h2>
