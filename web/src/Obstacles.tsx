@@ -4,9 +4,9 @@ import { KIND, Look, Obstacle, findObstacles } from "./roofObstacles";
 import type { Selected } from "./api";
 import { Button, Check } from "./ui";
 
-type Props = { buildings: Selected[]; obstacles?: Obstacle[]; set: (o: Obstacle[], label: string) => void; hover?: (i: number | null) => void };
+type Props = { buildings: Selected[]; obstacles?: Obstacle[]; set: (o: Obstacle[], label: string) => void; hover?: (i: number | null) => void; auto?: string };
 
-export default function Obstacles({ buildings, obstacles, set, hover }: Props) {
+export default function Obstacles({ buildings, obstacles, set, hover, auto }: Props) {
   const [busy, setBusy] = useState(false), [said, setSaid] = useState("");
   const look = () => {
     setBusy(true); setSaid("");
@@ -17,8 +17,9 @@ export default function Obstacles({ buildings, obstacles, set, hover }: Props) {
   };
   const kept = (obstacles ?? []).filter((o) => o.on).length;
   return <section className="obstacles" aria-label="Obstacles on the roof">
-    {!obstacles ? <>
-      <p className="small muted">Chimneys, roof windows and vents are not in the 3D model. A vision model can look for them on the aerial photo; you confirm each one, and no module goes where you keep one.</p>
+    {!obstacles && auto === "looking" && !busy ? <p className="small muted"><span className="spinner" aria-hidden="true" />Looking for chimneys and roof windows on the aerial photo. The offer waits for it.</p>
+    : !obstacles ? <>
+      <p className="small muted">{auto === "failed" ? "The photo could not be checked by itself. Modules may sit on roof windows or chimneys until you check it." : auto === "off" ? "The photo check is not set up on this server, so roof windows and chimneys are not known. Look at the photo before you trust the layout." : "Chimneys, roof windows and vents are not in the 3D model. A vision model can look for them on the aerial photo; you confirm each one, and no module goes where you keep one."}</p>
       <Button onClick={look} disabled={busy}>{busy ? <><span className="spinner" aria-hidden="true" />Looking at the photo…</> : "Find obstacles on the photo"}</Button>
     </> : <>
       <p className="small muted">{obstacles.length ? `${obstacles.length} found on the photo, ${kept} kept. Modules keep 30 cm clear of each kept one. Switch off what is wrong.` : "Nothing found on the roofs. Still check the photo before you trust the layout."}</p>

@@ -1,7 +1,7 @@
 // Things on the roof the 3D model lacks, found on the public aerial photo by a vision model and confirmed by the planner.
 // Only the public roof outlines go out; the cells under a confirmed obstacle hold no module.
 import type { Selected } from "./api";
-import { P2, toLngLat } from "./geometry";
+import { P2, toLngLat, toLocal } from "./geometry";
 
 export type ObstacleKind = "chimney" | "skylight" | "vent" | "dormer" | "antenna" | "solar" | "terrace" | "other";
 /** One thing on the roof: its outline as lon/lat, how sure the model was, a few words, and whether the planner keeps it. */
@@ -39,6 +39,15 @@ export function blockedOf(buildings: Selected[], obstacles: Obstacle[] | undefin
     if (hit.length) out[`${b.id}|${s.kind}${s.index}`] = hit;
   }
   return out;
+}
+
+/** The kept obstacles in one building's own metres, seen from above and widened by the clearance: no module may touch one. */
+export function avoidOf(b: Selected, obstacles: { ring: P2[]; on: boolean }[] | undefined, clear = CLEAR_M): P2[][] {
+  return (obstacles ?? []).filter((o) => o.on).map((o) => {
+    const ring = o.ring.map((p) => toLocal(b.origin, p)), xs = ring.map((p) => p[0]), ys = ring.map((p) => p[1]);
+    const w = Math.min(...xs) - clear, e = Math.max(...xs) + clear, s = Math.min(...ys) - clear, n = Math.max(...ys) + clear;
+    return [[w, s], [e, s], [e, n], [w, n]];
+  });
 }
 
 /** Old panels and confirmed obstacles together: every cell where no new module may go. */

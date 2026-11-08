@@ -4,7 +4,7 @@ import type { Shade } from "./treeShade";
 import { P2, P3, toLocal } from "./geometry";
 import type { RoofNumbers, Shared } from "./share";
 import { ordered } from "./panels";
-import type { Obstacle } from "./roofObstacles";
+import { Obstacle, avoidOf } from "./roofObstacles";
 import { BANDS, TYPICAL_KM } from "./questions";
 
 export type Inputs = { installer: string; demand_kwh: number | null; price_ct_kwh: number; heating: string | null; heat_kwh: number | null; hp_kwh?: number | null; has_solar: boolean; has_storage: boolean; ev: boolean; ev_km: number; ev_kwh_month?: number | null; ev_charge_home?: string | null; ev_day?: boolean | null; has_wallbox?: boolean | null; ev_when?: string | null; use_range?: [number, number] | null; wants_hp?: boolean | null; electric_heat_meter?: string | null; oil_l?: number | null;
@@ -44,7 +44,8 @@ export type Request = {
 /** What the homeowner sees once the planner sends the offer: the system and the engine's estimate. With it, what the
  *  homeowner may try (the planner's allowed changes and the catalog's battery sizes) and the request as the planner left
  *  it, so every variant the homeowner tries is the same engine on the same facts, with one choice changed. */
-export type OfferBasis = { inputs: Inputs; overrides: Overrides; off: string[]; installed: string[]; existing: Existing; priority?: Record<string, number[]>; taken?: Record<string, number[]>; strict?: boolean };
+export type OfferBasis = { inputs: Inputs; overrides: Overrides; off: string[]; installed: string[]; existing: Existing; priority?: Record<string, number[]>; taken?: Record<string, number[]>; strict?: boolean; obstacles?: Obstacle[];
+  trees?: boolean; money?: { extras: Record<string, boolean>; qty: Record<string, number>; income: string | null; kids: boolean } }; // trees: the offer was designed on the trees' sun; money: the planner's priced choices
 export type Offer = { kwp: number; modules: number; battery_kwh: number; wallbox: boolean; heatpump_kw: number; production_mwh: number; self_sufficiency_pct: number; saving_eur: number;
   pays_eur?: number; payback_years?: number | null; // from the planner's Cost tab when it priced the sent design; saving_eur is then its first year
   allowed?: string[]; choices?: number[]; max_modules?: number | null; basis?: OfferBasis };
@@ -52,13 +53,14 @@ export const DEFAULT_ALLOWED = ["no_battery", "battery_size"];
 export const offerOf = (d: Design, r?: Request & { allowed?: string[] }): Offer => ({ kwp: d.pv.kwp, modules: d.pv.modules, battery_kwh: d.battery.kwh, wallbox: d.wallbox.included, heatpump_kw: d.heatpump.included ? d.heatpump.kw : 0,
   production_mwh: d.energy.production_mwh, self_sufficiency_pct: d.energy.self_sufficiency_pct, saving_eur: d.energy.saving_eur,
   ...(r ? { allowed: r.allowed ?? DEFAULT_ALLOWED, choices: d.battery.choices, max_modules: d.pv.max_modules,
-    basis: { inputs: r.inputs, overrides: { ...r.overrides, modules: d.pv.modules, battery_kwh: d.battery.kwh, wallbox: d.wallbox.included, heatpump: d.heatpump.included }, off: r.off, installed: r.installed, existing: r.existing, priority: r.priority, taken: r.taken, strict: r.strict } } : {}) });
+    basis: { inputs: r.inputs, overrides: { ...r.overrides, modules: d.pv.modules, battery_kwh: d.battery.kwh, wallbox: d.wallbox.included, heatpump: d.heatpump.included }, off: r.off, installed: r.installed, existing: r.existing, priority: r.priority, taken: r.taken, strict: r.strict, obstacles: r.obstacles?.filter((o) => o.on), trees: !!r.shade && r.shade.status !== "unknown",
+      money: (({ extras = {}, qty = {}, income = null, kids = false }) => ({ extras, qty, income, kids: !!kids }))((r as Request & { money?: { extras?: Record<string, boolean>; qty?: Record<string, number>; income?: string | null; kids?: boolean } }).money ?? {}) } } : {}) });
 /** The homeowner's side of one request: what they sent, and how far the planner is. */
 export type Progress = { opened: boolean; offer: Offer | null };
 export type Mine = { ref: string; label: string; sentAt: number; handoff: Handoff } & Progress;
 /** Solar already on the building: size and year as the customer gave them, else the area they marked and the sun it gets. */
 export type Existing = { kwp: number | null; year: number | null; battery_kwh: number | null; m2?: number | null; kwh_per_kwp?: number | null; photo?: { has_solar: boolean; source?: Source } }; // photo: the area is what the aerial photo shows; holds what the customer said before, to go back to
-export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string; seed?: { opened?: boolean; offer?: Offer | null };
+export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string; seed?: { opened?: boolean; offer?: Offer | null; obstacles?: Obstacle[] };
   shared?: Shared; roof?: RoofNumbers | null; sentAt?: number }; // sentAt: when the homeowner sent it; shared: what the homeowner chose to send (share.ts); roof: a few roof numbers instead of the home // seed: demo requests that arrive already opened or offered
 
 const FOSSIL_HEAT = ["Gas", "Oil", "OtherNonRenewable"];
@@ -97,7 +99,7 @@ export function fromHomeowner(h: Handoff): Request {
   return {
     meterPhoto: a.meter_photo ?? undefined,
     id: h.ref ? `homeowner-${h.ref}` : "homeowner", ref: h.ref, label: buildings[0]?.label ?? (buildings.length ? "Home" : a.address?.trim() || "Home not shared"),
-    roofNumbers: buildings.length ? null : h.roof ?? null, receivedAt: h.sentAt ?? Date.now(), from: "Homeowner", buildings, status: h.seed?.offer ? "sent" : "draft", opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? undefined,
+    roofNumbers: buildings.length ? null : h.roof ?? null, receivedAt: h.sentAt ?? Date.now(), from: "Homeowner", buildings, status: h.seed?.offer ? "sent" : "draft", opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? undefined, obstacles: h.seed?.obstacles,
     inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating === "unknown" ? null : a.heating, heat_kwh: a.heat_kwh, oil_l: a.heating === "Oil" ? a.oil_l ?? null : null, hp_kwh: a.heating === "Heatpump" ? a.hp_kwh : null, has_solar: !!a.has_solar && !thermal, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM * (a.ev_count ?? 1),
       ev_kwh_month: a.ev && !a.ev_planned ? a.ev_kwh_month : null, ev_charge_home: car ? a.ev_charge_home : null, ev_day: car ? a.ev_day : null, has_wallbox: car ? a.has_wallbox : null, ev_when: a.ev_planned ? a.ev_when : null,
       demand_source: a.use_source === "exact" ? "bill" : a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source, monthly_eur: a.use_source === "payment" ? a.monthly_eur : null,
@@ -127,11 +129,11 @@ const post = <T,>(url: string, body: unknown): Promise<T> => fetch(url, { method
 export type Spot = { b: Selected; s: SunSurface; key: string; poly: number; fits: number; inside: number; yield_: number; shade: number };
 /** The roof surfaces, best first: how many modules really fit, how many on the homeowner's marked cells, and what a kWp gives
  *  there after measured shade. Cells with old panels hold no new module. */
-export const roofOf = (buildings: Selected[], installed: string[], priority?: Record<string, number[]>, taken?: Record<string, number[]>): Spot[] => buildings.flatMap((b) => {
-  const polys = b.real ? [...b.real.roofs, ...b.real.walls] : [];
+export const roofOf = (buildings: Selected[], installed: string[], priority?: Record<string, number[]>, taken?: Record<string, number[]>, obstacles?: Obstacle[]): Spot[] => buildings.flatMap((b) => {
+  const polys = b.real ? [...b.real.roofs, ...b.real.walls] : [], avoid = avoidOf(b, obstacles);
   return (b.sun?.surfaces ?? []).filter((s) => s.kind === "roof" && !installed.includes(surfaceKey(b, s))).map((s) => {
     const poly = polyOf(b, s), key = surfaceKey(b, s), shade = s.kwh_m2 ? Math.max(0, 1 - meanSun(s) / s.kwh_m2) : 0;
-    const o = polys[poly] ? ordered(polys[poly], s, priority?.[key], taken?.[key]) : { rects: [], inside: 0 };
+    const o = polys[poly] ? ordered(polys[poly], s, priority?.[key], taken?.[key], avoid) : { rects: [], inside: 0 };
     // Where the homeowner marked part of a surface, what they left out of it is a cut-out (a skylight, a terrace): no module
     // goes there. A surface they left out whole stays a reserve, used only when their area is not enough.
     const cut = (priority?.[key]?.length ?? 0) > 0;

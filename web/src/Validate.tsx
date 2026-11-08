@@ -3,7 +3,6 @@
 // every number comes from the engine, the words around them are templates.
 import { useMemo, useState } from "react";
 import { Design, Overrides, Request, design, roofOf } from "./plan";
-import { blockedOf, mergeCells } from "./roofObstacles";
 import { Button, Field, Input, Segmented, Select } from "./ui";
 
 const KWP_PER_MODULE = 0.45; // as the engine counts modules
@@ -20,7 +19,7 @@ export default function Validate({ r, d }: { r: Request; d: Design }) {
   const [kwp, setKwp] = useState(String(d.pv.kwp.toFixed(1))), [battery, setBattery] = useState(String(d.battery.kwh));
   const [hp, setHp] = useState(String(d.heatpump.included ? d.heatpump.kw : 0)), [wallbox, setWallbox] = useState(d.wallbox.included ? "yes" : "no");
   const buildings = (r as Request & { shaded?: Request["buildings"] }).shaded ?? r.buildings;
-  const roof = useMemo(() => roofOf(buildings, r.installed, r.priority, mergeCells(r.taken, blockedOf(buildings, r.obstacles))), [buildings, r.installed, r.priority, r.taken, r.obstacles]);
+  const roof = useMemo(() => roofOf(buildings, r.installed, r.priority, r.taken, r.obstacles), [buildings, r.installed, r.priority, r.taken, r.obstacles]);
   const heatRelevant = d.heatpump.included || ["Gas", "Oil", "OtherNonRenewable"].includes(r.inputs.heating ?? "");
 
   const check = () => {

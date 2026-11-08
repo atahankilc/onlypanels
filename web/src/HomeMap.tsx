@@ -4,6 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import * as THREE from "three";
 import { Poly, Selected, SunSurface, View, homesIn, polyOf, surfaceKey, Square, homesUrl, squareEdges, squaresIn } from "./api";
 import { fit, ordered, take } from "./panels";
+import { avoidOf } from "./roofObstacles";
 import { TILT_PER_PX, TURN_PER_PX, leash } from "./camera";
 import { P2, P3, centre, inside, normal, toLngLat, toLocal } from "./geometry";
 import { Info, Locate, Minus, Needle, Plus } from "./icons";
@@ -122,7 +123,7 @@ type Props = {
   // editsOn: the cells the tool changes now (priority or existing panels), to tell adding from taking out.
   // The homeowner's drawing: the cells marked on each surface, the tool in hand, and each stroke's cells. Without them a click toggles a whole surface.
   marked?: Record<string, number[]>; taken?: Record<string, number[]>; editsOn?: Record<string, number[]>;
-  priority?: Record<string, number[]>; blocked?: Record<string, number[]>; obstacles?: { ring: P2[]; on: boolean }[]; hotObstacle?: number | null; tool?: Tool; onPaint?: (cells: Record<string, number[]>, on: boolean, start: boolean) => void; // priority: the homeowner's marked cells, where modules are drawn first, as the design placed them
+  priority?: Record<string, number[]>; obstacles?: { ring: P2[]; on: boolean }[]; keepClear?: { ring: P2[]; on: boolean }[]; hotObstacle?: number | null; tool?: Tool; onPaint?: (cells: Record<string, number[]>, on: boolean, start: boolean) => void; // priority: the homeowner's marked cells, where modules are drawn first, as the design placed them
 };
 export type Tool = "surface" | "draw";
 const SNAP_PX = 10; // a click this close to a point, corner or edge lands on it
@@ -451,7 +452,7 @@ type Real = { mesh: THREE.Mesh; ids: string[]; starts: Uint32Array; shade: Float
 type OnMap = { scene: THREE.Scene; at: P2; done: boolean; real?: Real };
 type Spot = { id: string; square: string };
 
-export default function HomeMap({ buildings, step, focus, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, editing, installed, panels, panelW, turn, onReady, marked, taken, editsOn, tool, onPaint, priority, blocked, obstacles, hotObstacle }: Props) {
+export default function HomeMap({ buildings, step, focus, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, editing, installed, panels, panelW, turn, onReady, marked, taken, editsOn, tool, onPaint, priority, obstacles, keepClear, hotObstacle }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const models = useRef<{ scene: THREE.Scene; at: P2; id: string; polys: Poly[]; surfaces: { s: SunSurface; poly: number }[]; skins: ReturnType<typeof skinOf>[]; ghosts: THREE.Mesh }[]>([]); // one per building, each around its own origin
@@ -472,8 +473,8 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
   const spot = useRef<maplibregl.Marker | null>(null);
   const pins = useRef<maplibregl.Marker[]>([]);
   const sunOn = view.layer === "sun" && !!view.moment;
-  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken, blocked, obstacles, hotObstacle, sunOn });
-  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken, blocked, obstacles, hotObstacle, sunOn };
+  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken, obstacles, keepClear, hotObstacle, sunOn });
+  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken, obstacles, keepClear, hotObstacle, sunOn };
   const clearDraft = useRef(() => {});
   const drawing = () => live.current.step === "review" && live.current.editing && !!live.current.onPaint && !!live.current.tool;
 
@@ -650,7 +651,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         const count = live.current.panels?.[surfaceKey(b, s)] ?? 0;
         if (!count || s.kind !== "roof") continue;
         const key = surfaceKey(b, s);
-        const fitted = ordered(x.polys[poly], s, live.current.priority?.[key], [...(live.current.taken?.[key] ?? []), ...(live.current.blocked?.[key] ?? [])]);
+        const fitted = ordered(x.polys[poly], s, live.current.priority?.[key], live.current.taken?.[key], avoidOf(b, live.current.keepClear ?? live.current.obstacles));
         for (const q of take(fitted.rects, count, fitted.inside)) {
           const k = points.length; points.push(...q); faces.push(k, k + 1, k + 2, k, k + 2, k + 3);
           q.forEach((p, i) => edges.push(...p, ...q[(i + 1) % 4]));
@@ -1391,7 +1392,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     if (on && tool === "surface") m.dragPan.disable(); else m.dragPan.enable(PAN);
     clearDraft.current();
   }, [tool, step, editing]);
-  useEffect(() => { paintPanels(); }, [panels]);
+  useEffect(() => { paintPanels(); }, [panels, obstacles, keepClear]);
   useEffect(() => { paintObstacles(); }, [obstacles, hotObstacle, buildings]);
   // Models are built when their sun arrives, so tiles appear without leaving the screen.
   const sunReady = buildings.filter((b) => b.sun).length;

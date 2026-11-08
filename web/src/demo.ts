@@ -3,6 +3,8 @@
 import { Answers, Choice, NO_ANSWERS, NO_CHOICE, Selected, SunSurface, areaAt, surfaceKey } from "./api";
 import { Handoff, design, fromHomeowner, loadHome, offerOf, roofOf } from "./plan";
 import { homeLoaded } from "./draftLog";
+import { findObstacles } from "./roofObstacles";
+import { withTrees } from "./treeShade";
 
 type Marks = { cells?: number[]; panels?: number[] };
 type Seed = {
@@ -99,10 +101,15 @@ async function build(seed: Seed): Promise<Sent | null> {
       if (m?.panels) choice.panels[surfaceKey(b, s)] = m.panels;
     }
     const h: Sent = { buildings, answers: { ...NO_ANSWERS, ...seed.answers, area }, choice, ref: seed.ref, sentAt: Date.now() - seed.hoursAgo * 3600000 };
-    if (seed.state === "opened") h.seed = { opened: true };
+    // The photo is checked as a planner would have on opening: a sent offer keeps its modules off roof windows and chimneys.
+    const look = seed.state === "sent" ? null : await findObstacles(buildings).catch(() => null);
+    const obstacles = look && look.source !== "unavailable" && look.source !== "failed" ? look.obstacles : undefined;
+    if (seed.state === "opened") h.seed = { opened: true, obstacles };
     if (seed.state === "offer") {
-      const r = fromHomeowner(h), { d } = await design(r.inputs, r.overrides, roofOf(r.buildings, r.installed, r.priority, r.taken), r.off, r.existing, r.strict);
-      h.seed = { opened: true, offer: offerOf(d, r) };
+      // On the trees' sun, as the planner's desk designs it: the offer and the planner's tiles show the same numbers.
+      const shaded = (await withTrees(buildings).catch(() => ({ buildings }))).buildings;
+      const r = { ...fromHomeowner(h), obstacles }, { d } = await design(r.inputs, r.overrides, roofOf(shaded, r.installed, r.priority, r.taken, obstacles), r.off, r.existing, r.strict);
+      h.seed = { opened: true, offer: offerOf(d, r), obstacles };
     }
     return h;
   } catch {

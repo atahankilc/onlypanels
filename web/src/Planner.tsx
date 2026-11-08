@@ -15,7 +15,7 @@ import Obstacles from "./Obstacles";
 import Validate from "./Validate";
 import { Ask, answer, describeChange, useAsks } from "./asks";
 import "./asks.css";
-import { KIND, Obstacle, blockedOf, findObstacles, mergeCells } from "./roofObstacles";
+import { KIND, Obstacle, blockedOf, findObstacles } from "./roofObstacles";
 import { Options } from "./Options";
 import { AgentPanel } from "./Agent";
 import type { RoofNumbers } from "./share";
@@ -68,20 +68,21 @@ const useDesign = (r: Request, roof: Spot[]) => {
   const wait = !roof.length && r.buildings.length > 0; // a shared home waits for its roof; without one the answers carry the design
   // The last answer to the same question shows at once (answers.ts); the engine is asked again behind it.
   const key = useMemo(() => (wait ? "" : askKey("design", designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).body)), [r.inputs, r.overrides, r.off, roof, r.existing, r.strict, wait]);
-  const [out, setOut] = useState<{ d: Design; panels: Record<string, number> } | null>(() => (key ? lastAnswer(key) : null));
+  type Out = { d: Design; panels: Record<string, number>; for?: string };
+  const [out, setOut] = useState<Out | null>(() => { const k = key ? lastAnswer<Out>(key) : null; return k ? { ...k, for: key } : null; });
   useEffect(() => {
     if (!key) return;
     const known = lastAnswer<{ d: Design; panels: Record<string, number> }>(key);
-    if (known) setOut(known);
+    if (known) setOut({ ...known, for: key });
     let live = true, t = 0;
     // A failed call (the API restarting, a slow square) is tried again, sooner first, so the desk never stays on "working".
     const WAIT = [known ? 400 : 120, 1500, 4000, 8000, 15000];
-    const go = (k: number) => { t = window.setTimeout(() => design(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).then((x) => { keepAnswer(key, x); if (live) setOut(x); })
+    const go = (k: number) => { t = window.setTimeout(() => design(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).then((x) => { keepAnswer(key, x); if (live) setOut({ ...x, for: key }); })
       .catch(() => { if (live) go(Math.min(k + 1, WAIT.length - 1)); }), WAIT[k]); };
     go(0);
     return () => { live = false; clearTimeout(t); };
   }, [key, prices]);
-  return out;
+  return out && { ...out, fresh: out.for === key }; // fresh: the answer is for the request as it is now, not the one before
 };
 
 // The desk's requests outlive the desk: switching to the homeowner view and back must not lose the planner's work.
@@ -108,7 +109,12 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
   useEffect(() => {
     for (const r of requests) if (!r.shade && !shading.current.has(r.id)) {
       shading.current.add(r.id);
-      withTrees(r.buildings).then(({ buildings, shade }) => { update(r.id, { shaded: buildings, shade }); finished(r.id, "trees", ...chainText.trees(r.buildings.length > 0, shade)); });
+      // The tree map briefly away is asked again, twice, before the request is designed without trees.
+      const go = (k: number): void => { withTrees(r.buildings).then(({ buildings, shade }) => {
+        if (shade.status === "unknown" && r.buildings.length && k < 2) { window.setTimeout(() => go(k + 1), 3000 * (k + 1)); return; }
+        update(r.id, { shaded: buildings, shade }); finished(r.id, "trees", ...chainText.trees(r.buildings.length > 0, shade));
+      }); };
+      go(0);
     }
   }, [requests]);
   // The homeowner follows their request: opened by a planner, then the offer once it is sent.
@@ -156,7 +162,7 @@ const useDraftSteps = (r: Request, roof: Spot[], out: { d: Design } | null) => {
 };
 
 function Line({ r, open }: { r: Request; open: () => void }) {
-  const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, mergeCells(r.taken, blockedOf(r.shaded ?? r.buildings, r.obstacles))), [r.shaded, r.buildings, r.installed, r.priority, r.taken, r.obstacles]); // trees reach the sun after arrival; kept obstacles block cells
+  const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, r.taken, r.obstacles), [r.shaded, r.buildings, r.installed, r.priority, r.taken, r.obstacles]); // trees reach the sun after arrival; no module touches a kept obstacle
   const out = useDesign(r, roof);
   useDraftSteps(r, roof, out);
   // Once the draft is in, the review and the price are asked ahead, so the request opens on them without waiting.
@@ -231,7 +237,8 @@ const SOURCE_LONG: Record<Source, string> = { customer: "from the customer", ass
  *  Customers with only hot-water collectors keep them as collectors. Switching the panels off goes back to what was said. */
 export const withPhotoSolar = (r: Request, obstacles: Obstacle[]): Partial<Request> => {
   const thermalOnly = !!r.inputs.solar_thermal && !r.inputs.has_solar && r.sources.has_solar === "customer";
-  if (r.existing.kwp || (r.existing.m2 && !r.existing.photo) || thermalOnly) return { obstacles };
+  const saidNo = r.sources.has_solar === "customer" && !r.inputs.has_solar && !r.existing.photo; // their word stands; the panels still take no new module
+  if (r.existing.kwp || (r.existing.m2 && !r.existing.photo) || thermalOnly || saidNo) return { obstacles };
   const homes = r.shaded ?? r.buildings;
   const { m2, kwh_per_kwp } = existingArea(homes, blockedOf(homes, obstacles.filter((o) => o.on && o.kind === "solar"), 0));
   const was = r.existing.photo ?? { has_solar: r.inputs.has_solar, source: r.sources.has_solar };
@@ -246,7 +253,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const [tab, setTab] = useState<Tab>("design");
   const home = r.buildings.length > 0;
   const [step, setStep] = useState<"pick" | "review">(home ? "pick" : "review");
-  const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, mergeCells(r.taken, blockedOf(r.shaded ?? r.buildings, r.obstacles))), [r.shaded, r.buildings, r.installed, r.priority, r.taken, r.obstacles]); // trees reach the sun after arrival; kept obstacles block cells
+  const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, r.taken, r.obstacles), [r.shaded, r.buildings, r.installed, r.priority, r.taken, r.obstacles]); // trees reach the sun after arrival; no module touches a kept obstacle
   const [view, setView] = useState<View>({ layer: "photo", moment: null });
   const [face, setFace] = useState<Face | null>(null);
   const [hotObs, setHotObs] = useState<number | null>(null); // the obstacle under the pointer in the list, lit on the model
@@ -270,8 +277,13 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   // Munich's heat plan at the home, asked the same way: by the page, from the city's map server.
   const [heatPlan, setHeatPlan] = useState<HeatPlan | null>(null);
   useEffect(() => { let live = true; setHeatPlan(null); (home ? heatPlanOf(r.buildings) : spot ? heatPlanAt(spot.lat, spot.lon) : null)?.then((p) => live && setHeatPlan(p)); return () => { live = false; }; }, [r.id, spot]);
+  // looking: the photo is being checked, and the offer waits for it; failed: tried three times, the planner is told.
+  const [photo, setPhoto] = useState<"idle" | "looking" | "done" | "off" | "failed">(r.obstacles ? "done" : "idle");
+  // The engine's first draft is taken once the roof is what the desk found by itself: trees on the sun and the photo checked.
+  // Before, it was the draft from before them, and "Changes from the AI draft" showed changes nobody made.
+  const settled = !home || (!!r.shade && photo !== "looking" && photo !== "idle");
   const first = useRef<Design | null>(null);
-  if (out && !first.current) first.current = out.d;
+  if (out?.fresh && settled && !first.current) first.current = out.d;
   const d = out?.d;
   // A change remembers the request as it was, so the card can say what moved and undo it.
   const [change, setChange] = useState<Change | null>(null);
@@ -290,19 +302,23 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   }, [d]);
   useEffect(() => { if (!lit.length) return; const t = setTimeout(() => setLit([]), 2600); return () => clearTimeout(t); }, [lit]);
   const mark = (label: string) => { pending.current = { label, was: { inputs: r.inputs, overrides: r.overrides, sources: r.sources, off: r.off, existing: r.existing, obstacles: r.obstacles } }; };
-  // No marked area for old panels, and the customer did not rule them out: the photo is checked as the request opens, once,
-  // so old panels count, and keep their cells, without a question to the customer. Its other finds land in the obstacle list as a click would.
+  // Every request with a home has its photo checked as it opens, once: chimneys and roof windows take no module, and old
+  // panels count, and keep their cells, without a question to the customer. The finds land in the obstacle list as a click would.
   const roofReady = (r.shaded ?? r.buildings).some((b) => b.sun?.surfaces?.length);
   const found = useRef<(o: Obstacle[]) => void>(() => undefined); // the photo answers after a while: apply it to the request as it is then
   found.current = (obstacles) => { mark(obstacles.some((o) => o.on && o.kind === "solar") ? "Old panels found on the photo" : "Photo checked"); update(r.id, withPhotoSolar(r, obstacles)); };
   useEffect(() => {
-    const saidNo = r.sources.has_solar === "customer" && !r.inputs.has_solar;
-    if (!home || !roofReady || r.obstacles || r.existing.m2 || saidNo) return; // with a size but no area, the photo still finds where they sit
-    let live = true;
-    findObstacles(r.shaded ?? r.buildings).then((x) => {
-      if (live && x.source !== "unavailable" && x.source !== "failed") found.current(x.obstacles);
-    }).catch(() => undefined);
-    return () => { live = false; };
+    if (!home || !roofReady || r.obstacles) return;
+    let live = true, t = 0;
+    setPhoto("looking");
+    const go = (k: number) => findObstacles(r.shaded ?? r.buildings).then((x) => {
+      if (!live) return;
+      if (x.source === "unavailable") return setPhoto("off");
+      if (x.source === "failed") throw new Error();
+      found.current(x.obstacles); setPhoto("done");
+    }).catch(() => { if (!live) return; if (k < 2) t = window.setTimeout(() => go(k + 1), 3000 * (k + 1)); else setPhoto("failed"); });
+    go(0);
+    return () => { live = false; clearTimeout(t); };
   }, [r.id, roofReady]);
   useEffect(() => { if (tab !== "home") { setView({ layer: "photo", moment: null }); setFace(null); } }, [tab]);
 
@@ -346,7 +362,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const tryAsk = (x: Ask) => { setO(x.change as Overrides, `Tried the customer's question: ${describeChange(x.change)}`); if (r.status === "sent") update(r.id, { status: "draft" }); setTab("design"); };
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
-    {home ? <HomeMap buildings={r.shaded ?? r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} blocked={blockedOf(r.shaded ?? r.buildings, r.obstacles)} obstacles={r.obstacles} hotObstacle={hotObs} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
+    {home ? <HomeMap buildings={r.shaded ?? r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} obstacles={r.obstacles} hotObstacle={hotObs} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
       panels={tab === "home" && view.layer === "sun" ? {} : out?.panels} panelW={LEFT} turn={turnTo(roof, out?.panels)} onReady={() => setStep("review")} />
       : <NoHomeStage r={r} />}
     <aside className="panel tall desk">
@@ -363,7 +379,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
         {d && tab === "design" && <><Brief assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
             energy={<Fold title="Energy in a year" summary={`Makes ${d.energy.production_mwh.toFixed(1)} MWh against ${d.energy.total_mwh.toFixed(1)} MWh needed; ${d.energy.self_sufficiency_pct}% from own power`}><Energy d={d} inputs={r.inputs} measured={home} /></Fold>} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /></>}
-        {tab === "home" && <><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, withPhotoSolar(r, obstacles)); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
+        {tab === "home" && <><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} auto={photo} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, withPhotoSolar(r, obstacles)); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "cost" && (pricing ? <PriceBook installer={r.inputs.installer} close={() => setPricing(false)} />
           : <CostTab c={costs} failed={costsFailed} money={moneyOf(r)} setMoney={(money: Money) => update(r.id, { money } as Partial<Request>)} sent={r.status === "sent"}
             use={(change: Record<string, unknown>, label: string) => setO(change as Overrides, label)} prices={() => setPricing(true)} />)}
@@ -379,6 +395,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         <Button size="lg" onClick={back}>Requests</Button>
         {r.status === "sent" ? <Button variant="solid" size="lg" wide disabled>Offer sent</Button>
           : confirm.length ? <Button variant="solid" size="lg" wide disabled={!d} onClick={() => setTab("checks")}>Confirm {confirm.length} {confirm.length === 1 ? "fact" : "facts"} to send</Button>
+          : home && photo === "looking" ? <Button variant="solid" size="lg" wide disabled><span className="spinner" aria-hidden="true" />Checking the roof photo</Button>
           : <Button variant="solid" size="lg" wide disabled={!d} onClick={send}>Send offer</Button>}
       </div>
     </aside>

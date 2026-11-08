@@ -2,6 +2,8 @@
 // The numbers are the engine's; the sentence around them is a template.
 import { useEffect, useMemo, useState } from "react";
 import { Design, Mine, Overrides, design, designBody, roofOf } from "./plan";
+import type { Selected } from "./api";
+import { withTrees } from "./treeShade";
 import type { Costs } from "./money";
 import { Button, Input, Slider } from "./ui";
 import { ask, describeChange, useAsks } from "./asks";
@@ -12,7 +14,23 @@ const eur = (v: number) => `€${v.toLocaleString("en")}`;
 
 export default function Explore({ m, onPanels }: { m: Mine; onPanels?: (p: Record<string, number> | null) => void }) {
   const o = m.offer!, b = o.basis!, allowed = o.allowed ?? [];
-  const roof = useMemo(() => roofOf(m.handoff.buildings, b.installed, b.priority, b.taken), [m.ref]);
+  // The roof on the trees' sun, as the planner designed the offer: without them a tried change starts from other yields.
+  // A home the homeowner kept to themselves never reached the planner: the offer was designed without it, and so is every change.
+  const sentHomes = m.handoff.shared?.home === false ? [] : m.handoff.buildings;
+  const [homes, setHomes] = useState<Selected[] | null>(sentHomes.length ? null : sentHomes);
+  // An offer designed without trees is tried without them; one with them waits for them, tried again if the tree map is away.
+  useEffect(() => {
+    if (!sentHomes.length) return;
+    if (b.trees === false) { setHomes(sentHomes); return; }
+    let live = true, t = 0;
+    const go = (k: number) => withTrees(sentHomes).then((x) => {
+      if (!live) return;
+      if (x.shade.status === "unknown" && k < 3) t = window.setTimeout(() => go(k + 1), 2000 * (k + 1)); else setHomes(x.buildings);
+    }, () => live && setHomes(sentHomes));
+    go(0);
+    return () => { live = false; clearTimeout(t); };
+  }, [m.ref]);
+  const roof = useMemo(() => (homes ? roofOf(homes, b.installed, b.priority, b.taken, b.obstacles) : null), [homes]);
   const [v, setV] = useState<Variant>({});
   const [out, setOut] = useState<{ d: Design; panels: Record<string, number> } | null>(null);
   // The offer carries the planner's price and first year when it was priced: the change is then priced the same way.
@@ -22,14 +40,15 @@ export default function Explore({ m, onPanels }: { m: Mine; onPanels?: (p: Recor
   const [note, setNote] = useState(""), [asking, setAsking] = useState(false);
   const asked = useAsks(m.ref);
   useEffect(() => {
+    if (!roof) return;
     let live = true;
     setBusy(true);
     const o2 = { ...b.overrides, ...v } as Overrides;
     const t = setTimeout(() => Promise.all([design(b.inputs, o2, roof, b.off, b.existing, b.strict),
-      priced && Object.keys(v).length ? fetch("/api/costs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(designBody(b.inputs, o2, roof, b.off, b.existing, b.strict).body) }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null)])
+      priced && Object.keys(v).length ? fetch("/api/costs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...designBody(b.inputs, o2, roof, b.off, b.existing, b.strict).body, ...(b.money ? { money: b.money } : {}) }) }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null)])
       .then(([x, c]) => { if (live) { setOut(x); setMoney(c); setBusy(false); } }).catch(() => live && setBusy(false)), 150);
     return () => { live = false; clearTimeout(t); };
-  }, [v]);
+  }, [v, roof]);
   useEffect(() => { onPanels?.(out?.panels ?? null); }, [out]);
   useEffect(() => () => onPanels?.(null), []);
 

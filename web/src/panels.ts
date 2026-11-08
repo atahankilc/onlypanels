@@ -67,11 +67,25 @@ export function fit(poly: Poly, n: P3): P3[][] {
   return best.sort((a, b) => a[0][1] - b[0][1] || a[0][0] - b[0][0]).map((c) => c.map(back));
 }
 
+/** Two convex outlines seen from above touch (separating axis test). */
+const overlaps = (a: V[], b: V[]) => {
+  for (const ring of [a, b]) for (let i = 0; i < ring.length; i++) {
+    const p = ring[i], q = ring[(i + 1) % ring.length], ax: V = [q[1] - p[1], p[0] - q[0]];
+    const span = (r: V[]) => r.map((v) => v[0] * ax[0] + v[1] * ax[1]);
+    const sa = span(a), sb = span(b);
+    if (Math.max(...sa) <= Math.min(...sb) || Math.max(...sb) <= Math.min(...sa)) return false;
+  }
+  return true;
+};
+
 /** The modules on a surface with those on the homeowner's marked cells first, and how many those are. A module counts as
  *  marked when its middle lies on a marked cell and no point near its corners lies on a cell the homeowner left free. The cell grid
  *  is laid onto the surface through its outline, the same way the map lays its colours: three outline corners fix the plane. */
-export function ordered(poly: Poly, s: SurfaceCells, marked?: number[], taken?: number[]): { rects: P3[][]; inside: number } {
+export function ordered(poly: Poly, s: SurfaceCells, marked?: number[], taken?: number[], avoid?: V[][]): { rects: P3[][]; inside: number } {
   let rects = fit(poly, s.n);
+  // Obstacles from the photo are tested against the module itself, seen from above: a roof window smaller than a cell
+  // still takes every module it touches.
+  if (avoid?.length) rects = rects.filter((r) => !avoid.some((a) => overlaps(r.map((p) => [p[0], p[1]] as V), a)));
   const total = s.cells.length / 2;
   if (!taken?.length && (!marked || marked.length >= total)) return { rects, inside: rects.length }; // nothing drawn, or all of it marked
   if (!taken?.length && !marked?.length) return { rects, inside: 0 };
