@@ -104,7 +104,7 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
     const car = a.ev === false ? "No" : a.ev ? (a.ev_planned ? `Coming ${a.ev_when === "soon" ? "within a year" : a.ev_when === "later" ? "later" : "soon"}` : "Yes") : no;
     const groups: [string, Stage, [string, string][]][] = [
       ["Your roof", "roof", [["Priority area", `${Math.round(m2)} m²`]]],
-      ["About the roof", "roofinfo", [["Big trees nearby", yes(a.trees)], ["Renewed soon", a.roof_renovation === "unsure" ? "Not sure" : yes(a.roof_renovation === "yes" ? true : a.roof_renovation === "no" ? false : null)]]],
+      ["Roof renewal", "roofinfo", [["Renewed soon", a.roof_renovation === "unsure" ? "Not sure" : yes(a.roof_renovation === "yes" ? true : a.roof_renovation === "no" ? false : null)]]],
       ["Solar already there", "solar", a.has_solar ? [["Solar", "Yes"], ["Marked area", `${Math.round(panelM2)} m²`], ["Size", n(a.solar_kwp, "kWp")], ["Year", a.solar_year ? String(a.solar_year) : no]] : [["Solar", yes(a.has_solar)]]],
       ["Home battery", "battery", [["Battery", yes(a.has_storage)], ...(a.has_storage ? [["Size", n(a.battery_kwh, "kWh")] as [string, string]] : [])]],
       ["Electricity", "use", [["Yearly use", use], ["Price", a.price_known ? `${a.price_ct_kwh} ct per kWh` : no]]],
@@ -144,16 +144,8 @@ export default function Review({ stage, setStage, answers: a, setAnswers, buildi
   const fossil = FOSSIL.includes(a.heating ?? "");
   return (
     <aside className="panel tall quiz" key={stage} ref={panel} onKeyDown={enter}>
-      {stage === "roofinfo" && page("Anything we should know about the roof?", "The 3D model cannot see these.", <div className="more flat">
-        <h2>Big trees near the roof?</h2>
-        <div className="pair">
-          <Button size="lg" wide aria-pressed={a.trees === true} onClick={() => setAnswers({ ...a, trees: true })}>Yes</Button>
-          <Button size="lg" wide aria-pressed={a.trees === false} onClick={() => setAnswers({ ...a, trees: false })}>No</Button>
-        </div>
-        <h2>Will the roof be renewed in the next few years?</h2>
-        <div className="answers grid3">
-          {([["yes", "Yes"], ["no", "No"], ["unsure", "Not sure"]] as const).map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.roof_renovation === v} onClick={() => setAnswers({ ...a, roof_renovation: v })}>{label}</Button>)}
-        </div>
+      {stage === "roofinfo" && page("Will the roof be renewed in the next few years?", "Panels go on after a new roof, not before.", <div className="answers grid3">
+        {([["yes", "Yes"], ["no", "No"], ["unsure", "Not sure"]] as const).map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.roof_renovation === v} onClick={() => setAnswers({ ...a, roof_renovation: v })}>{label}</Button>)}
       </div>)}
 
       {stage === "solar" && page("Is there solar here already?", null, yesNo("has_solar", { solar_kwp: null, solar_year: null }), a.has_solar && <>
