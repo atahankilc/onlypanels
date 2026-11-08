@@ -107,6 +107,21 @@ What this shows:
 
 Sensible reaction checks on 192 unseen homes: adding a car never shrinks PV (100%) and grows it in 97.4%; never shrinks the battery (98.4%); a heat pump never shrinks PV (100%); more PV never shrinks the battery (100%); area limits hold (100%).
 
+## Test split: final numbers
+
+Scored once on 2026-11-08 with `uv run python scripts/final_test.py`: every method trained on all 1,041 dev projects, scored on the 276 held-out test projects (204 at `2a8ba8e2`, 72 at `23c108b7`). Last option unless noted.
+
+| | Engine | Engine `2a8ba8e2` | Engine `23c108b7` | Best simple model | Median design | Rule of thumb |
+|---|---|---|---|---|---|---|
+| kWp mean error | 2.65 | 2.58 | 2.84 | 2.60 (coupled) | 3.06 | 4.02 |
+| kWp within 20% | 49% | 50% | 47% | 49% (coupled) | 44% | 31% |
+| Battery mean error, kWh | 2.72 | 2.82 | 2.38 | 2.42 (planner fixes PV) | 3.03 | 3.56 |
+| Battery size exact, closest option | 38% | 37% | 44% | 43% (installer mode) | 34% | 24% |
+| Whole set right (battery, wallbox, heat pump) | 64% | 68% | 53% | 63% (median) | 63% | 63% |
+| Wallbox right | 77% | 76% | 79% | 77% (median) | 77% | 77% |
+
+Test matches dev (engine kWp mean error 2.63, within 20% 49% on dev), so the dev work did not overfit. The engine clearly beats the median and the rule of thumb on size, ties the plain learned models on solar, and is a little behind the best single method on battery. Heat pumps: 6 in the test split; every method finds 4 of them (the heat pump is a rule, D10), too few to compare.
+
 ## "No battery" decisions
 
 Forcing more "no battery" answers does not work: at 40% recall, only 23% of those answers are right (dev cross-validation). The inputs do not separate these homes well. Instead the engine keeps the battery by default, removes it when the home already has one, and flags an open decision below 80% confidence. On 192 unseen homes the flag covers 7.3%; 35.7% of flagged homes had no battery, against 8.4% of the others.
