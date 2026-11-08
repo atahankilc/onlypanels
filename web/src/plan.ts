@@ -5,6 +5,7 @@ import { P2, P3, toLocal } from "./geometry";
 import type { RoofNumbers, Shared } from "./share";
 import { ordered } from "./panels";
 import type { Obstacle } from "./roofObstacles";
+import { TYPICAL_KM } from "./questions";
 
 export type Inputs = { installer: string; demand_kwh: number | null; price_ct_kwh: number; heating: string | null; heat_kwh: number | null; hp_kwh?: number | null; has_solar: boolean; has_storage: boolean; ev: boolean; ev_km: number; ev_kwh_month?: number | null; ev_charge_home?: string | null; ev_day?: boolean | null; has_wallbox?: boolean | null;
   demand_source?: string | null; monthly_eur?: number | null; big_users?: string[]; living_m2?: number | null; living_from_model?: boolean; area_built?: string | null; area_built_share?: number | null; cert_kwh_m2?: number | null; built?: string | null; trees?: boolean | null; roof_renovation?: string | null; goal?: string | null;
@@ -58,7 +59,6 @@ export type Existing = { kwp: number | null; year: number | null; battery_kwh: n
 export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string; seed?: { opened?: boolean; offer?: Offer | null };
   shared?: Shared; roof?: RoofNumbers | null }; // shared: what the homeowner chose to send (share.ts); roof: a few roof numbers instead of the home // seed: demo requests that arrive already opened or offered
 
-const TYPICAL_KM = 11300;
 const FOSSIL_HEAT = ["Gas", "Oil", "OtherNonRenewable"]; // heating with a boiler whose age the customer may give
 /** The marked area with panels and the sun it gets: measured yield after shade, weighted by area. */
 const existingArea = (buildings: Selected[], c: Choice) => {

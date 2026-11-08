@@ -378,3 +378,28 @@ html[data-vt="out"]::view-transition-new(root) { z-index: 1; animation-name: vt-
 @keyframes vt-close { from { clip-path: circle(var(--vt-r) at var(--vt-x) var(--vt-y)); } to { clip-path: circle(0 at var(--vt-x) var(--vt-y)); } }
 @keyframes vt-recede { to { scale: 0.9; opacity: 0.25; filter: blur(6px); } }
 @keyframes vt-return { from { scale: 0.9; opacity: 0.25; filter: blur(6px); } }
+/* Under each question: what we know, what stands in for an answer left open, what the installer does later. One dot colour each. */
+.is-known { --dot: var(--hud-live); } .is-assumed { --dot: var(--hud-warn); } .is-later { --dot: var(--hud-route); } .is-found { --dot: var(--hud-live); }
+.known { display: grid; gap: 12px; margin-top: 22px; padding: 14px 14px 12px; border: 1px solid var(--hud-line); border-radius: 14px; background: rgba(255, 255, 255, 0.03); animation: rise 0.35s var(--ease); }
+.known .known-group + .known-group { padding-top: 12px; border-top: 1px solid var(--hud-line); }
+.known .known-group h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 7px; font: 500 10.5px/1.2 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--hud-ink-2); }
+.known .known-group h3::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dot); }
+.known ul { list-style: none; display: grid; gap: 6px; margin: 0; padding: 0; }
+.known li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px; line-height: 1.45; color: var(--hud-ink-2); }
+.known li b { color: var(--hud-ink); font-weight: 600; }
+.known li em { flex: none; padding: 1px 6px; border: 1px solid var(--hud-line); border-radius: 999px; font: 500 10px/1.5 var(--font-mono); font-style: normal; letter-spacing: 0.02em; color: var(--hud-ink-3); white-space: nowrap; }
+.photo-ask .known { margin-top: 14px; }
+/* Said once, on the first page. */
+.allopt { margin: 0 0 14px; padding: 10px 12px; border: 1px solid color-mix(in oklab, var(--hud-live) 32%, var(--hud-line)); border-radius: 12px; background: color-mix(in oklab, var(--hud-live) 7%, transparent); font-size: 13.5px; line-height: 1.45; color: var(--hud-ink-2); }
+.allopt b { color: var(--hud-ink); font-weight: 600; }
+/* The overview's three numbers, and what stands in under each part. */
+.tally { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+.tally > div { display: grid; align-content: start; gap: 4px; padding: 10px 12px; border: 1px solid var(--hud-line); border-radius: 12px; }
+.tally b { display: flex; align-items: center; gap: 7px; font: 650 22px/1 var(--font-ui); color: var(--hud-ink); }
+.tally b::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--dot); }
+.tally .is-found b::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--dot); }
+.tally span { font-size: 12px; line-height: 1.3; color: var(--hud-ink-2); }
+.overview .assumed { list-style: none; display: grid; gap: 3px; margin: 8px 0 0; padding: 0; }
+.overview .assumed li { position: relative; padding-left: 14px; font-size: 12.5px; line-height: 1.45; color: var(--hud-ink-3); }
+.overview .assumed li::before { content: ""; position: absolute; left: 1px; top: 0.55em; width: 5px; height: 5px; border-radius: 50%; background: var(--hud-warn); }
+.overview .assumed b { color: var(--hud-ink-2); font-weight: 600; }

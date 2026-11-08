@@ -4,33 +4,11 @@ import { Face } from "./HomeMap";
 import { Handoff, Mine } from "./plan";
 import { Shared, forInstaller } from "./share";
 import SendView from "./SendView";
+import { Ctx, Known, factsFor } from "./Known";
 import { Status, day, stepOf } from "./Requests";
 import { Button, Check, Field, Input } from "./ui";
 
-const BANDS = [["Under 3,000", 2500], ["3,000 – 4,000", 3500], ["4,000 – 5,000", 4500], ["5,000 – 7,000", 6000], ["Over 7,000", 8500]] as const;
-// The last resort when the use is not known at all. Stromspiegel 2025, single-family house, from secondary sources; one person is our own guess. Shown to the planner as assumed.
-const BY_PEOPLE = [["1", 2000], ["2", 2700], ["3", 3500], ["4", 3800], ["5+", 4500]] as const;
-// Past projects hold almost only heat pump, gas and oil (scripts/profile_heating.py); anything else the engine treats as unknown.
-// What the customer can tell us beyond that is asked, never required: a heat pump's own meter, the gas or oil a year.
-// District and electric heating are what the census can name as common here, so they can be picked too. Electric heating can take a heat pump;
-// district heating gets none (the planner is told why).
-const HEATING = [["Heatpump", "Heat pump"], ["Gas", "Gas"], ["Oil", "Oil"], ["District", "District heating"], ["Electric", "Electric heating"], ["OtherRenewable", "Wood or pellets"], ["unknown", "Something else or not sure"]] as const;
-const SOLAR_KIND = [["pv", "Electricity"], ["thermal", "Hot water"], ["both", "Both"]] as const;
-const BOILER_AGE = [["under10", "Under 10 years"], ["10to20", "10 – 20 years"], ["over20", "Over 20 years"]] as const;
-const HEAT_DIST = [["floor", "Underfloor"], ["radiators", "Radiators"], ["both", "Both"]] as const;
-const HOME_DAY = [["most", "Mostly"], ["some", "Sometimes"], ["rarely", "Rarely"]] as const;
-const OWNER = [["sole", "Only me or my family"], ["shared", "Shared with other owners"], ["tenant", "I rent it"]] as const;
-const BIG_USERS = [["pool", "Pool"], ["sauna", "Sauna"], ["ac", "Air conditioning"], ["water", "Electric water heater"]] as const;
-const BUILT = [["before1979", "Before 1979"], ["1979to1990", "1979 – 1990"], ["1991to2000", "1991 – 2000"], ["2001to2010", "2001 – 2010"], ["since2011", "2011 or later"]] as const;
-const GOALS = [["cost", "Low cost", "A smaller system, a lower price"], ["independence", "Independence", "As much of my own power as I can"], ["environment", "The environment", "As much clean power as the roof gives"]] as const;
-const KWH_PER_LITRE_OIL = 10; // heating oil, about 10 kWh of heat per litre
-const FOSSIL = ["Gas", "Oil", "OtherNonRenewable"];
-const REPLACEABLE = [...FOSSIL, "Electric"]; // heating a heat pump can replace
-const number = (v: string) => (v === "" ? null : Number(v));
-
-const FACING = [["south", "South"], ["south-east", "South-east"], ["south-west", "South-west"], ["east", "East"], ["west", "West"], ["north", "North"], ["flat", "Flat roof"], ["unsure", "Not sure"]] as const;
-const SLOPE = [["gentle", "Gentle", "Easy to walk on, under about 30°"], ["steep", "Steep", "A usual pitched roof"], ["unsure", "Not sure", ""]] as const;
-const SIZE = [["small", "Small house", "Terraced or semi-detached"], ["medium", "Detached house", "One family"], ["large", "Large house", "Two families or more, or a big footprint"], ["known", "I know the roof area", ""]] as const;
+import { BANDS, BIG_USERS, BOILER_AGE, BUILT, BY_PEOPLE, FACING, FOSSIL, GOALS, HEAT_DIST, HEATING, HOME_DAY, KWH_PER_LITRE_OIL, OWNER, REPLACEABLE, SIZE, SLOPE, SOLAR_KIND, number } from "./questions";
 export type Stage = "where" | "roofq" | "roof" | "solar" | "battery" | "use" | "big" | "house" | "heat" | "car" | "charge" | "goal" | "send" | "share" | "sent";
 /** One topic a page. A follow-up opens on the same page, under the answer that needs it, so the count never changes. */
 // Every household sees the same pages, so the count never moves. A battery without solar is rare, but one tap answers it.
@@ -51,6 +29,11 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   const loading = buildings.some((b) => b.sun === undefined), failed = buildings.some((b) => b.sun === null);
 
   const mapped = buildings.length > 0, pages = pagesFor(mapped);
+  const ctx: Ctx = { mapped, roofs: all.filter((s) => s.kind === "roof"), m2, drawn: changed, panelM2, modelM2: modelM2(buildings) };
+  /** What this page knows, what stands in for an answer left open, and what the installer does with it later. */
+  const known = (s: Stage = stage) => <Known facts={factsFor(s, a, ctx)} />;
+  /** Said once, on the first page: no question has to be answered. */
+  const allOptional = <p className="allopt"><b>Every question is optional.</b> Each answer you give makes your offer more accurate.</p>;
   const at_ = Math.max(0, pages.indexOf(stage));
   // The electricity page shows one way of answering at a time: the number, a range, and as a last resort the household size.
   const [way, setWay] = useState<"exact" | "range" | "people" | "payment">(a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source === "people" || a.use_source === "unknown" ? "people" : a.use_source === "payment" ? "payment" : "exact");
@@ -88,20 +71,23 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   /** A page: the question, its answers, and what an answer opened. Next shows once something is open. */
   const page = (title: string, line: string | null, body: React.ReactNode, more: React.ReactNode = null) => <>
     <p className="count">Question {at_ + 1} of {pages.length - 1}</p>
+    {at_ === 0 && allOptional}
     <h1>{title}</h1>
     {line && <p className="muted">{line}</p>}
     {body}
     {more && <div className="more">{more}</div>}
+    {known()}
     <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={next}>{nextLabel}</Button></div>
   </>;
-  /** A field that helps but can be left empty: it says so in its label. */
-  const optional = (label: string) => <>{label}<span className="opt">Optional</span></>;
+  /** Every field may be left empty: the first page says so once, so no field is marked on its own. */
+  const optional = (label: string) => <>{label}</>;
   const numberField = (label: React.ReactNode, value: number | null, set: (v: number | null) => void, placeholder?: string) =>
     <Field label={label}><Input type="number" min={0} placeholder={placeholder} value={value ?? ""} onChange={(e) => set(number(e.target.value))} /></Field>;
 
   if (stage === "roof") return (
     <aside className="panel tall quiz" key="roof" ref={panel}>
       <p className="count">Question 1 of {PAGES.length - 1}</p>
+      {allOptional}
       <h1>Where would you like panels?</h1>
       <p className="muted">You do not have to change anything here. We find the best layout for your home either way. If some parts matter to you, mark them and we use them first.</p>
       {loading && <p className="muted">Loading your roof…</p>}
@@ -112,6 +98,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
         <p className="small muted">To change it, pick a tool on the map. <b>Whole surface</b>: drag across surfaces. <b>Draw</b>: click around a part and close the shape. A shape over marked parts takes them out, over free parts or a wall adds them.</p>
         {changed && <button type="button" className="textlink" onClick={reset}>Start over</button>}
       </>}
+      {!loading && known()}
       <div className="stick"><Button size="lg" onClick={back}>Back</Button><Button variant="solid" size="lg" wide disabled={loading} onClick={next}>{nextLabel}</Button></div>
       <p className="source small muted">3D model: Bayerische Vermessungsverwaltung.</p>
     </aside>
@@ -131,7 +118,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
       ...(mapped ? [["Your roof", "roof", [["Priority area", `${Math.round(m2)} m²`]]] as [string, Stage, [string, string][]]]
         : [["Your home", "where", [["Address", a.address || no]]], ["Your roof", "roofq", [["Larger side", label(FACING, a.roof_facing)], ...(a.roof_facing === "flat" ? [] : [["Slope", label(SLOPE, a.roof_slope)]]),
           ["Size", a.roof_size === "known" ? n(a.roof_m2, "m²") : label(SIZE, a.roof_size)]]]] as [string, Stage, [string, string][]][]),
-      ["Solar already there", "solar", a.has_solar ? [["Solar", "Yes"], ["Makes", label(SOLAR_KIND, a.solar_kind)], ["Marked area", `${Math.round(panelM2)} m²`], ...(a.solar_kind === "thermal" ? [] : [["Size", n(a.solar_kwp, "kWp")], ["Year", a.solar_year ? String(a.solar_year) : no]] as [string, string][])] : [["Solar", yes(a.has_solar)]]],
+      ["Solar already there", "solar", a.has_solar ? [["Solar", "Yes"], ["Makes", label(SOLAR_KIND, a.solar_kind)], ...(mapped ? [["Marked area", `${Math.round(panelM2)} m²`]] as [string, string][] : []), ...(a.solar_kind === "thermal" ? [] : [["Size", n(a.solar_kwp, "kWp")], ["Year", a.solar_year ? String(a.solar_year) : no]] as [string, string][])] : [["Solar", yes(a.has_solar)]]],
       ["Home battery", "battery", [["Battery", yes(a.has_storage)], ...(a.has_storage ? [["Size", n(a.battery_kwh, "kWh")] as [string, string]] : [])]],
       ["Electricity", "use", [["Yearly use", use], ["Price", a.price_known ? `${a.price_ct_kwh} ct per kWh` : no], ["Home in the day", label(HOME_DAY, a.home_day)]]],
       ["Big electric users", "big", [["Has", a.big_users.length ? a.big_users.map((v) => label(BIG_USERS, v)).join(", ") : "None"]]],
@@ -149,6 +136,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
       {groups.map(([title, to, rows]) => <section key={to}>
         <header><h2>{title}</h2>{editable && <button type="button" className="textlink" onClick={() => { setFromOverview(true); go(to); }}>Change</button>}</header>
         <dl>{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={v === no ? "none" : undefined}>{v}</dd></div>)}</dl>
+        {editable && to !== "send" && (() => { const open = factsFor(to, a, ctx).assumed; return open.length > 0 && <ul className="assumed">{open.map((l, i) => <li key={i}>{l.t}</li>)}</ul>; })()}
       </section>)}
     </div> };
   };
@@ -157,10 +145,22 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
     <aside className="panel tall quiz" key="send" ref={panel}>
       <p className="count">Overview</p>
       <h1>Is everything right?</h1>
-      <p className="muted">An installer plans your system from this and sends you an offer. "Not given" is fine: they will ask you.</p>
+      <p className="muted">An installer plans your system from this and sends you an offer. Anything left open is fine: what we assume for it is under each part, and they will ask you.</p>
+      {(() => {
+        // The whole request in three numbers: what the homeowner said, what maps, the census and our arithmetic added, and what stands in.
+        const all = flow.filter((x) => x !== "send").map((x) => factsFor(x, a, ctx));
+        const said = all.reduce((n, f) => n + f.known.filter((l) => l.from === "You" || l.from === "Your bill").length, 0);
+        const found = all.reduce((n, f) => n + f.known.filter((l) => l.from && l.from !== "You" && l.from !== "Your bill").length, 0);
+        const open = all.reduce((n, f) => n + f.assumed.length, 0);
+        return <div className="tally" role="group" aria-label="Your request so far">
+          <div className="is-known"><b>{said}</b><span>from you</span></div>
+          <div className="is-found"><b>{found}</b><span>found or worked out</span></div>
+          <div className="is-assumed"><b>{open}</b><span>assumed for now</span></div>
+        </div>;
+      })()}
       {summary(true).view}
       <section className="photo-ask">
-        <h2>A photo of your meter cabinet<span className="opt">Optional</span></h2>
+        <h2>A photo of your meter cabinet</h2>
         <p className="small muted">Open the cabinet door and take one photo of the whole cabinet. It shows the installer whether the cabinet needs work, often without a visit.</p>
         {a.meter_photo && <img className="photo-preview" src={a.meter_photo} alt="Your meter cabinet" />}
         <input ref={photoInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { takePhoto(e.target.files?.[0]); e.target.value = ""; }} />
@@ -169,6 +169,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
           {a.meter_photo && <Button size="lg" wide onClick={() => setAnswers({ ...a, meter_photo: null })}>Remove</Button>}
         </div>
         {photoFailed && <p className="error small">That file could not be read as a photo.</p>}
+        {known("send")}
       </section>
       <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={() => go("share")}>Choose what to send</Button></div>
     </aside>
@@ -233,10 +234,10 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
         <div className="answers">
           {SOLAR_KIND.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.solar_kind === v} onClick={() => setAnswers({ ...a, solar_kind: v, ...(v === "thermal" ? { solar_kwp: null, solar_year: null } : {}) })}>{label}</Button>)}
         </div>
-        <h2>Where are the panels?<span className="opt">Optional</span></h2>
+        {mapped && <><h2>Where are the panels?</h2>
         <p className="small muted">Mark them on the map with <b>Whole surface</b> or <b>Draw</b>. We leave that area out of your new system.</p>
-        <p className="marked"><b>{Math.round(panelM2)} m²</b> with panels</p>
-        {a.solar_kind !== "thermal" && <><p className="small muted">Size and year help, but you can skip them: we then work from the area you marked.</p>
+        <p className="marked"><b>{Math.round(panelM2)} m²</b> with panels</p></>}
+        {a.solar_kind !== "thermal" && <><p className="small muted">{mapped ? "Size and year help, but you can skip them: we then work from the area you marked." : "Size and year help, but you can skip them."}</p>
         <div className="pair">
           <Field label={optional("Size (kWp)")}><Input type="number" min={0} step={0.1} value={a.solar_kwp ?? ""} onChange={(e) => setAnswers({ ...a, solar_kwp: number(e.target.value) })} /></Field>
           <Field label={optional("Year")}><Input type="number" min={1990} max={2026} value={a.solar_year ?? ""} onChange={(e) => setAnswers({ ...a, solar_year: number(e.target.value) })} /></Field>
@@ -303,12 +304,13 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
           </div>
         </>}
         <div className="more">
-          <h2>Is someone home during the day on weekdays?<span className="opt">Optional</span></h2>
+          <h2>Is someone home during the day on weekdays?</h2>
           <p className="small muted">Power used while the sun shines comes straight from the roof.</p>
           <div className="answers">
             {HOME_DAY.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.home_day === v} onClick={() => setAnswers({ ...a, home_day: a.home_day === v ? null : v })}>{label}</Button>)}
           </div>
         </div>
+        {known()}
         <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={next}>{nextLabel}</Button></div>
       </>}
 
@@ -324,7 +326,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
         {a.area?.built && <p className="small muted">"Common here": {Math.round((a.area.built_share ?? 0) * 100)}% of homes nearby, Census 2022.</p>}
         {numberField(optional("Living area (m²)"), a.living_m2, (living_m2) => setAnswers({ ...a, living_m2 }), modelM2(buildings) ? `About ${modelM2(buildings)} from the 3D model` : undefined)}
         {numberField(optional("Energy certificate (kWh per m² a year)"), a.cert_kwh_m2, (cert_kwh_m2) => setAnswers({ ...a, cert_kwh_m2 }), "If you have one")}
-        <h2>Who owns the home?<span className="opt">Optional</span></h2>
+        <h2>Who owns the home?</h2>
         <div className="answers">
           {OWNER.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.owner === v} onClick={() => setAnswers({ ...a, owner: a.owner === v ? null : v })}>{label}</Button>)}
         </div>
@@ -357,13 +359,13 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
               <button type="button" className="textlink lone" onClick={() => { setGasWay("eur"); setAnswers({ ...a, heat_kwh: null }); }}>I only know what I pay a year</button>
             </>}
           {FOSSIL.includes(a.heating ?? "") && <>
-            <h2>How old is the boiler?<span className="opt">Optional</span></h2>
+            <h2>How old is the boiler?</h2>
             <p className="small muted">The year is on its type plate. It can change the grants.</p>
             <div className="answers">
               {BOILER_AGE.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.boiler_age === v} onClick={() => setAnswers({ ...a, boiler_age: a.boiler_age === v ? null : v })}>{label}</Button>)}
             </div>
           </>}
-          <h2>How is the heat spread in the rooms?<span className="opt">Optional</span></h2>
+          <h2>How is the heat spread in the rooms?</h2>
           <p className="small muted">A heat pump works best with underfloor heating or large radiators.</p>
           <div className="answers">
             {HEAT_DIST.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.heat_dist === v} onClick={() => setAnswers({ ...a, heat_dist: a.heat_dist === v ? null : v })}>{label}</Button>)}
@@ -406,7 +408,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
         </div>
       </div>)}
 
-      {stage === "where" && page("Where is your home?", "Optional. Your installer needs it for a visit. Nothing looks it up: it stays as text in this browser, and before sending you can still leave it out.",
+      {stage === "where" && page("Where is your home?", "Your installer needs it for a visit. Nothing looks it up: it stays as text in this browser, and before sending you can still leave it out.",
         <div className="answers"><Field label={optional("Address")}><Input autoComplete="street-address" placeholder="Street and number, postcode" value={a.address ?? ""} onChange={(e) => setAnswers({ ...a, address: e.target.value || null })} /></Field></div>)}
       {stage === "roofq" && page("Tell us about your roof", "Rough answers are fine. They stand in for what the map would measure.", <>
         <h2 className="ask">Which way does the larger side face?</h2>
@@ -420,7 +422,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
       {stage === "goal" && page("What matters most to you?", "We size the system with this in mind.", <div className="answers">
         {GOALS.map(([v, label, line]) => <Button key={v} size="lg" wide className="choice" aria-pressed={a.goal === v} onClick={() => setAnswers({ ...a, goal: v })}><b>{label}</b><small>{line}</small></Button>)}
       </div>, <>
-        <h2>Power during an outage?<span className="opt">Optional</span></h2>
+        <h2>Power during an outage?</h2>
         <p className="small muted">Some systems keep the house running when the grid is down.</p>
         <div className="pair">
           <Button size="lg" wide aria-pressed={a.backup === true} onClick={() => setAnswers({ ...a, backup: a.backup === true ? null : true })}>I want that</Button>
