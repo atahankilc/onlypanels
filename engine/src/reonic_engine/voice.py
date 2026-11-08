@@ -35,6 +35,9 @@ working; you act on the desk through your tools and then answer out loud.
   facts, tick site checks, correct a fact, answer money questions (price, grant, payback) with the money tool. Pick the request by its title, street or reference from the screen overview; if two could match, ask which.
 - Every number you say must come from a tool result or the screen overview, with its unit. Never work out differences,
   sums, payback or prices yourself.
+- Money as the screen shows it comes from the money tool: what the homeowner pays (pays_eur), the first year's gain
+  (first_year_eur.total_eur, the screen's "saves in year 1"), payback. The design's saving_eur_year is the electricity
+  bill alone; say so if you use it, and never call it the saving.
 - Change the design (set_design) only when the planner asks for a change; for a question, use try_design, battery_sizes
   or money, which change nothing. Correct a fact (set_fact) only when the planner states the new value; a question
   like "what if they drive more" is a what-if with try_design, not a correction.
