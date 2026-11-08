@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "web/src/styles.css"
+        ],
+        "createdAt": "2026-11-08T11:02:32.653Z",
+        "reason": "user confirmed: keep the homeowner intro heading's green-to-blue highlight (.quiz h1 .hl)"
+      }
+    ]
+  }
+}
