@@ -7,7 +7,7 @@ import { fit, ordered, take } from "./panels";
 import { TILT_PER_PX, TURN_PER_PX, leash } from "./camera";
 import { P2, P3, centre, inside, normal, toLngLat, toLocal } from "./geometry";
 import { Info, Locate, Minus, Needle, Plus } from "./icons";
-import { BUILDINGS_3D_FILTER, mapStyle } from "./mapStyle";
+import { BUILDINGS_3D_FILTER, BUILDINGS_FROM_ZOOM, mapStyle } from "./mapStyle";
 import SunLight from "./SunLight";
 import { MUNICH, REGION_EDGE, REGION_OUTSIDE, VIEW_LIMIT, inRegion } from "./region";
 import { Button, IconButton } from "./ui";
@@ -18,8 +18,12 @@ const BLOCKS = "buildings-3d"; // the base map's blocks: a rough picture from af
 const homesOf = (square: string) => `homes-${square}`; // measured buildings, one feature each: what people select. A source and layer per square
 const squareOf = (source: string) => source.slice(homesOf("").length);
 const PENDING = "pending-blocks"; // the base map's blocks, slowly brightening and dimming, where measured buildings are still on their way
-const HOMES_FROM_ZOOM = 15;
-const LOAD_REACH_DEG = 0.018; // about 1.5 km around the view's centre
+const HOMES_FROM_ZOOM = 15; // a click picks a home from here; further out it flies in
+// Measured buildings, with the photo on their roofs, load and draw from the zoom the map's own blocks start at, and rise out of the
+// ground over the same stretch: the dark blocks are only a stand-in where no square has arrived yet.
+const SQUARES_FROM_ZOOM = BUILDINGS_FROM_ZOOM, RISE_ZOOMS = 0.6;
+const rise = (zoom: number) => Math.min(1, Math.max(0, (zoom - SQUARES_FROM_ZOOM) / RISE_ZOOMS));
+const LOAD_REACH_DEG = 0.018, LOAD_REACH_MAX_DEG = 0.03; // about 1.5 km around the view's centre, more as far as the view reaches when zoomed out
 const MAX_LOADS = 3; // at once, nearest first: a quick trip across town must not queue behind places already left
 const KEEP_SQUARES = 16; // the farthest beyond this leave the map, so a long session stays as light as a short one
 const MOVE_CHECK_MS = 300, PULSE_MS = 1100;
@@ -780,8 +784,14 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     const shaper = new Worker(new URL("./solids.worker.ts", import.meta.url), { type: "module" });
     let pulse = 0;
     m.on("load", () => {
+      // The blocks get a source of their own: their filter changes as squares arrive, and that must not make the map read roads and labels again.
+      {
+        const layers = m.getStyle().layers, k = layers.findIndex((l) => l.id === BLOCKS), spec = layers[k] as maplibregl.FillExtrusionLayerSpecification;
+        m.addSource(`${BLOCKS}-own`, m.getStyle().sources[spec.source]);
+        m.removeLayer(BLOCKS);
+        m.addLayer({ ...spec, source: `${BLOCKS}-own` }, layers[k + 1]?.id);
+      }
       const paint = (name: "fill-extrusion-color" | "fill-extrusion-opacity") => m.getPaintProperty(BLOCKS, name);
-      m.setLayerZoomRange(BLOCKS, 14, HOMES_FROM_ZOOM);
       solid.current.opacity = paint("fill-extrusion-opacity") as number;
       m.addLayer({
         id: "home-3d", type: "custom", renderingMode: "3d",
@@ -793,19 +803,22 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
           renderer.resetState();
           renderer.setViewport(0, 0, m.getCanvas().width, m.getCanvas().height);
           // Each around its own origin, near what it draws: the GPU's numbers run out of digits far from it.
-          const draw = (what: THREE.Scene, at: P2 | null) => {
+          const draw = (what: THREE.Scene, at: P2 | null, up = 1) => {
             what.userData.seen = null;
             if (!at) return;
             const c = maplibregl.MercatorCoordinate.fromLngLat(at, 0), s = c.meterInMercatorCoordinateUnits();
-            const local = new THREE.Matrix4().makeTranslation(c.x, c.y, c.z).scale(new THREE.Vector3(s, -s, s));
+            const local = new THREE.Matrix4().makeTranslation(c.x, c.y, c.z).scale(new THREE.Vector3(s, -s, s * up));
             camera.projectionMatrix = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix).multiply(local);
             what.userData.seen = camera.projectionMatrix.clone();
             renderer.render(what, camera);
           };
           // Real roofs stay as the city around a chosen site, fading into the ground with its rings; the chosen buildings give way
           // to their measured models halfway through. While picking, real roofs show wherever the blocks would.
-          const siteT = shown.current, city = solid.current.visibility === "visible" || siteT > 0;
-          if (city) around.current.forEach(({ name }) => {
+          const siteT = shown.current, city = solid.current.visibility === "visible" || siteT > 0, up = rise(m.getZoom());
+          // While picking, every square still kept is drawn, not only those the view asked for last: coming back, or zooming
+          // out and in again, the roofs are there at once instead of waiting for the next check.
+          const names = siteT > 0 || live.current.step === "review" ? around.current.map((s) => s.name) : [...squares.current.keys()];
+          if (city && (up > 0 || siteT > 0)) names.forEach((name) => {
             const square = squares.current.get(name);
             if (!square?.done || (!square.real && (siteT > 0 || edgeFade(m.getZoom()) === 0))) return;
             if (square.real) {
@@ -815,7 +828,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
               material.uniforms.siteT.value = siteRef.current ? siteT : 0;
               material.uniforms.hideOn.value = siteT > 0.5 ? 1 : 0;
             }
-            draw(square.scene, square.at);
+            draw(square.scene, square.at, siteT > 0 ? 1 : up);
           });
           if (shown.current > 0) models.current.forEach(({ scene, at }) => draw(scene, at));
         },
@@ -846,13 +859,25 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       const block = m.getStyle().layers.find((l) => l.id === BLOCKS) as maplibregl.FillExtrusionLayerSpecification;
       m.addSource(PENDING, m.getStyle().sources[block.source]);
       m.addLayer({
-        ...block, id: PENDING, source: PENDING, minzoom: HOMES_FROM_ZOOM, maxzoom: 24, layout: { visibility: "none" },
+        ...block, id: PENDING, source: PENDING, minzoom: SQUARES_FROM_ZOOM, maxzoom: 24, layout: { visibility: "none" },
         paint: { ...block.paint, "fill-extrusion-color": COLORS.pendingDim, "fill-extrusion-color-transition": { duration: PULSE_MS, delay: 0 }, "fill-extrusion-opacity": 0.9 },
       }, BLOCKS);
       const failed = new Set<string>();
-      const missing = () => around.current.filter((s) => !squares.current.get(s.name)?.done && !failed.has(s.name));
-      let blinking = "";
+      const missing = () => around.current.filter((s) => { const q = squares.current.get(s.name); return !q?.done && !q?.real && !failed.has(s.name); });
+      let blinking = "", covered = "";
+      const outlines = new Map<string, P2[]>(); // each square's outline, once the view has asked for it
+      // The map's own blocks step aside wherever a square is on the map or blinking on its way, so nothing is drawn twice.
+      const coverBlocks = () => {
+        around.current.forEach((s) => outlines.set(s.name, s.ring as P2[]));
+        const names = [...new Set([...squares.current.keys(), ...missing().map((s) => s.name)])].filter((n) => outlines.has(n)).sort(), now = names.join();
+        if (now === covered) return;
+        covered = now;
+        m.setFilter(BLOCKS, names.length
+          ? ["all", BUILDINGS_3D_FILTER, [">=", ["distance", { type: "MultiPolygon", coordinates: names.map((n) => [outlines.get(n)!]) }], 1]] as maplibregl.FilterSpecification
+          : BUILDINGS_3D_FILTER);
+      };
       const showMissing = () => {
+        coverBlocks();
         // Around a chosen site the city loads quietly: no blinking blocks, no note, as the map shows only the site.
         if (live.current.step === "review") { setLoading(0); if (blinking) { blinking = ""; m.setLayoutProperty(PENDING, "visibility", "none"); } return; }
         const list = missing(), now = list.map((s) => s.name).sort().join();
@@ -892,15 +917,16 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
           // Tiles stop at z16: finer ones hold the same shapes, in many more pieces.
           m.addSource(homesOf(name), { type: "geojson", data: homesUrl(name), promoteId: "id", maxzoom: 16 });
           m.addLayer({
-            id: homesOf(name), type: "fill-extrusion", source: homesOf(name), minzoom: HOMES_FROM_ZOOM, layout: { visibility: solid.current.visibility },
+            id: homesOf(name), type: "fill-extrusion", source: homesOf(name), minzoom: SQUARES_FROM_ZOOM, layout: { visibility: solid.current.visibility },
             paint: {
               "fill-extrusion-color": blockColour(),
-              "fill-extrusion-height": ["get", "h"],
+              "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], SQUARES_FROM_ZOOM, 0, SQUARES_FROM_ZOOM + RISE_ZOOMS, ["get", "h"]],
               "fill-extrusion-base": 0,
               "fill-extrusion-opacity": solid.current.opacity,
               "fill-extrusion-opacity-transition": { duration: FADE_MS, delay: 0 },
             },
           }, BLOCKS);
+          pumpReal(); // the real roofs load alongside the blocks, not after them
         }).catch(() => { asking.delete(name); failed.add(name); showMissing(); pump(); });
       };
       // The roofs' photo: for each ring, tiles around the view's centre drawn into one image. Tiles the ground already has are on the
@@ -924,7 +950,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       };
       dressAll.current = () => { squares.current.forEach(dress); m.triggerRepaint(); };
       const refreshPhoto = () => {
-        if (m.getZoom() < HOMES_FROM_ZOOM) return;
+        if (m.getZoom() < SQUARES_FROM_ZOOM) return;
         // Picking: around the view's centre. Around a chosen site: around the site, wherever the camera turns.
         const o = live.current.step === "review" ? siteRef.current?.o : null, c = o ? { lng: o[0], lat: o[1] } : m.getCenter(), X = ((c.lng + 180) / 360 - 0.5) * WORLD_M, Y = (0.5 - mercator(c.lng, c.lat)[1]) * WORLD_M;
         ROOF_LEVELS.forEach(({ dz, tiles }, k) => {
@@ -954,7 +980,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       const shaping = new Set<string>(), noReal = new Set<string>();
       const pumpReal = () => {
         const c = m.getCenter();
-        [...squares.current].filter(([name, s]) => s.done && !s.real && !shaping.has(name) && !noReal.has(name) && around.current.some((x) => x.name === name))
+        [...squares.current].filter(([name, s]) => !s.real && !shaping.has(name) && !noReal.has(name) && around.current.some((x) => x.name === name))
           .sort(([, a], [, b]) => Math.hypot(a.at[0] - c.lng, a.at[1] - c.lat) - Math.hypot(b.at[0] - c.lng, b.at[1] - c.lat))
           .slice(0, MAX_DETAIL_LOADS - shaping.size)
           .forEach(([name, s]) => { shaping.add(name); shaper.postMessage({ name, at: s.at }); });
@@ -985,6 +1011,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         dress(square);
         refreshPhoto(); // the map may not have moved since it loaded
         m.setPaintProperty(homesOf(data.name), "fill-extrusion-opacity", 0); // still there to be clicked
+        showMissing();
         m.triggerRepaint();
         pumpReal();
       };
@@ -996,6 +1023,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         const c = m.getCenter(), near = new Set(around.current.map((s) => s.name));
         const spare = [...squares.current].filter(([name, s]) => s.done && !near.has(name)).sort(([, a], [, b]) => Math.hypot(b.at[0] - c.lng, b.at[1] - c.lat) - Math.hypot(a.at[0] - c.lng, a.at[1] - c.lat));
         spare.slice(0, Math.max(0, squares.current.size - KEEP_SQUARES)).forEach(([name]) => drop(name));
+        coverBlocks();
       };
       m.on("sourcedata", (e) => {
         const name = e.sourceId?.startsWith(homesOf("")) ? squareOf(e.sourceId) : "", square = squares.current.get(name);
@@ -1019,8 +1047,8 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
         if (live.current.step === "review") return; // the buildings are chosen: no more of the city is needed
         const ticket = ++asks;
         if (!ready.current) return;
-        if (m.getZoom() < HOMES_FROM_ZOOM || live.current.step !== "pick") { around.current = []; showMissing(); return; }
-        const { lng, lat } = m.getCenter(), r = LOAD_REACH_DEG;
+        if (m.getZoom() < SQUARES_FROM_ZOOM || live.current.step !== "pick") { around.current = []; showMissing(); return; }
+        const { lng, lat } = m.getCenter(), b = m.getBounds(), r = Math.min(LOAD_REACH_MAX_DEG, Math.max(LOAD_REACH_DEG, (b.getEast() - b.getWest()) / 2));
         squaresIn(lng - r, lat - r * 0.7, lng + r, lat + r * 0.7).then((list) => {
           if (ticket !== asks || !ready.current) return;
           around.current = list.filter((s) => s.ring.some(inRegion));
