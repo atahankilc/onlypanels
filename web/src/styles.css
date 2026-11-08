@@ -398,6 +398,17 @@ html[data-vt="out"]::view-transition-new(root) { z-index: 1; animation-name: vt-
 .known li b { color: var(--hud-ink); font-weight: 600; }
 .known li em { flex: none; padding: 1px 6px; border: 1px solid var(--hud-line); border-radius: 999px; font: 500 10px/1.5 var(--font-mono); font-style: normal; letter-spacing: 0.02em; color: var(--hud-ink-3); white-space: nowrap; }
 .photo-ask .known { margin-top: 14px; }
+/* Before the first question: what answers are for, as stops on one vertical line. */
+.quiz h1 .hl { background: linear-gradient(90deg, var(--hud-live), var(--hud-route)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.intro { position: relative; display: grid; gap: 26px; margin: 28px 0 8px; padding: 0; list-style: none; }
+.intro::before { content: ""; position: absolute; left: 19px; top: 20px; bottom: 20px; width: 3px; border-radius: 3px;
+  background: linear-gradient(var(--hud-live), var(--hud-route), #B58CFF, var(--hud-sun)); opacity: 0.55; }
+.intro li { position: relative; display: flex; align-items: center; gap: 16px; }
+.intro i { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--c);
+  background: color-mix(in oklab, var(--c) 16%, #141619); border: 2px solid var(--c); box-shadow: 0 0 18px -4px var(--c); }
+.intro div { display: grid; gap: 2px; }
+.intro b { font-size: 16px; line-height: 1.25; font-weight: 650; color: var(--hud-ink); }
+.intro span { font-size: 13px; line-height: 1.4; color: var(--hud-ink-2); }
 /* Said once, on the first page. */
 .allopt { margin: 0 0 14px; padding: 10px 12px; border: 1px solid color-mix(in oklab, var(--hud-live) 32%, var(--hud-line)); border-radius: 12px; background: color-mix(in oklab, var(--hud-live) 7%, transparent); font-size: 13.5px; line-height: 1.45; color: var(--hud-ink-2); }
 .allopt b { color: var(--hud-ink); font-weight: 600; }

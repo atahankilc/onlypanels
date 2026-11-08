@@ -21,11 +21,11 @@ export async function findObstacles(buildings: Selected[]): Promise<Look> {
 }
 
 /** The roof cells under the obstacles the planner keeps, per surface, a little wider so modules keep clear of them. */
-export function blockedOf(buildings: Selected[], obstacles: Obstacle[] | undefined): Record<string, number[]> {
+export function blockedOf(buildings: Selected[], obstacles: Obstacle[] | undefined, clear = CLEAR_M): Record<string, number[]> {
   const on = (obstacles ?? []).filter((o) => o.on);
   if (!on.length) return {};
   const boxes = on.map((o) => {
-    const lat = o.ring[0][1], dLon = CLEAR_M / (111320 * Math.cos((lat * Math.PI) / 180)), dLat = CLEAR_M / 111320;
+    const lat = o.ring[0][1], dLon = clear / (111320 * Math.cos((lat * Math.PI) / 180)), dLat = clear / 111320;
     return [Math.min(...o.ring.map((p) => p[0])) - dLon, Math.max(...o.ring.map((p) => p[0])) + dLon, Math.min(...o.ring.map((p) => p[1])) - dLat, Math.max(...o.ring.map((p) => p[1])) + dLat];
   });
   const out: Record<string, number[]> = {};

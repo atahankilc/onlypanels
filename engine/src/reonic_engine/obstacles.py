@@ -30,8 +30,9 @@ coordinates of this image (x to the right, y down). Find everything ON those roo
 chimneys, skylights and roof windows, vents and pipes, dormers, antennas or satellite dishes, existing solar thermal
 collectors, roof terraces or railings, ladders or walkways. Ignore trees, shadows, the ground, neighbours' roofs and
 anything outside the outlines. Give each as a tight axis-aligned box in pixels around the object itself, without its
-shadow. Do not report panels that are already solar PV unless asked; report them as kind "solar". If a roof is clear,
-return no boxes. Be precise rather than generous: a false box costs the customer modules."""
+shadow. Report every existing solar panel, PV or hot-water collector, as kind "solar": one box per group of panels
+that lie together, tight around the panels, and say in the note whether they look like PV or hot-water collectors.
+If a roof is clear, return no boxes. Be precise rather than generous: a false box costs the customer modules."""
 
 
 class Box(BaseModel):
@@ -60,7 +61,7 @@ def find(roofs):
     """roofs: rings of [lon, lat] for one home. Returns {"obstacles": [{kind, ring, sure, note}], "source": ...}."""
     if not roofs:
         return {"obstacles": [], "source": "none"}
-    key = hashlib.sha1(json.dumps([[[round(c, 6) for c in p] for p in r] for r in roofs]).encode()).hexdigest()[:16]
+    key = hashlib.sha1(json.dumps([PROMPT, MODEL, [[[round(c, 6) for c in p] for p in r] for r in roofs]]).encode()).hexdigest()[:16]  # a new prompt looks again
     hit = CACHE / f"{key}.json"
     if hit.exists():
         return json.loads(hit.read_text())

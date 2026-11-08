@@ -55,17 +55,18 @@ export const offerOf = (d: Design, r?: Request & { allowed?: string[] }): Offer 
 export type Progress = { opened: boolean; offer: Offer | null };
 export type Mine = { ref: string; label: string; sentAt: number; handoff: Handoff } & Progress;
 /** Solar already on the building: size and year as the customer gave them, else the area they marked and the sun it gets. */
-export type Existing = { kwp: number | null; year: number | null; battery_kwh: number | null; m2?: number | null; kwh_per_kwp?: number | null };
+export type Existing = { kwp: number | null; year: number | null; battery_kwh: number | null; m2?: number | null; kwh_per_kwp?: number | null; photo?: { has_solar: boolean; source?: Source } }; // photo: the area is what the aerial photo shows; holds what the customer said before, to go back to
 export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string; seed?: { opened?: boolean; offer?: Offer | null };
   shared?: Shared; roof?: RoofNumbers | null }; // shared: what the homeowner chose to send (share.ts); roof: a few roof numbers instead of the home // seed: demo requests that arrive already opened or offered
 
 const FOSSIL_HEAT = ["Gas", "Oil", "OtherNonRenewable"];
 const REPLACEABLE_HEAT = [...FOSSIL_HEAT, "Electric"]; // heating the homeowner was asked to swap for a heat pump // heating with a boiler whose age the customer may give
 /** The marked area with panels and the sun it gets: measured yield after shade, weighted by area. */
-const existingArea = (buildings: Selected[], c: Choice) => {
+/** Old panels on these cells: their roof area and what a kWp makes there after shade. */
+export const existingArea = (buildings: Selected[], panels: Record<string, number[]>) => {
   let m2 = 0, kwh = 0;
   for (const b of buildings) for (const s of b.sun?.surfaces ?? []) {
-    const n = c.panels[surfaceKey(b, s)]?.length ?? 0;
+    const n = panels[surfaceKey(b, s)]?.length ?? 0;
     if (!n) continue;
     const area = (s.m2 * n) / Math.max(1, s.year.length), shade = s.kwh_m2 ? Math.max(0, 1 - meanSun(s) / s.kwh_m2) : 0;
     m2 += area; kwh += area * (s.kwh_per_kwp ?? 950) * (1 - shade);
@@ -114,7 +115,7 @@ export function fromHomeowner(h: Handoff): Request {
     overrides: a.wants_hp === false ? { heatpump: false } : a.wants_hp ? { heatpump: true } : {},
     // The homeowner's marked area is a priority, not a limit: no roof is taken out for them, modules fill their cells first.
     priority: drawnOf(buildings, choice), taken: Object.fromEntries(Object.entries(choice.panels).filter(([, v]) => v.length)),
-    off: [], installed: installedKeys(buildings, choice), walls: chosenKeys(buildings, choice).filter((k) => !k.includes("|roof")), existing: thermal ? { kwp: null, year: null, battery_kwh: a.battery_kwh } : { kwp: a.solar_kwp, year: a.solar_year, battery_kwh: a.battery_kwh, ...existingArea(buildings, choice) },
+    off: [], installed: installedKeys(buildings, choice), walls: chosenKeys(buildings, choice).filter((k) => !k.includes("|roof")), existing: thermal ? { kwp: null, year: null, battery_kwh: a.battery_kwh } : { kwp: a.solar_kwp, year: a.solar_year, battery_kwh: a.battery_kwh, ...existingArea(buildings, choice.panels) },
   };
 }
 

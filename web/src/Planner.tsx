@@ -6,7 +6,7 @@ import { Place, searchPlace } from "./places";
 import { Shade, withTrees } from "./treeShade";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
-import { Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, designBody, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
+import { Design, Handoff, Inputs, Overrides, existingArea, Progress, Request, Source, Spot, design, designBody, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
 import { Change, ChangeCard, Trace, touched } from "./Trace";
 import "./planner.css";
 import ProofPage from "./Proof";
@@ -15,7 +15,7 @@ import Obstacles from "./Obstacles";
 import Validate from "./Validate";
 import { Ask, answer, describeChange, useAsks } from "./asks";
 import "./asks.css";
-import { KIND, blockedOf, mergeCells } from "./roofObstacles";
+import { KIND, Obstacle, blockedOf, findObstacles, mergeCells } from "./roofObstacles";
 import { Options } from "./Options";
 import { AgentPanel } from "./Agent";
 import type { RoofNumbers } from "./share";
@@ -191,6 +191,23 @@ const toConfirm = (r: Request, d: Design) => [...relevant(r, d).filter((k) => r.
   ...(d.heatpump.included && r.inputs.heat_kwh == null && !r.inputs.cert_kwh_m2 && !r.inputs.built && r.inputs.area_built && !r.sources.built && !d.review.some((n) => n.code === "model_area_large") ? ["built"] : [])];
 const SOURCE_LONG: Record<Source, string> = { customer: "from the customer", assumed: "assumed", planner: "confirmed by the planner" };
 
+/** Old panels the aerial photo shows stand in for the existing system when the customer gave neither its size nor its
+ *  marked area: their roof cells give the area, and the area the size and yield, as a marked area would (plan.ts).
+ *  Nobody asks the customer: the planner sees the panels in the obstacle list and confirms "Existing solar" before sending.
+ *  Customers with only hot-water collectors keep them as collectors. Switching the panels off goes back to what was said. */
+export const withPhotoSolar = (r: Request, obstacles: Obstacle[]): Partial<Request> => {
+  const thermalOnly = !!r.inputs.solar_thermal && !r.inputs.has_solar && r.sources.has_solar === "customer";
+  if (r.existing.kwp || (r.existing.m2 && !r.existing.photo) || thermalOnly) return { obstacles };
+  const homes = r.shaded ?? r.buildings;
+  const { m2, kwh_per_kwp } = existingArea(homes, blockedOf(homes, obstacles.filter((o) => o.on && o.kind === "solar"), 0));
+  const was = r.existing.photo ?? { has_solar: r.inputs.has_solar, source: r.sources.has_solar };
+  if (m2) return { obstacles, existing: { ...r.existing, m2, kwh_per_kwp, photo: was }, inputs: { ...r.inputs, has_solar: true },
+    sources: { ...r.sources, has_solar: was.has_solar && was.source === "customer" ? "customer" : "assumed" } };
+  if (!r.existing.photo) return { obstacles };
+  return { obstacles, existing: { ...r.existing, m2: null, kwh_per_kwp: null, photo: undefined }, inputs: { ...r.inputs, has_solar: was.has_solar },
+    sources: { ...r.sources, has_solar: was.source ?? "assumed" } };
+};
+
 function Workspace({ r, update, back, scores }: { r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null }) {
   const [tab, setTab] = useState<Tab>("design");
   const home = r.buildings.length > 0;
@@ -236,7 +253,21 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
     prev.current = d;
   }, [d]);
   useEffect(() => { if (!lit.length) return; const t = setTimeout(() => setLit([]), 2600); return () => clearTimeout(t); }, [lit]);
-  const mark = (label: string) => { pending.current = { label, was: { inputs: r.inputs, overrides: r.overrides, sources: r.sources, off: r.off } }; };
+  const mark = (label: string) => { pending.current = { label, was: { inputs: r.inputs, overrides: r.overrides, sources: r.sources, off: r.off, existing: r.existing, obstacles: r.obstacles } }; };
+  // Neither a size nor an area for old panels, and the customer did not rule them out: the photo is checked as the request
+  // opens, once, so old panels count without a question to the customer. Its other finds land in the obstacle list as a click would.
+  const roofReady = (r.shaded ?? r.buildings).some((b) => b.sun?.surfaces?.length);
+  const found = useRef<(o: Obstacle[]) => void>(() => undefined); // the photo answers after a while: apply it to the request as it is then
+  found.current = (obstacles) => { mark(obstacles.some((o) => o.on && o.kind === "solar") ? "Old panels found on the photo" : "Photo checked"); update(r.id, withPhotoSolar(r, obstacles)); };
+  useEffect(() => {
+    const saidNo = r.sources.has_solar === "customer" && !r.inputs.has_solar;
+    if (!home || !roofReady || r.obstacles || r.existing.kwp || r.existing.m2 || saidNo) return;
+    let live = true;
+    findObstacles(r.shaded ?? r.buildings).then((x) => {
+      if (live && x.source !== "unavailable" && x.source !== "failed") found.current(x.obstacles);
+    }).catch(() => undefined);
+    return () => { live = false; };
+  }, [r.id, roofReady]);
   useEffect(() => { if (tab !== "home") { setView({ layer: "photo", moment: null }); setFace(null); } }, [tab]);
 
   const setI = (change: Partial<Inputs>, by: Source = "planner", label?: string) => { mark(label ?? `${Object.keys(change).map((k) => FACT[k] ?? k).join(", ")} changed`); update(r.id, { inputs: { ...r.inputs, ...change }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(change).filter((k) => k in FACT).map((k) => [k, by])) } }); };
@@ -290,7 +321,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
         {asks.map((x) => <AskCard key={x.id} x={x} tried={() => tryAsk(x)} done={() => answer(r.ref ?? "-", x.id)} />)}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
         {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} measured={home} /></>}
-        {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, { obstacles }); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
+        {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && !home && <><h3>Roof</h3><NoHomeRoof r={r} /></>}{d && home && <><h3>Roof</h3><Obstacles buildings={r.shaded ?? r.buildings} obstacles={r.obstacles} hover={setHotObs} set={(obstacles, label) => { mark(label); update(r.id, withPhotoSolar(r, obstacles)); }} /><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "cost" && (pricing ? <PriceBook installer={r.inputs.installer} close={() => setPricing(false)} />
           : <CostTab c={costs} failed={costsFailed} money={moneyOf(r)} setMoney={(money: Money) => update(r.id, { money } as Partial<Request>)} sent={r.status === "sent"}
             use={(change: Record<string, unknown>, label: string) => setO(change as Overrides, label)} prices={() => setPricing(true)} />)}
@@ -556,7 +587,7 @@ function Facts({ r, d, setI }: { r: Request; d?: Design; setI: (c: Partial<Input
     <Tagged label="Driving (km a year)" source={s.ev_km}><Input type="number" step={1000} value={i.ev_km} onChange={(e) => setI({ ev_km: Number(e.target.value) })} /></Tagged>
     <Tagged label="Existing solar" source={s.has_solar}><Segmented wide label="Existing solar" value={i.has_solar ? "yes" : "no"} onChange={(v) => setI({ has_solar: v === "yes" })} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></Tagged>
     <Tagged label="Existing battery" source={s.has_storage}><Segmented wide label="Existing battery" value={i.has_storage ? "yes" : "no"} onChange={(v) => setI({ has_storage: v === "yes" })} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></Tagged>
-    {(i.has_solar || i.has_storage) && (r.existing.kwp || r.existing.m2 || r.existing.year || r.existing.battery_kwh) && <p className="small muted span">On the building: {[r.existing.kwp ? `${r.existing.kwp} kWp` : r.existing.m2 && `${r.existing.m2} m² of panels marked, size estimated from it`, r.existing.year && `from ${r.existing.year}`, r.existing.battery_kwh && `${r.existing.battery_kwh} kWh battery`].filter(Boolean).join(", ")}. The engine sizes the new system for the need the old one leaves.</p>}
+    {(i.has_solar || i.has_storage) && (r.existing.kwp || r.existing.m2 || r.existing.year || r.existing.battery_kwh) && <p className="small muted span">On the building: {[r.existing.kwp ? `${r.existing.kwp} kWp` : r.existing.m2 && `${r.existing.m2} m² of panels ${r.existing.photo ? "seen on the aerial photo" : "marked"}, size estimated from it`, r.existing.year && `from ${r.existing.year}`, r.existing.battery_kwh && `${r.existing.battery_kwh} kWh battery`].filter(Boolean).join(", ")}. The engine sizes the new system for the need the old one leaves.</p>}
     <Tagged label="Catalog"><Select value={i.installer} onChange={(e) => setI({ installer: e.target.value })}>{INSTALLERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Tagged>
     {((i.demand_source && i.demand_source !== "bill") || !!i.big_users?.length) && <p className="small muted span">Yearly use {i.demand_source ? USE_FROM[i.demand_source] ?? i.demand_source : "not given"}{i.monthly_eur ? ` (€${i.monthly_eur} a month)` : ""}.{i.big_users?.length ? ` Big users: ${fmt(r, "big_users", d as Design)}${i.demand_source === "bill" ? ", already in the bill." : ", added on top by the engine."}` : ""}{i.demand_source !== "bill" ? " A bill would be better." : ""}</p>}
     <h3 className="span">More from the homeowner</h3>

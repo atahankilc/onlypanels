@@ -7,9 +7,10 @@ import SendView from "./SendView";
 import { Ctx, Known, factsFor } from "./Known";
 import { Status, day, stepOf } from "./Requests";
 import { Button, Check, Field, Input } from "./ui";
+import { Info, Lock, Skip, Spark } from "./icons";
 
 import { BANDS, BIG_USERS, BOILER_AGE, BUILT, BY_PEOPLE, FACING, FOSSIL, GOALS, HEAT_DIST, HEATING, HOME_DAY, KWH_PER_LITRE_OIL, OWNER, REPLACEABLE, SIZE, SLOPE, SOLAR_KIND, SPAN, TYPICAL_KM, clean, number } from "./questions";
-export type Stage = "where" | "roofq" | "roof" | "solar" | "battery" | "use" | "big" | "house" | "heat" | "car" | "goal" | "send" | "share" | "sent";
+export type Stage = "intro" | "where" | "roofq" | "roof" | "solar" | "battery" | "use" | "big" | "house" | "heat" | "car" | "goal" | "send" | "share" | "sent";
 /** One topic a page. A follow-up opens on the same page, under the answer that needs it, so the count never changes. */
 // Every household sees the same pages, so the count never moves. A battery without solar is rare, but one tap answers it.
 // How the car charges opens on the car page, under the answer that needs it.
@@ -33,8 +34,6 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   const ctx: Ctx = { mapped, roofs: all.filter((s) => s.kind === "roof"), m2, drawn: changed, panelM2, modelM2: modelM2(buildings) };
   /** What this page knows, what stands in for an answer left open, and what the installer does with it later. */
   const known = (s: Stage = stage) => <Known facts={factsFor(s, ca, ctx)} />;
-  /** Said once, on the first page: no question has to be answered. */
-  const allOptional = <p className="allopt"><b>Every question is optional.</b> Each answer you give makes your offer more accurate.</p>;
   const shown = flowFor(a, mapped), at_ = Math.max(0, shown.indexOf(stage)), total = shown.length - 1;
   // The electricity page shows one way of answering at a time: the number, a range, and as a last resort the household size.
   const [way, setWay] = useState<"exact" | "range" | "people" | "payment">(a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source === "people" || a.use_source === "unknown" ? "people" : a.use_source === "payment" ? "payment" : "exact");
@@ -58,7 +57,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   const [fromOverview, setFromOverview] = useState(false);
   const next = () => go(fromOverview ? "send" : flow[here + 1]);
   const nextLabel = fromOverview ? "Go to overview" : "Next";
-  const previous = () => (fromOverview ? go("send") : here ? go(flow[here - 1]) : back());
+  const previous = () => (fromOverview ? go("send") : here ? go(flow[here - 1]) : go("intro"));
   /** An answer only records itself, and opens below what it needs. Every page moves on with its own Next, never by itself. */
   const answer = (change: Partial<Answers>, _done = true) => setAnswers({ ...a, ...change });
 
@@ -79,7 +78,6 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   /** A page: the question, its answers, and what an answer opened. Next shows once something is open. */
   const page = (title: string, line: string | null, body: React.ReactNode, more: React.ReactNode = null) => <>
     <p className="count">Question {at_ + 1} of {total}</p>
-    {at_ === 0 && allOptional}
     <h1>{title}</h1>
     {line && <p className="muted">{line}</p>}
     {body}
@@ -95,10 +93,25 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   const warn = (value: number | null, span: readonly [number, number]) => value != null && (value < span[0] || value > span[1]) &&
     <span className="error small">{value < span[0] ? "That looks too low" : "That looks too high"}, so we leave it out. Between {span[0].toLocaleString("en")} and {span[1].toLocaleString("en")} works.</span>;
 
+  // Before the first question: what answers are for, said once and short. Not counted as a question.
+  if (stage === "intro") return (
+    <aside className="panel tall quiz" key="intro" ref={panel}>
+      <p className="count">Before we start</p>
+      <h1>More answers, <span className="hl">better offer</span></h1>
+      <ul className="intro">
+        {([["var(--hud-live)", Skip, "All optional", "Skip what you don't know"],
+          ["var(--hud-route)", Spark, mapped ? "Your home fills gaps" : "We fill gaps", mapped ? "Roof, sun and shade from the map" : "A fair guess for what's left open"],
+          ["#B58CFF", Info, "Every answer explained", "What it's for, right under it"],
+          ["var(--hud-sun)", Lock, "You decide what's sent", "Nothing leaves before you send"]] as const).map(([c, Icon, title, line]) =>
+          <li key={title} style={{ "--c": c } as React.CSSProperties}><i><Icon size={18} /></i><div><b>{title}</b><span>{line}</span></div></li>)}
+      </ul>
+      <div className="stick"><Button size="lg" onClick={back}>Back</Button><Button variant="solid" size="lg" wide onClick={() => go(pages[0])}>Start</Button></div>
+    </aside>
+  );
+
   if (stage === "roof") return (
     <aside className="panel tall quiz" key="roof" ref={panel}>
       <p className="count">Question 1 of {total}</p>
-      {allOptional}
       <h1>Where would you like panels?</h1>
       <p className="muted">You do not have to change anything here. We find the best layout for your home either way. If some parts matter to you, mark them and we use them first.</p>
       {loading && <p className="muted">Loading your roof…</p>}
@@ -110,7 +123,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
         {changed && <button type="button" className="textlink" onClick={reset}>Start over</button>}
       </>}
       {!loading && known()}
-      <div className="stick"><Button size="lg" onClick={back}>Back</Button><Button variant="solid" size="lg" wide disabled={loading} onClick={next}>{nextLabel}</Button></div>
+      <div className="stick"><Button size="lg" onClick={() => go("intro")}>Back</Button><Button variant="solid" size="lg" wide disabled={loading} onClick={next}>{nextLabel}</Button></div>
       <p className="source small muted">3D model: Bayerische Vermessungsverwaltung.</p>
     </aside>
   );
@@ -200,7 +213,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
     return (
       <aside className="panel tall quiz" key="share" ref={panel}>
         <p className="count">Before sending</p>
-        <h1>What goes to the installer</h1>
+        <h1>What goes to us and your installer</h1>
         <p className="muted">None of your answers has left this browser yet. Switch off what you would rather keep.</p>
         <ul className="share-list">
           <li className="share-fixed"><span className="share-mark" aria-hidden="true">✓</span><div><b>Your answers</b><small>{answered} {answered === 1 ? "answer" : "answers"}, as in the overview. Always sent: the offer is built on them.</small></div></li>

@@ -25,3 +25,6 @@ export const Mark = ({ size = 28 }: { size?: number }) => (
 );
 export const Mic = path("M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3");
 export const Stop = path("M7 7h10v10H7z");
+export const Skip = path("M5 6l7 6-7 6M13 6l7 6-7 6");
+export const Spark = path("M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6");
+export const Lock = path("M6 11h12v10H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3");
