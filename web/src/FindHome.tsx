@@ -8,6 +8,7 @@ import { Close, Search, Undo } from "./icons";
 import Review, { Stage } from "./Review";
 import SunView from "./SunView";
 import StartChoice, { Start } from "./Start";
+import { SHARE_ALL, Shared, forInstaller, roofNumbers } from "./share";
 import { Button, IconButton } from "./ui";
 
 const PHOTO: View = { layer: "photo", moment: null }; // every page but the roof page shows the photo
@@ -21,7 +22,7 @@ function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real 
 
 const newRef = () => `R-${Math.random().toString(36).slice(2, 7).toUpperCase()}`; // a reference the homeowner can quote
 
-export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h: Handoff) => void; requests: Mine[]; loading?: number }) {
+export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h: Handoff, out: Handoff) => void; requests: Mine[]; loading?: number }) {
   const [q, setQ] = useState("");
   const [places, setPlaces] = useState<Place[] | null>(null);
   const [active, setActive] = useState(0);
@@ -42,9 +43,12 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const [fromList, setFromList] = useState(false); // the home on screen is a sent request opened from the list
   const [start, setStart] = useState<Start | null>(null); // map or questions only; nothing shows on the map until chosen
   const [offerPanels, setOfferPanels] = useState<Record<string, number> | null>(null); // the offer's modules, or the variant being tried, on the roof
-  useEffect(() => { if (stage === "sent" && !requests.some((m) => m.ref === ref)) onSend({ buildings, answers, choice, ref }); }, [stage]); // what the homeowner produced goes to the planner
   const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
   const [choice, setChoice] = useState<Choice>(NO_CHOICE);
+  const [shared, setShared] = useState<Shared>(SHARE_ALL); // what the homeowner lets go to the installer
+  const request: Handoff = { buildings, answers, choice, ref, roof: roofNumbers(buildings) };
+  // The homeowner keeps the whole request; the installer gets only what was switched on.
+  useEffect(() => { if (stage === "sent" && !requests.some((m) => m.ref === ref)) onSend(request, forInstaller(request, shared)); }, [stage]);
   const [tool, setTool] = useState<Tool | null>(null); // no tool: the mouse moves the map
   const [undo, setUndo] = useState<Choice[]>([]); // one step per stroke
   const now = useRef(choice);
@@ -148,7 +152,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
     setMove(null);
     if (!clearAfter.current) return;
     clearAfter.current = false;
-    setStage("roof"); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef()); setFromList(false);
+    setStage("roof"); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef()); setFromList(false); setShared(SHARE_ALL);
   };
 
   return (
@@ -197,7 +201,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
       </aside>}
       </Curtain>}
 
-      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && moved()}><Review refId={ref} onPanels={setOfferPanels} progress={requests.find((m) => m.ref === ref)} done={newRequest} stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={backToPick} /></div>}
+      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && moved()}><Review refId={ref} onPanels={setOfferPanels} progress={requests.find((m) => m.ref === ref)} done={newRequest} stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={backToPick} request={request} shared={shared} setShared={setShared} /></div>}
     </main>
   );
 }

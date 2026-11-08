@@ -4,6 +4,7 @@ import { Mark } from "./icons";
 import { DEMO_COUNT, loadDemo } from "./demo";
 import { Handoff, Mine, Progress } from "./plan";
 import Planner from "./Planner";
+import { sunOf } from "./api";
 import { Button, Segmented } from "./ui";
 
 export default function App() {
@@ -11,8 +12,14 @@ export default function App() {
   const [handoffs, setHandoffs] = useState<Handoff[]>([]);
   // The homeowner's requests and how far each is. The planner reports progress; a remounted planner never takes it back.
   const [mine, setMine] = useState<Mine[]>([]);
-  const sent = (h: Handoff, sentAt = Date.now()) => {
-    setHandoffs((l) => [...l.filter((x) => x.ref !== h.ref), h]);
+  // `out` is what reaches the installer (share.ts). Sun never travels: with the home shared, the installer works it out again
+  // from the building, the same way, so marked cells still line up. Until then the request waits.
+  const sent = (h: Handoff, sentAt = Date.now(), out: Handoff = h) => {
+    const arrive = (x: Handoff) => setHandoffs((l) => [...l.filter((y) => y.ref !== x.ref), x]);
+    if (out.buildings.some((b) => b.sun === undefined))
+      Promise.all(out.buildings.map((b) => (b.sun !== undefined ? b : sunOf(b.square, b.id).then((sun) => ({ ...b, sun })).catch(() => ({ ...b, sun: null })))))
+        .then((buildings) => arrive({ ...out, buildings }));
+    else arrive(out);
     if (h.ref) setMine((l) => [{ ref: h.ref!, label: h.buildings[0]?.label ?? "Home", sentAt, handoff: h, opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? null }, ...l.filter((x) => x.ref !== h.ref)].sort((a, b) => b.sentAt - a.sentAt));
   };
   // The demo starts with three requests on real homes, oldest first, as if their homeowners had sent them.
@@ -40,7 +47,7 @@ export default function App() {
           </div>}
         </div>
       </header>
-      <FindHome onSend={sent} requests={mine} loading={loading} />
+      <FindHome onSend={(h, out) => sent(h, Date.now(), out)} requests={mine} loading={loading} />
       {view === "planner" && <Planner handoffs={handoffs} onProgress={progress} loading={loading} />}
     </div>
   );

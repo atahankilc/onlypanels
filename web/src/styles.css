@@ -322,3 +322,18 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 .start-form { font-size: 13.5px; }
 .start-src { margin: 22px 0 0; padding-top: 14px; border-top: 1px solid var(--hud-line); font-size: 11px; line-height: 1.6; color: var(--hud-ink-3); text-align: center; max-width: none; }
 @keyframes fade { from { opacity: 0; } }
+
+/* ---------- before sending: what goes to the installer (Review "share") ---------- */
+.share-list { list-style: none; margin: 18px 0 14px; padding: 0; border-top: 1px solid var(--hud-line); }
+.share-list > li { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--hud-line); max-width: none; }
+.share-list .check { align-items: flex-start; }
+.share-list .check i { margin-top: 2px; }
+.share-list .check > span, .share-fixed > div { display: grid; gap: 3px; }
+.share-list b { font-weight: 600; color: var(--hud-ink); }
+.share-list small { font-size: 12.5px; line-height: 1.45; color: var(--hud-ink-2); }
+.share-fixed { display: flex; gap: 10px; }
+.share-mark { display: grid; place-items: center; flex: none; width: 20px; height: 20px; margin-top: 2px; border-radius: 6px; background: var(--hud-fill-2); color: var(--hud-ink-2); font-size: 12px; }
+.share-sub { padding-left: 30px !important; }
+.share-note { margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; background: var(--hud-fill); color: var(--hud-ink-2); }
+.share-raw summary { padding: 6px 0; cursor: pointer; color: var(--hud-ink-2); font-size: 13px; }
+.share-raw pre { margin: 6px 0 0; padding: 12px; max-height: 320px; overflow: auto; border: 1px solid var(--hud-line); border-radius: 12px; background: rgba(0, 0, 0, 0.3); font: 11.5px/1.5 var(--font-mono); color: var(--hud-ink-2); white-space: pre; }

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Answers, GAS_CT, PRICE_CT, Selected, modelM2, shrinkPhoto } from "./api";
 import { Face } from "./HomeMap";
-import { Mine } from "./plan";
+import { Handoff, Mine } from "./plan";
+import { Shared, forInstaller, readable } from "./share";
 import { Status, day, stepOf } from "./Requests";
-import { Button, Field, Input } from "./ui";
+import { Button, Check, Field, Input } from "./ui";
 
 const BANDS = [["Under 3,000", 2500], ["3,000 – 4,000", 3500], ["4,000 – 5,000", 4500], ["5,000 – 7,000", 6000], ["Over 7,000", 8500]] as const;
 // The last resort when the use is not known at all. Stromspiegel 2025, single-family house, from secondary sources; one person is our own guess. Shown to the planner as assumed.
@@ -26,7 +27,7 @@ const FOSSIL = ["Gas", "Oil", "OtherNonRenewable"];
 const REPLACEABLE = [...FOSSIL, "Electric"]; // heating a heat pump can replace
 const number = (v: string) => (v === "" ? null : Number(v));
 
-export type Stage = "roof" | "solar" | "battery" | "use" | "big" | "house" | "heat" | "car" | "charge" | "goal" | "send" | "sent";
+export type Stage = "roof" | "solar" | "battery" | "use" | "big" | "house" | "heat" | "car" | "charge" | "goal" | "send" | "share" | "sent";
 /** One topic a page. A follow-up opens on the same page, under the answer that needs it, so the count never changes. */
 // Every household sees the same pages, so the count never moves. A battery without solar is rare, but one tap answers it.
 // Charging habits only follow a car, now or soon.
@@ -38,9 +39,10 @@ const flowFor = (a: Answers, mapped = true): Stage[] => pagesFor(mapped).filter(
 type Props = {
   stage: Stage; setStage: (s: Stage) => void; answers: Answers; setAnswers: (a: Answers) => void; refId: string; progress?: Mine; done: () => void; onPanels?: (p: Record<string, number> | null) => void;
   buildings: Selected[]; setFace: (f: Face | null) => void; m2: number; panelM2: number; reset: () => void; back: () => void; changed: boolean; retrySun: () => void;
+  request: Handoff; shared: Shared; setShared: (s: Shared) => void;
 };
 
-export default function Review({ refId, progress, done, onPanels, stage, setStage, answers: a, setAnswers, buildings, setFace, m2, panelM2, reset, back, changed, retrySun }: Props) {
+export default function Review({ refId, progress, done, onPanels, stage, setStage, answers: a, setAnswers, buildings, setFace, m2, panelM2, reset, back, changed, retrySun, request, shared, setShared }: Props) {
   const all = buildings.flatMap((b) => b.sun?.surfaces ?? []);
   const loading = buildings.some((b) => b.sun === undefined), failed = buildings.some((b) => b.sun === null);
 
@@ -136,7 +138,8 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
       ["What matters most", "goal", [["Priority", GOALS.find((x) => x[0] === a.goal)?.[1] ?? no], ["Power in an outage", yes(a.backup, "Wanted", "Not needed")]]],
     ];
     if (!editable) groups.push(["Meter cabinet", "send", [["Photo", a.meter_photo ? "Added" : no]]]);
-    return { missing: groups.flatMap(([, , rows]) => rows).filter(([, v]) => v === no).length, view: <div className="overview">
+    const all = groups.flatMap(([, , rows]) => rows);
+    return { missing: all.filter(([, v]) => v === no).length, answered: all.filter(([, v]) => v !== no).length, view: <div className="overview">
       {groups.map(([title, to, rows]) => <section key={to}>
         <header><h2>{title}</h2>{editable && <button type="button" className="textlink" onClick={() => { setFromOverview(true); go(to); }}>Change</button>}</header>
         <dl>{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={v === no ? "none" : undefined}>{v}</dd></div>)}</dl>
@@ -161,9 +164,35 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
         </div>
         {photoFailed && <p className="error small">That file could not be read as a photo.</p>}
       </section>
-      <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={() => go("sent")}>Send to an installer</Button></div>
+      <div className="stick"><Button size="lg" onClick={previous}>Back</Button><Button variant="solid" size="lg" wide onClick={() => go("share")}>Choose what to send</Button></div>
     </aside>
   );
+
+  // The last page: what leaves this browser, switched by the homeowner, shown as a list and as the very object that goes.
+  if (stage === "share") {
+    const out = forInstaller(request, shared), home = buildings.length > 0, roof = request.roof;
+    const set = (change: Partial<Shared>) => setShared({ ...shared, ...change });
+    const { answered } = summary(true); // the overview's rows that are not "Not given"
+    return (
+      <aside className="panel tall quiz" key="share" ref={panel}>
+        <p className="count">Before sending</p>
+        <h1>What goes to the installer</h1>
+        <p className="muted">Nothing has left this browser yet. Switch off what you would rather keep.</p>
+        <ul className="share-list">
+          <li className="share-fixed"><span className="share-mark" aria-hidden="true">✓</span><div><b>Your answers</b><small>{answered} {answered === 1 ? "answer" : "answers"}, as in the overview. Always sent: the offer is built on them.</small></div></li>
+          {home && <li><Check checked={shared.home} onChange={(v) => set({ home: v })}><b>Your home</b><small>{buildings[0]?.label ?? "Your building"}, with its building shape. Bavaria publishes every building's shape openly, so the shape shows where the home is: the two only go together.</small></Check></li>}
+          {home && shared.home && <li className="share-sub"><Check checked={shared.marked} onChange={(v) => set({ marked: v })}><b>Areas you marked</b><small>{Math.round(m2)} m² of roof you want panels on first.</small></Check></li>}
+          {home && !shared.home && roof && <li className="share-sub"><Check checked={shared.roof} onChange={(v) => set({ roof: v })}><b>Roof numbers only</b><small>{roof.m2} m² of roof · {roof.facing === "flat" ? "flat" : `facing ${roof.facing}, ${roof.tilt}° slope`}. Rounded, so they fit thousands of roofs and cannot lead to your address.</small></Check></li>}
+          {a.meter_photo && <li><Check checked={shared.photo} onChange={(v) => set({ photo: v })}><b>Meter cabinet photo</b><small>The one photo you added.</small></Check></li>}
+        </ul>
+        {home && (shared.home
+          ? <p className="share-note small">With your home, the installer also checks trees that shade the roof, monument rules and the city's heat plan, without asking you.</p>
+          : <p className="share-note small">Without your home, the installer plans from your answers{out.roof ? " and the roof numbers" : ""}, and may need to ask more before an offer.</p>)}
+        <details className="share-raw"><summary>See exactly what is sent</summary><pre>{JSON.stringify(readable(out), null, 2)}</pre></details>
+        <div className="stick"><Button size="lg" onClick={() => go("send")}>Back</Button><Button variant="solid" size="lg" wide onClick={() => go("sent")}>Send to an installer</Button></div>
+      </aside>
+    );
+  }
 
   if (stage === "sent") {
     const { missing, view } = summary(false);
