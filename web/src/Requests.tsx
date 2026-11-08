@@ -4,8 +4,8 @@ import { Button } from "./ui";
 
 const STEPS = ["Sent", "Being planned", "Offer ready"] as const;
 export const stepOf = (m: Mine) => (m.offer ? 2 : m.opened ? 1 : 0);
-/** "Sent" and "Offer ready" are done the moment they happen; "Being planned" is work, so it runs (blue, pulsing) until the offer is in. */
-const stepClass = (i: number, at: number) => (i < at || (i === at && at !== 1) ? "past" : i === at ? "now" : undefined);
+/** "Sent" and "Offer ready" are done the moment they happen; "Being planned" runs (blue, pulsing) from the moment the request is sent until the offer is in. */
+const stepClass = (i: number, at: number) => (i === 0 || at === 2 ? "past" : i === 1 ? "now" : undefined);
 export const day = (t: number) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 /** How long ago something was sent: minutes, hours for two days, then days. The planner's list says it the same way. */
 export const ago = (t: number) => {
