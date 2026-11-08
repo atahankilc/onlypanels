@@ -1,5 +1,5 @@
 // Addresses and the area around a home, worked out in the browser. Nothing here goes through our own server:
-// the typed text goes to Photon (komoot, Germany), a clicked point to Nominatim (OpenStreetMap Foundation),
+// the typed text and a clicked point go to Photon (komoot, Germany, OpenStreetMap data), so every service stays in the EU,
 // and the census is a static file of public aggregates the page reads whole, so nobody learns which cell was looked up.
 import { REGION } from "./region";
 
@@ -7,14 +7,12 @@ export type Place = { label: string; lat: number; lon: number };
 /** The 2022 census around a point: the most common build period and heating, with their shares. Empty where there is no data. */
 export type Area = { built?: string | null; built_share?: number; buildings?: number; heating?: string | null; heating_share?: number; heated?: number; metres?: number };
 
-const PHOTON = "https://photon.komoot.io/api/"; // made for search-as-you-type; Nominatim's rules forbid that
-const NOMINATIM = "https://nominatim.openstreetmap.org";
+const PHOTON = "https://photon.komoot.io/"; // made for search-as-you-type, and in the EU
 const { west, south, east, north } = REGION;
 const inRegion = (p: Place) => p.lon >= west && p.lon <= east && p.lat >= south && p.lat <= north;
 
 const json = <T,>(url: string, ms: number): Promise<T> => {
   const stop = new AbortController(), timer = setTimeout(() => stop.abort(), ms);
-  // The browser sends only our origin as referrer, which Nominatim asks apps to identify themselves with.
   return fetch(url, { signal: stop.signal }).then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<T>; }).finally(() => clearTimeout(timer));
 };
 const joined = (...xs: (string | undefined | null)[]) => xs.filter(Boolean).join(" ");
@@ -25,25 +23,25 @@ const fromPhoton = ({ properties: p, geometry }: PhotonFeature): Place => {
   const label = [p.name, street !== p.name ? street : null, town].filter(Boolean).join(", ");
   return { label, lat: geometry.coordinates[1], lon: geometry.coordinates[0] };
 };
-type NominatimRow = { display_name: string; lat: string; lon: string; address?: Record<string, string | undefined> };
-const fromNominatim = (row: NominatimRow): Place => {
-  const a = row.address ?? {};
-  const label = [joined(a.road, a.house_number), joined(a.postcode, a.city ?? a.town ?? a.village)].filter(Boolean).join(", ");
-  return { label: label || row.display_name, lat: Number(row.lat), lon: Number(row.lon) };
-};
 
-/** Places for a partly typed address, inside the region. Falls back to Nominatim if Photon is down. */
+/** Places for a partly typed address, inside the region. */
 export async function searchPlace(text: string): Promise<Place[]> {
-  const q = text.trim();
-  let places: Place[];
-  try {
-    const p = new URLSearchParams({ q, limit: "6", bbox: [west, south, east, north].join(",") });
-    places = (await json<{ features: PhotonFeature[] }>(`${PHOTON}?${p}`, 6000)).features.map(fromPhoton);
-  } catch {
-    const p = new URLSearchParams({ q, format: "jsonv2", limit: "5", viewbox: `${west},${north},${east},${south}`, bounded: "1", addressdetails: "1" });
-    places = (await json<NominatimRow[]>(`${NOMINATIM}/search?${p}`, 10000)).map(fromNominatim);
-  }
+  const p = new URLSearchParams({ q: text.trim(), limit: "6", bbox: [west, south, east, north].join(",") });
+  const places = (await json<{ features: PhotonFeature[] }>(`${PHOTON}api/?${p}`, 6000)).features.map(fromPhoton);
   return [...new Map(places.filter(inRegion).map((x) => [x.label, x])).values()];
+}
+
+// Photon turns away a burst (503), as when the demo's homes load together: one question at a time, twice more if refused.
+let line: Promise<unknown> = Promise.resolve();
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+function queued<T>(ask: () => Promise<T>): Promise<T> {
+  const run = line.then(async () => {
+    for (let tries = 0; ; tries++) {
+      try { return await ask(); } catch (e) { if (tries >= 2) throw e; await pause(600 * (tries + 1)); }
+    }
+  });
+  line = run.catch(() => undefined);
+  return run;
 }
 
 const reverseSeen = new Map<string, Promise<Place>>();
@@ -51,8 +49,12 @@ const reverseSeen = new Map<string, Promise<Place>>();
 export function placeAt(lat: number, lon: number): Promise<Place> {
   const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
   if (!reverseSeen.has(key)) {
-    const p = new URLSearchParams({ lat: lat.toFixed(5), lon: lon.toFixed(5), format: "jsonv2", zoom: "18", addressdetails: "1" });
-    const asked = json<NominatimRow>(`${NOMINATIM}/reverse?${p}`, 10000).then(fromNominatim);
+    const p = new URLSearchParams({ lat: lat.toFixed(5), lon: lon.toFixed(5), limit: "1" });
+    const asked = queued(() => json<{ features: PhotonFeature[] }>(`${PHOTON}reverse?${p}`, 8000)).then(({ features: [f] }) => {
+      if (!f) throw new Error("no address here");
+      const { street, housenumber, postcode, city } = f.properties, label = [joined(street, housenumber), joined(postcode, city)].filter(Boolean).join(", ");
+      return { ...fromPhoton(f), label: label || fromPhoton(f).label, lat, lon };
+    });
     asked.catch(() => reverseSeen.delete(key));
     reverseSeen.set(key, asked);
   }

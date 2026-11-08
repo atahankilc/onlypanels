@@ -1,40 +1,29 @@
 // The first thing a homeowner sees: how to start, over a quiet map. It asks for no location and sends nothing.
-// The map is the way we recommend, because a picked home answers what most people cannot: roof size, slope, sun and shade.
+// One message carries it: the map fills most answers in, and nobody sees any of it until the homeowner sends.
 import { Button } from "./ui";
 
 export type Start = "map" | "form";
 
-const FROM_HOME: [string, string][] = [
-  ["Roof", "size, slope and direction of every surface"],
-  ["Sun", "over the year, with the shade of the buildings around"],
-  ["Area", "how old homes nearby are and how they heat"],
-  ["Listing", "whether the building is a protected monument"],
+const PROMISES: [string, string][] = [
+  ["We see nothing until you send.", "Your home is worked out here, in your browser."],
+  ["No location needed.", "Every piece of data about your home comes from Bavaria and the EU."],
+  ["You decide what goes.", "After picking your home, leave out its address, building or roof shape."],
 ];
 
 export default function StartChoice({ onChoose }: { onChoose: (s: Start) => void }) {
   return (
     <div className="start-veil">
       <section className="start" role="dialog" aria-modal="true" aria-labelledby="start-title">
-        <p className="eyebrow">New request</p>
-        <h1 id="start-title">Show us your home, and we fill in the rest</h1>
-        <p className="muted">Pick your building on the map. We read from it what most people would have to look up or guess:</p>
-        <ul className="start-reads">{FROM_HOME.map(([k, v]) => <li key={k}><b>{k}</b><span>{v}</span></li>)}</ul>
+        <h1 id="start-title">The map fills in most of it <em>for you.</em></h1>
+        <p className="start-lead">Pick your building. We read its roof, sun and shade, so you type less and your offer is closer.</p>
 
-        <div className="start-safe">
-          <h2>Nothing leaves before you send</h2>
-          <ul>
-            <li>No location access. Type an address or move the map yourself.</li>
-            <li>Your home is worked out in this browser, from public data of Bavaria and the EU.</li>
-            <li>Before sending you choose what goes: address, building shape, marked areas, or only your answers.</li>
-          </ul>
-        </div>
+        <ol className="start-promises">{PROMISES.map(([big, small]) => <li key={big}><b>{big}</b><span>{small}</span></li>)}</ol>
 
         <div className="start-go">
           <Button variant="solid" size="lg" wide autoFocus onClick={() => onChoose("map")}>Find my home on the map</Button>
-          <Button size="lg" wide onClick={() => onChoose("form")}>Only answer questions</Button>
+          <button type="button" className="textlink start-form" onClick={() => onChoose("form")}>Only answer questions, without the map</button>
         </div>
-        <p className="small muted start-foot">Without the map, the installer estimates your roof and may need to ask more before an offer.</p>
-        <p className="small muted start-src">Bayerische Vermessungsverwaltung · Landesamt für Denkmalpflege · Destatis Zensus 2022 · EU JRC PVGIS · OpenStreetMap</p>
+        <p className="start-src">Bayerische Vermessungsverwaltung · Landesamt für Denkmalpflege · Landeshauptstadt München · Destatis · EU JRC PVGIS · Photon (komoot, Germany)</p>
       </section>
     </div>
   );
