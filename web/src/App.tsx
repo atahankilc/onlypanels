@@ -6,13 +6,22 @@ import { Handoff, Mine, Progress } from "./plan";
 import Planner from "./Planner";
 import VoiceDock from "./Voice";
 import { sunOf } from "./api";
-import { Segmented } from "./ui";
+import { Button, Segmented } from "./ui";
 
 type View = "homeowner" | "planner";
 // The demo keeps every request in the page. With the homeowner and the planner on their own addresses, two tabs of the same browser
 // each held their own: an offer sent in one never reached the other. The tabs now tell each other what was sent and how far each
 // request is. It stays in this browser, as the requests do.
 const tabs = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("onlypanels-demo") : null;
+// How far each request is, kept in this browser too: a tab opened or reloaded after an offer was sent still shows it.
+// Only the reference, whether it was opened and the offer the homeowner gets. DEV's Reset clears it and starts the demo afresh.
+const KEPT = "onlypanels-progress";
+const keptProgress = (): Record<string, Progress> => { try { return JSON.parse(localStorage.getItem(KEPT) ?? "{}"); } catch { return {}; } };
+const keepProgress = (ref: string, p: Progress) => {
+  const all = keptProgress(), was = all[ref];
+  all[ref] = { opened: !!(was?.opened || p.opened), offer: p.offer ?? was?.offer ?? null };
+  try { localStorage.setItem(KEPT, JSON.stringify(all)); } catch { /* full: the tabs still tell each other */ }
+};
 type TabNews = { type: "sent"; h: Handoff; sentAt: number; out: Handoff } | { type: "progress"; ref: string; p: Progress };
 const viewOf = (): View => (location.pathname.replace(/\/+$/, "") === "/planner" ? "planner" : "homeowner");
 
@@ -31,7 +40,10 @@ export default function App() {
   const [mine, setMine] = useState<Mine[]>([]);
   // `out` is what reaches the installer (share.ts). Sun never travels: with the home shared, the installer works it out again
   // from the building, the same way, so marked cells still line up. Until then the request waits.
-  const sent = (h: Handoff, sentAt = Date.now(), out: Handoff = h, told = false) => {
+  const sent = (h0: Handoff, sentAt = Date.now(), out0: Handoff = h0, told = false) => {
+    const k = h0.ref ? keptProgress()[h0.ref] : undefined;
+    const seed = k && (k.opened || k.offer) ? { ...h0.seed, opened: k.opened || h0.seed?.opened, offer: k.offer ?? h0.seed?.offer ?? null } : h0.seed;
+    const h = seed === h0.seed ? h0 : { ...h0, seed }, out = out0 === h0 ? h : { ...out0, seed };
     if (!told && h.ref && !h.seed) tabs?.postMessage({ type: "sent", h, sentAt, out } satisfies TabNews); // the demo's own requests load in every tab
     const arrive = (x: Handoff) => setHandoffs((l) => [...l.filter((y) => y.ref !== x.ref), { ...x, sentAt }]);
     if (out.buildings.some((b) => b.sun === undefined))
@@ -44,7 +56,7 @@ export default function App() {
   const [loading, setLoading] = useState(DEMO_COUNT); // demo requests still on their way
   useEffect(() => loadDemo((h) => sent(h, h.sentAt, h, true), () => setLoading((n) => Math.max(0, n - 1))), []);
   const progress = (ref: string, p: Progress, told = false) => {
-    if (!told) tabs?.postMessage({ type: "progress", ref, p } satisfies TabNews);
+    if (!told) { tabs?.postMessage({ type: "progress", ref, p } satisfies TabNews); if (p.opened || p.offer) keepProgress(ref, p); }
     setMine((l) => l.map((x) => (x.ref === ref ? { ...x, opened: x.opened || p.opened, offer: p.offer ?? x.offer } : x)));
   };
   // News from another tab, applied as if it happened here, without telling it back.
@@ -63,6 +75,7 @@ export default function App() {
         <div className="dev" role="group" aria-label="Demo tools">
           <span className="dev-tag">DEV</span>
           <Segmented label="Demo only: switch profile" variant="dev" value={view} onChange={setView} options={[{ value: "homeowner", label: "Homeowner" }, { value: "planner", label: "Planner" }]} />
+          <Button variant="dev" title="Forget sent offers and start the demo afresh" onClick={() => { localStorage.removeItem(KEPT); location.reload(); }}>Reset</Button>
         </div>
       </header>
       <FindHome onSend={(h, out) => sent(h, Date.now(), out)} requests={mine} loading={loading} />
