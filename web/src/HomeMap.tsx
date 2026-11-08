@@ -120,6 +120,7 @@ const heat = (t: number) => {
 const seenBits = (s: SunSurface, suns: number) => { const raw = atob(s.seen), width = Math.ceil(suns / 8); return (row: number, sun: number) => (raw.charCodeAt(row * width + (sun >> 3)) >> (7 - (sun & 7))) & 1; };
 
 const MOVE_MS = 900; // the map rising into its window: --move in styles.css
+const FLY_MAX_MS = 2800, FLY_PER_ZOOM_MS = 260, FLY_PER_KM_MS = 120; // a longer flight when the chosen buildings are far or small on screen
 // Same curve as --glide, so camera, window and fade are one movement.
 const glide = (t: number) => (t < 0.5 ? 8 * t ** 4 : 1 - (-2 * t + 2) ** 4 / 2);
 // The roof's overlays: what is not chosen lies under a shade and a diagonal hatch, so roofs and walls read the same way;
@@ -247,7 +248,7 @@ function skinOf(s: SunSurface, poly: Poly, step: number) {
 // Roads and rails bound a street block. Service roads, paths and tracks run inside blocks, so they do not.
 const BLOCK_ROADS = new Set(["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "busway", "rail", "transit"]);
 const ROADS_WITHIN_M = 250;
-const GHOST_M = 26; // buildings beyond the block fade out over this distance from what is drawn
+const GHOST_ALPHA = 0.92; // the plain blocks around the site, before the fade rings cover them
 
 /** The map's roads and rails near a point, as segments in metres around it. Empty while the map has no tiles there. */
 function roadsNear(m: maplibregl.Map, o: P2) {
@@ -291,19 +292,29 @@ function blockOf(list: Selected[], roads: [P2, P2][], o: P2) {
   return block;
 }
 
-/** The buildings around one that are not drawn as measured, as plain blocks fading out with distance from what is drawn, so the home stands in its street and not alone. */
-function ghostsOf(b: Selected, skip: Set<string>, drawn: P2[]) {
+/** The box the site's fade rings are drawn around: the chosen buildings and their street block, as a centre and half sizes in metres. */
+type SiteBox = { o: P2; w: number; h: number };
+function siteBox(list: Selected[], extra: P2[] = []): SiteBox {
+  const corners = [...list.flatMap((b) => [b.origin, ...(b.real?.roofs ?? []).flatMap((r) => r.ring.map((p) => toLngLat(b.origin, [p[0], p[1]])))]), ...extra];
+  const o: P2 = [(Math.min(...corners.map((p) => p[0])) + Math.max(...corners.map((p) => p[0]))) / 2, (Math.min(...corners.map((p) => p[1])) + Math.max(...corners.map((p) => p[1]))) / 2];
+  const local = corners.map((p) => toLocal(o, p));
+  return { o, w: Math.max(...local.map((p) => Math.abs(p[0]))), h: Math.max(...local.map((p) => Math.abs(p[1]))) };
+}
+/** How much the fade rings cover a point, 0 to 1: the rings lie on top of each other, each covering what is beyond its edge. */
+function coverAt(box: SiteBox, at: P2) {
+  const p = toLocal(box.o, at), r = Math.hypot(Math.max(0, Math.abs(p[0]) - box.w), Math.max(0, Math.abs(p[1]) - box.h));
+  return 1 - SITE_RINGS.reduce((open, o, i) => (r >= SITE_FROM_M + i * SITE_RING_M ? open * (1 - o) : open), 1);
+}
+
+/** The buildings around one that are not drawn as measured, as plain blocks out to the site's edge, so the home stands in its
+ *  street and not alone. Each fades exactly as the rings over the ground do, so nothing stands in the dark beyond them. */
+function ghostsOf(b: Selected, skip: Set<string>, box: SiteBox) {
   const points: P3[] = [], alpha: number[] = [], faces: number[] = [];
   const add = (p: P3, a: number) => { points.push(p); alpha.push(1, 1, 1, a); return points.length - 1; };
-  const shown = drawn.map((p) => toLocal(b.origin, p));
   for (const near of b.sun?.around ?? []) {
     if (skip.has(near.id)) continue;
     const ring = near.ring.map((p) => toLocal(b.origin, [p[0], p[1]]));
-    const fade = ring.map((p, i) => {
-      let d = near.ring[i][2];
-      for (const q of shown) d = Math.min(d, Math.hypot(p[0] - q[0], p[1] - q[1]));
-      return Math.max(0, 1 - d / GHOST_M) ** 1.3 * 0.92;
-    });
+    const fade = near.ring.map((p) => GHOST_ALPHA * (1 - coverAt(box, [p[0], p[1]])));
     if (!fade.some((a) => a > 0)) continue;
     ring.forEach((p, i) => {
       const j = (i + 1) % ring.length, q = ring[j];
@@ -351,9 +362,7 @@ const blockPoints = (list: Selected[], block: Set<string>) => {
 
 /** Rings of growing opacity around the buildings: what is further out is covered. */
 function fadeAround(list: Selected[], extra: P2[] = []) {
-  const corners = [...list.flatMap((b) => [b.origin, ...(b.real?.roofs ?? []).flatMap((r) => r.ring.map((p) => toLngLat(b.origin, [p[0], p[1]])))]), ...extra];
-  const o: P2 = [(Math.min(...corners.map((p) => p[0])) + Math.max(...corners.map((p) => p[0]))) / 2, (Math.min(...corners.map((p) => p[1])) + Math.max(...corners.map((p) => p[1]))) / 2];
-  const local = corners.map((p) => toLocal(o, p)), w = Math.max(...local.map((p) => Math.abs(p[0]))), h = Math.max(...local.map((p) => Math.abs(p[1])));
+  const { o, w, h } = siteBox(list, extra);
   const hole = (r: number): P2[] => Array.from({ length: 49 }, (_, i) => {
     const a = (i / 48) * 2 * Math.PI, x = Math.cos(a), y = Math.sin(a);
     return toLngLat(o, [Math.sign(x) * w + x * r, Math.sign(y) * h + y * r]); // a rounded box
@@ -578,7 +587,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       const skins = (b.sun?.surfaces ?? []).map((x) => skinOf(x, [...roofs, ...walls][polyOf(b, x)], b.sun?.step ?? 1));
       skins.forEach((k) => g.add(k.skin, k.cover, k.plate));
       roofPhoto(b, roofMeshes, () => map.current?.triggerRepaint());
-      const ghosts = ghostsOf(b, solid, around);
+      const ghosts = ghostsOf(b, solid, siteBox(list, around));
       ghosts.renderOrder = -1;
       g.add(ghosts);
       const neighbours = neighboursOf(b, drawn, block);
@@ -1275,6 +1284,14 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     // The padding stays on the map, so its centre, which it turns around, is the middle of the window.
     m.fitBounds(area, { padding: room(), absolutePadding: true, maxZoom: live.current.panelW ? 20.4 : 19.5, pitch: PITCH, bearing: live.current.turn ?? m.getBearing(), duration, easing: glide });
   };
+  /** How long the camera takes to reach the chosen buildings: the usual movement when they are on screen, longer from across
+   *  the city, so the flight is never a jump. Grows with the zoom to cover and the distance, at most FLY_MAX_MS. */
+  const travelTime = () => {
+    const m = map.current, list = live.current.buildings;
+    if (!m || !list.length) return MOVE_MS;
+    const area = areaOf(list), zoomIn = Math.max(0, (live.current.panelW ? 20.4 : 19.5) - m.getZoom()), km = m.getCenter().distanceTo(area.getCenter()) / 1000;
+    return Math.round(Math.min(FLY_MAX_MS, MOVE_MS + Math.max(0, zoomIn - 1.5) * FLY_PER_ZOOM_MS + Math.min(km, 8) * FLY_PER_KM_MS));
+  };
 
   // Between the steps the map's blocks fade out while the measured buildings fade in, as the camera settles on them.
   useEffect(() => {
@@ -1283,9 +1300,11 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     const to = step === "review" ? 1 : 0, from = shown.current;
     if (to === from) return;
     const coverOutside = (t: number) => m.setPaintProperty(SITE, "fill-opacity", ["*", ["get", "o"], t]);
+    // The models fade in, and the city fades out, over the last MOVE_MS of the flight: while the camera is still far they would only flicker.
+    const flight = to ? travelTime() : MOVE_MS, wait = flight - MOVE_MS;
     if (to) {
       camera.current = { center: m.getCenter(), zoom: m.getZoom(), bearing: m.getBearing(), pitch: m.getPitch() };
-      buildModels(); setShown(0); placePins(); frame(MOVE_MS);
+      buildModels(); setShown(0); placePins(); frame(flight);
       (m.getSource(SITE) as maplibregl.GeoJSONSource).setData(fadeAround(live.current.buildings, site.current));
       m.setLayoutProperty(SITE, "visibility", "visible");
       m.setMaxPitch(REVIEW_PITCH);
@@ -1310,10 +1329,12 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       hidden.current.clear();
     }
     refreshSquares.current();
-    setSolid({ visibility: "visible", opacity: to ? 0 : 1 });
-    const start = performance.now();
-    let frameId = 0;
+    setSolid({ visibility: "visible", ...(wait > 0 ? {} : { opacity: to ? 0 : 1 }) });
+    const start = performance.now() + wait;
+    let frameId = 0, faded = wait <= 0;
     const tick = (now: number) => {
+      if (now < start) { frameId = requestAnimationFrame(tick); return; }
+      if (!faded) { faded = true; setSolid({ opacity: to ? 0 : 1 }); }
       const t = Math.min(1, (now - start) / MOVE_MS), eased = glide(t);
       setShown(from + (to - from) * eased);
       coverOutside(from + (to - from) * eased);
