@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Answers, PRICE_CT, Selected, modelM2 } from "./api";
 import { Face } from "./HomeMap";
+import { Mine } from "./plan";
+import { Status, day, stepOf } from "./Requests";
 import { Button, Field, Input } from "./ui";
 
 const BANDS = [["Under 3,000", 2500], ["3,000 – 4,000", 3500], ["4,000 – 5,000", 4500], ["5,000 – 7,000", 6000], ["Over 7,000", 8500]] as const;
@@ -24,11 +26,11 @@ const PAGES: Stage[] = ["roof", "solar", "battery", "use", "big", "house", "heat
 const flowFor = (a: Answers): Stage[] => PAGES.filter((p) => p !== "charge" || a.ev);
 
 type Props = {
-  stage: Stage; setStage: (s: Stage) => void; answers: Answers; setAnswers: (a: Answers) => void; refId: string; done: () => void;
+  stage: Stage; setStage: (s: Stage) => void; answers: Answers; setAnswers: (a: Answers) => void; refId: string; progress?: Mine; done: () => void;
   buildings: Selected[]; setFace: (f: Face | null) => void; m2: number; panelM2: number; reset: () => void; back: () => void; changed: boolean; retrySun: () => void;
 };
 
-export default function Review({ refId, done, stage, setStage, answers: a, setAnswers, buildings, setFace, m2, panelM2, reset, back, changed, retrySun }: Props) {
+export default function Review({ refId, progress, done, stage, setStage, answers: a, setAnswers, buildings, setFace, m2, panelM2, reset, back, changed, retrySun }: Props) {
   const all = buildings.flatMap((b) => b.sun?.surfaces ?? []);
   const loading = buildings.some((b) => b.sun === undefined), failed = buildings.some((b) => b.sun === null);
 
@@ -140,16 +142,16 @@ export default function Review({ refId, done, stage, setStage, answers: a, setAn
     return (
       <aside className="panel tall quiz" key="sent" ref={panel}>
         <div className="done" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></div>
-        <h1>Your request is with an installer</h1>
-        <p className="muted">Request {refId} · sent {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long" })}</p>
-        <ol className="next-steps">
+        <h1>{!progress || stepOf(progress) === 0 ? "Your request is with an installer" : stepOf(progress) === 1 ? "A planner is working on it" : "Your offer is ready"}</h1>
+        <p className="muted">Request {refId} · sent {day(progress?.sentAt ?? Date.now())}</p>
+        {progress && <Status m={progress} />}
+        {!progress?.offer && <ol className="next-steps">
           <li><b>They look at your roof and your answers</b><span>On the same 3D model of your home, with its measured sun and shade.</span></li>
           <li><b>{missing ? `They may ask about ${missing} ${missing === 1 ? "answer" : "answers"} you left open` : "They may call with a question or two"}</b><span>{missing ? "Have your electricity and heating bills at hand." : "You answered everything, so it should be quick."}</span></li>
           <li><b>You get an offer</b><span>Solar, battery and anything else that fits, with what it makes and saves.</span></li>
-        </ol>
+        </ol>}
         <details className="sent-answers"><summary>What you sent</summary>{view}</details>
-        <div className="stick"><Button variant="solid" size="lg" wide onClick={done}>Done</Button></div>
-        <p className="small muted">You can follow this request on the start page.</p>
+        <div className="stick"><Button variant="solid" size="lg" wide onClick={done}>Back to the start page</Button></div>
       </aside>
     );
   }

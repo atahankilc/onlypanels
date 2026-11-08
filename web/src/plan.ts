@@ -32,7 +32,7 @@ export const offerOf = (d: Design): Offer => ({ kwp: d.pv.kwp, modules: d.pv.mod
   production_mwh: d.energy.production_mwh, self_sufficiency_pct: d.energy.self_sufficiency_pct, saving_eur: d.energy.saving_eur });
 /** The homeowner's side of one request: what they sent, and how far the planner is. */
 export type Progress = { opened: boolean; offer: Offer | null };
-export type Mine = { ref: string; label: string; sentAt: number } & Progress;
+export type Mine = { ref: string; label: string; sentAt: number; handoff: Handoff } & Progress;
 /** Solar already on the building: size and year as the customer gave them, else the area they marked and the sun it gets. */
 export type Existing = { kwp: number | null; year: number | null; battery_kwh: number | null; m2?: number | null; kwh_per_kwp?: number | null };
 export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string };

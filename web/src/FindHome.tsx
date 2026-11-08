@@ -39,7 +39,7 @@ export default function FindHome({ dark, onSend, requests }: { dark: boolean; on
   const [stage, setStage] = useState<Stage>("roof");
   const [view, setView] = useState<View>(PHOTO); // what the roof page paints on the surfaces: photo or sunlight
   const [ref, setRef] = useState(newRef);
-  useEffect(() => { if (stage === "sent") onSend({ buildings, answers, choice, ref }); }, [stage]); // what the homeowner produced goes to the planner
+  useEffect(() => { if (stage === "sent" && !requests.some((m) => m.ref === ref)) onSend({ buildings, answers, choice, ref }); }, [stage]); // what the homeowner produced goes to the planner
   const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
   const [choice, setChoice] = useState<Choice>(NO_CHOICE);
   const [tool, setTool] = useState<Tool | null>(null); // no tool: the mouse moves the map
@@ -120,6 +120,12 @@ export default function FindHome({ dark, onSend, requests }: { dark: boolean; on
   const goTo = (id: string) => { setOpen(id); setLook({ id }); };
 
   /** After sending: back to the map, ready for another home. The request stays in the list with its progress. */
+  /** A sent request, opened from the start page: its home on the map and where it is, read only. */
+  const openRequest = (m: Mine) => {
+    const h = m.handoff;
+    setBuildings(h.buildings); setAnswers(h.answers); setChoice(h.choice); setRef(m.ref); setStage("sent"); setTool(null); setUndo([]);
+    setOpen(h.buildings[0]?.home ?? null); setStep("review"); setMove("in");
+  };
   const newRequest = () => {
     setFace(null); setStep("pick"); setMove("out"); setStage("roof"); setTool(null); setUndo([]);
     setBuildings([]); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef());
@@ -137,7 +143,7 @@ export default function FindHome({ dark, onSend, requests }: { dark: boolean; on
       </div>}
       {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
       {step === "pick" && <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</Button>}
-      {step === "pick" && !buildings.length && requests.length > 0 && !move && <Requests list={requests} />}
+      {step === "pick" && !buildings.length && requests.length > 0 && !move && <Requests list={requests} onOpen={openRequest} />}
       {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
       {(step === "pick" || move === "in") && <Curtain move={move} done={() => setMove(null)}>
@@ -168,7 +174,7 @@ export default function FindHome({ dark, onSend, requests }: { dark: boolean; on
       </aside>}
       </Curtain>}
 
-      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && setMove(null)}><Review refId={ref} done={newRequest} stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={() => { setFace(null); setStep("pick"); setMove("out"); }} /></div>}
+      {(step === "review" || move === "out") && <div className={move === "out" ? "curtain new back" : "curtain new"} onAnimationEnd={(e) => e.target === e.currentTarget && setMove(null)}><Review refId={ref} progress={requests.find((m) => m.ref === ref)} done={newRequest} stage={stage} setStage={setStage} answers={answers} setAnswers={setAnswers} buildings={buildings} setFace={setFace} m2={markedM2(buildings, choice)} changed={Object.keys(choice.cells).length > 0} reset={startOver} panelM2={panelsM2(buildings, choice)} retrySun={retrySun} back={() => { setFace(null); setStep("pick"); setMove("out"); }} /></div>}
     </main>
   );
 }
