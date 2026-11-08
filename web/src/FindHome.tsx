@@ -20,6 +20,11 @@ function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real 
   return { roofs: polys(answer.roofs), walls: polys(answer.walls) };
 }
 
+// The start choice is a preference of this browser, nothing about a home.
+const START_KEY = "start-choice";
+const savedStart = (): Start | null => { try { const v = localStorage.getItem(START_KEY); return v === "map" || v === "form" ? v : null; } catch { return null; } };
+const saveStart = (s: Start) => { try { localStorage.setItem(START_KEY, s); } catch { /* private mode: asked again next time */ } };
+
 const newRef = () => `R-${Math.random().toString(36).slice(2, 7).toUpperCase()}`; // a reference the homeowner can quote
 
 export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h: Handoff, out: Handoff) => void; requests: Mine[]; loading?: number }) {
@@ -41,7 +46,9 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const [view, setView] = useState<View>(PHOTO); // what the roof page paints on the surfaces: photo or sunlight
   const [ref, setRef] = useState(newRef);
   const [fromList, setFromList] = useState(false); // the home on screen is a sent request opened from the list
-  const [start, setStart] = useState<Start | null>(null); // map or questions only; nothing shows on the map until chosen
+  // Map or questions only: asked once, then kept in this browser. Nothing shows on the map until chosen.
+  const [start, setStart] = useState<Start | null>(() => (savedStart() === "map" ? "map" : null));
+  useEffect(() => { if (savedStart() === "form") begin("form"); }, []);
   const [offerPanels, setOfferPanels] = useState<Record<string, number> | null>(null); // the offer's modules, or the variant being tried, on the roof
   const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
   const [choice, setChoice] = useState<Choice>(NO_CHOICE);
@@ -127,13 +134,15 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const goTo = (id: string) => { setOpen(id); setLook({ id }); };
 
   const begin = (s: Start) => {
-    setStart(s);
+    setStart(s); saveStart(s);
     if (s === "map") setStage("roof");
     if (s === "form") { setBuildings([]); setStage("solar"); setOpen(null); setStep("review"); setMove("in"); }
   };
   // Questions only: no map behind the questions. Its frame asks once more for the home, keeping every answer.
   const bare = start === "form" && step === "review";
-  const addHome = () => { setStart("map"); setStage("roof"); setFace(null); setStep("pick"); setMove("out"); };
+  const addHome = () => { setStart("map"); saveStart("map"); setStage("roof"); setFace(null); setStep("pick"); setMove("out"); };
+  /** Asks again how to start, from either way: the map's picking step, or the questions. */
+  const changeStart = () => { setStart(null); if (step === "review") { setFace(null); setStep("pick"); setMove("out"); } };
   /** Back from the first page: the map's picking step, or the start choice for questions only. */
   const backToPick = () => { setFace(null); setStep("pick"); setMove("out"); if (start === "form") setStart(null); };
 
@@ -148,7 +157,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   // so the first question does not flash up on the way out. Meanwhile the start page shows the list, not a picked home.
   const clearAfter = useRef(false);
   const newRequest = () => {
-    setFace(null); setStep("pick"); setMove("out"); setTool(null); setUndo([]); setBuildings([]); setFromList(true); setStart(null);
+    setFace(null); setStep("pick"); setMove("out"); setTool(null); setUndo([]); setBuildings([]); setFromList(true); setStart(savedStart() === "map" ? "map" : null);
     clearAfter.current = true;
   };
   const moved = () => {
@@ -156,6 +165,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
     if (!clearAfter.current) return;
     clearAfter.current = false;
     setStage("roof"); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef()); setFromList(false); setShared(SHARE_ALL);
+    if (savedStart() === "form") begin("form"); // the next request starts the way this browser chose
   };
 
   return (
@@ -178,8 +188,10 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
           <p>Its size, slope and sun decide most of your offer. Pick your building and we measure them, here in your browser.</p>
           <Button variant="solid" size="lg" onClick={addHome}>Add my home on the map</Button>
           <small>Your answers stay. Nothing is sent until you choose.</small>
+          <button type="button" className="textlink" onClick={changeStart}>Change how to start</button>
         </div>
       </section>}
+      {step === "pick" && start === "map" && !move && !buildings.length && <Button className="startswitch" variant="glass" size="lg" onClick={changeStart}>Map or questions?</Button>}
       {step === "pick" && start === "map" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
       {(step === "pick" || move === "in") && <Curtain move={move} done={moved}>
