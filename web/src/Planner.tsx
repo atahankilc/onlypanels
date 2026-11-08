@@ -3,7 +3,7 @@ import { GAS_CT, View, surfaceKey } from "./api";
 import { Monument, monumentOf } from "./monument";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
-import { Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, offerOf, refine, roofOf, turnTo } from "./plan";
+import { Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
 import { Change, ChangeCard, Trace, touched } from "./Trace";
 import "./planner.css";
 import ProofPage from "./Proof";
@@ -191,8 +191,8 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const confirm = d ? toConfirm(r, d) : [];
   const warns = d ? d.review.filter((n) => n.level === "warn") : [];
   const left = confirm.length + checks.filter((c) => !done.includes(c.id)).length;
-  const allowed = (r as Req).allowed ?? ["no_battery", "battery_size"];
-  const send = () => { update(r.id, { status: "sent", ...(d ? { offer: offerOf(d) } : {}) }); back(); };
+  const allowed = (r as Req).allowed ?? DEFAULT_ALLOWED; // the same default the sent offer carries
+  const send = () => { update(r.id, { status: "sent", ...(d ? { offer: offerOf(d, r) } : {}) }); back(); };
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
     <HomeMap buildings={r.buildings} installed={r.installed} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}

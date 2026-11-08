@@ -1,3 +1,4 @@
+import Explore from "./Explore";
 import { Mine } from "./plan";
 
 const STEPS = ["Sent", "Being planned", "Offer ready"] as const;
@@ -27,7 +28,7 @@ export default function Requests({ list, loading = 0, onOpen, gone }: { list: Mi
 }
 
 /** Where one request is, and the offer once the planner sends it. */
-export function Status({ m }: { m: Mine }) {
+export function Status({ m, onPanels }: { m: Mine; onPanels?: (p: Record<string, number> | null) => void }) {
   const at = stepOf(m), o = m.offer;
   return <div className="requests status">
     <ol className="track">{STEPS.map((s, i) => <li key={s} className={i < at ? "past" : i === at ? "now" : undefined}>{s}</li>)}</ol>
@@ -43,6 +44,7 @@ export function Status({ m }: { m: Mine }) {
         <div><dt>Saves</dt><dd>About €{o.saving_eur.toLocaleString("en")} a year</dd></div>
       </dl>
       <p className="small muted">Estimates from your planner's design. They go through it with you before anything is ordered.</p>
+      {o.basis && <Explore m={m} onPanels={onPanels} />}
     </div>}
   </div>;
 }

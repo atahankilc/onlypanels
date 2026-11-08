@@ -15,7 +15,7 @@
 .btn[aria-pressed="true"] { background: var(--hud-solid); color: var(--hud-solid-ink); }
 @media (hover: hover) {
   .btn-solid:not(:disabled):hover { opacity: 0.88; }
-  .btn-fill:not(:disabled):hover, .btn-plain:not(:disabled):hover { background: var(--hud-fill-2); }
+  .btn-fill:not(:disabled):not([aria-pressed="true"]):hover, .btn-plain:not(:disabled):not([aria-pressed="true"]):hover { background: var(--hud-fill-2); } /* a pressed choice stays pressed under the pointer */
   .btn-glass:not(:disabled):not([aria-pressed="true"]):hover { background: var(--hud-glass-2); }
 }
 

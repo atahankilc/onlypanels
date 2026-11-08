@@ -28,10 +28,17 @@ export type Request = {
   off: string[]; installed: string[]; walls: string[]; existing: Existing; status: "draft" | "sent";
   opened?: boolean; offer?: Offer; // opened by a planner, and what the sent offer holds: both go back to the homeowner
 };
-/** What the homeowner sees once the planner sends the offer: the system and the engine's estimate, nothing else. */
-export type Offer = { kwp: number; modules: number; battery_kwh: number; wallbox: boolean; heatpump_kw: number; production_mwh: number; self_sufficiency_pct: number; saving_eur: number };
-export const offerOf = (d: Design): Offer => ({ kwp: d.pv.kwp, modules: d.pv.modules, battery_kwh: d.battery.kwh, wallbox: d.wallbox.included, heatpump_kw: d.heatpump.included ? d.heatpump.kw : 0,
-  production_mwh: d.energy.production_mwh, self_sufficiency_pct: d.energy.self_sufficiency_pct, saving_eur: d.energy.saving_eur });
+/** What the homeowner sees once the planner sends the offer: the system and the engine's estimate. With it, what the
+ *  homeowner may try (the planner's allowed changes and the catalog's battery sizes) and the request as the planner left
+ *  it, so every variant the homeowner tries is the same engine on the same facts, with one choice changed. */
+export type OfferBasis = { inputs: Inputs; overrides: Overrides; off: string[]; installed: string[]; existing: Existing };
+export type Offer = { kwp: number; modules: number; battery_kwh: number; wallbox: boolean; heatpump_kw: number; production_mwh: number; self_sufficiency_pct: number; saving_eur: number;
+  allowed?: string[]; choices?: number[]; max_modules?: number | null; basis?: OfferBasis };
+export const DEFAULT_ALLOWED = ["no_battery", "battery_size"];
+export const offerOf = (d: Design, r?: Request & { allowed?: string[] }): Offer => ({ kwp: d.pv.kwp, modules: d.pv.modules, battery_kwh: d.battery.kwh, wallbox: d.wallbox.included, heatpump_kw: d.heatpump.included ? d.heatpump.kw : 0,
+  production_mwh: d.energy.production_mwh, self_sufficiency_pct: d.energy.self_sufficiency_pct, saving_eur: d.energy.saving_eur,
+  ...(r ? { allowed: r.allowed ?? DEFAULT_ALLOWED, choices: d.battery.choices, max_modules: d.pv.max_modules,
+    basis: { inputs: r.inputs, overrides: { ...r.overrides, modules: d.pv.modules, battery_kwh: d.battery.kwh, wallbox: d.wallbox.included, heatpump: d.heatpump.included }, off: r.off, installed: r.installed, existing: r.existing } } : {}) });
 /** The homeowner's side of one request: what they sent, and how far the planner is. */
 export type Progress = { opened: boolean; offer: Offer | null };
 export type Mine = { ref: string; label: string; sentAt: number; handoff: Handoff } & Progress;

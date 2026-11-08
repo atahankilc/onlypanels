@@ -1,0 +1,89 @@
+// The homeowner tries the offer: only what the planner allowed, each variant computed by the same engine on the same facts.
+// The numbers are the engine's; the sentence around them is a template.
+import { useEffect, useMemo, useState } from "react";
+import { Design, Mine, Overrides, design, roofOf } from "./plan";
+import { Button, Slider } from "./ui";
+
+type Variant = { battery_kwh?: number; wallbox?: boolean; modules?: number };
+const eur = (v: number) => `€${v.toLocaleString("en")}`;
+
+export default function Explore({ m, onPanels }: { m: Mine; onPanels?: (p: Record<string, number> | null) => void }) {
+  const o = m.offer!, b = o.basis!, allowed = o.allowed ?? [];
+  const roof = useMemo(() => roofOf(m.handoff.buildings, b.installed), [m.ref]);
+  const [v, setV] = useState<Variant>({});
+  const [out, setOut] = useState<{ d: Design; panels: Record<string, number> } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setBusy(true);
+    const t = setTimeout(() => design(b.inputs, { ...b.overrides, ...v } as Overrides, roof, b.off, b.existing)
+      .then((x) => { if (live) { setOut(x); setBusy(false); } }).catch(() => live && setBusy(false)), 150);
+    return () => { live = false; clearTimeout(t); };
+  }, [v]);
+  useEffect(() => { onPanels?.(out?.panels ?? null); }, [out]);
+  useEffect(() => () => onPanels?.(null), []);
+
+  const battery = v.battery_kwh ?? o.battery_kwh, wallbox = v.wallbox ?? o.wallbox, modules = v.modules ?? o.modules;
+  // The offer's size and the catalog's nearest few around it: enough to feel the trade-off, not the whole price list.
+  const around = o.battery_kwh || 10;
+  const sizes = allowed.includes("battery_size")
+    ? [...new Set([...(o.choices ?? []).filter((c) => c > 0 && c <= 25).sort((x, y) => Math.abs(x - around) - Math.abs(y - around)).slice(0, 5), ...(o.battery_kwh ? [o.battery_kwh] : [])])].sort((x, y) => x - y)
+    : o.battery_kwh ? [o.battery_kwh] : [];
+  const canBattery = !b.inputs.has_storage && (allowed.includes("battery_size") || allowed.includes("no_battery"));
+  const fewest = Math.max(4, Math.round(o.modules * 0.5));
+  const changed = Object.keys(v).length > 0, d = out?.d;
+  const set = (x: Variant) => setV((now) => {
+    const next = { ...now, ...x };
+    (Object.keys(next) as (keyof Variant)[]).forEach((k) => { if (next[k] === (k === "battery_kwh" ? o.battery_kwh : k === "wallbox" ? o.wallbox : o.modules)) delete next[k]; });
+    return next;
+  });
+  if (!canBattery && !allowed.includes("wallbox") && !allowed.includes("fewer_modules")) return null;
+
+  /** One plain sentence: what the change does to own power and the saving, against the offer. */
+  const sentence = () => {
+    if (!d) return "";
+    const what = [v.battery_kwh !== undefined && (v.battery_kwh ? `a ${v.battery_kwh} kWh battery` : "no battery"), v.wallbox !== undefined && (v.wallbox ? "a wallbox" : "no wallbox"),
+      v.modules !== undefined && `${v.modules} modules`].filter(Boolean).join(" and ");
+    const own = d.energy.self_sufficiency_pct, save = d.energy.saving_eur;
+    return `With ${what}, about ${own}% of your use would come from your own power (offer: ${o.self_sufficiency_pct}%), and you would save about ${eur(save)} a year (offer: ${eur(o.saving_eur)}).`;
+  };
+
+  return <section className="explore" aria-label="Try the offer">
+    <h3>Try changes</h3>
+    <p className="small muted">Your installer allows these. Each is worked out by the same engine on the same facts about your home.</p>
+    {canBattery && <div className="explore-row">
+      <span>Battery</span>
+      <div className="explore-pick" role="group" aria-label="Battery">
+        {allowed.includes("no_battery") && <Button aria-pressed={battery === 0} onClick={() => set({ battery_kwh: 0 })}>None</Button>}
+        {sizes.map((s) => <Button key={s} aria-pressed={battery === s} onClick={() => set({ battery_kwh: s })}>{s} kWh{s === o.battery_kwh ? <small> offer</small> : null}</Button>)}
+      </div>
+    </div>}
+    {allowed.includes("wallbox") && <div className="explore-row">
+      <span>Wallbox</span>
+      <div className="explore-pick" role="group" aria-label="Wallbox">
+        <Button aria-pressed={wallbox} onClick={() => set({ wallbox: true })}>With</Button>
+        <Button aria-pressed={!wallbox} onClick={() => set({ wallbox: false })}>Without</Button>
+      </div>
+    </div>}
+    {allowed.includes("fewer_modules") && o.modules > fewest && <div className="explore-row">
+      <span>Solar</span>
+      <div className="explore-slide">
+        <Slider min={fewest} max={o.modules} value={modules} onChange={(e) => set({ modules: Number(e.target.value) })} aria-label="Solar modules" />
+        <b>{modules} modules · {(modules * (o.kwp / o.modules)).toFixed(1)} kWp</b>
+      </div>
+    </div>}
+    {changed && <div className={busy ? "explore-out busy" : "explore-out"} aria-live="polite">
+      <table>
+        <thead><tr><th /><th>Offer</th><th>Your change</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Makes</th><td>{o.production_mwh.toFixed(1)} MWh</td><td>{d ? `${d.energy.production_mwh.toFixed(1)} MWh` : "…"}</td></tr>
+          <tr><th scope="row">Own power</th><td>{o.self_sufficiency_pct}%</td><td>{d ? `${d.energy.self_sufficiency_pct}%` : "…"}</td></tr>
+          <tr><th scope="row">Saving a year</th><td>{eur(o.saving_eur)}</td><td>{d ? eur(d.energy.saving_eur) : "…"}</td></tr>
+        </tbody>
+      </table>
+      {d && <p>{sentence()}</p>}
+      <p className="small muted">An estimate to compare, within what your installer allows. The offer stays as sent until you agree a change with them.</p>
+      <button type="button" className="textlink" onClick={() => setV({})}>Back to the offer</button>
+    </div>}
+  </section>;
+}

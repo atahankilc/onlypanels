@@ -96,7 +96,7 @@ async function build(seed: Seed): Promise<Sent | null> {
     if (seed.state === "opened") h.seed = { opened: true };
     if (seed.state === "offer") {
       const r = fromHomeowner(h), { d } = await design(r.inputs, r.overrides, roofOf(r.buildings, r.installed), r.off, r.existing);
-      h.seed = { opened: true, offer: offerOf(d) };
+      h.seed = { opened: true, offer: offerOf(d, r) };
     }
     return h;
   } catch {
