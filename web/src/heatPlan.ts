@@ -20,7 +20,7 @@ const DETAILS: [string, string][] = [
   ["rku:wp_ueberlagernd_luftwaermepumpe", "an air-source heat pump suits the area"],
   ["rku:wp_ueberlagernd_grundwasserwaermepumpe", "a groundwater heat pump is possible"],
   ["rku:wp_ueberlagernd_erdwaermekollektor", "a ground collector is possible"],
-  ["rku:wp_ueberlagernd_sanierung", "a heat pump after renovation"],
+  ["rku:wp_ueberlagernd_sanierung", "a heat pump once the house is renovated"],
 ];
 
 export type HeatPlan = { area: "network" | "own" | "other" | "none" | "unknown"; label: string | null; details: string[] };

@@ -367,7 +367,7 @@ function shadeCheck(t: Shade | null): { id: string; title: string; why: string }
 
 /** What Munich's heat plan says at the home, worded as a check. Where a heat network is coming, a heat pump may be the wrong offer. */
 function heatPlanCheck(p: HeatPlan | null, heating: string | null, heatPump: boolean): { id: string; title: string; why: string } {
-  const more = p?.details.length ? `: ${p.details.join("; ")}` : "";
+  const more = p?.details.length ? `. The plan notes: ${p.details.join("; ")}` : "";
   if (!p) return { id: "heatplan", title: "Check the city's heat plan", why: "Asking Munich's heat plan map…" };
   if (p.area === "network") return { id: "heatplan", title: "Heat network area in the city's heat plan", why: `The city's heat plan puts this home in a heat network area${more}.` +
     (heating === "District" ? " The home already has district heating." : heatPump ? " The design has a heat pump: compare it with a district heating connection before offering it." : " If a heat pump comes up, compare it with a district heating connection first.") };

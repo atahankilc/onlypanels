@@ -125,7 +125,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
     const car = a.ev === false ? "No" : a.ev ? (a.ev_planned ? `Coming ${a.ev_when === "soon" ? "within a year" : a.ev_when === "later" ? "later" : "soon"}` : "Yes") : no;
     const groups: [string, Stage, [string, string][]][] = [
       ...(mapped ? [["Your roof", "roof", [["Priority area", `${Math.round(m2)} m²`]]] as [string, Stage, [string, string][]]] : []),
-      ["Solar already there", "solar", a.has_solar ? [["Solar", "Yes"], ["Makes", label(SOLAR_KIND, a.solar_kind)], ["Marked area", `${Math.round(panelM2)} m²`], ["Size", n(a.solar_kwp, "kWp")], ["Year", a.solar_year ? String(a.solar_year) : no]] : [["Solar", yes(a.has_solar)]]],
+      ["Solar already there", "solar", a.has_solar ? [["Solar", "Yes"], ["Makes", label(SOLAR_KIND, a.solar_kind)], ["Marked area", `${Math.round(panelM2)} m²`], ...(a.solar_kind === "thermal" ? [] : [["Size", n(a.solar_kwp, "kWp")], ["Year", a.solar_year ? String(a.solar_year) : no]] as [string, string][])] : [["Solar", yes(a.has_solar)]]],
       ["Home battery", "battery", [["Battery", yes(a.has_storage)], ...(a.has_storage ? [["Size", n(a.battery_kwh, "kWh")] as [string, string]] : [])]],
       ["Electricity", "use", [["Yearly use", use], ["Price", a.price_known ? `${a.price_ct_kwh} ct per kWh` : no], ["Home in the day", label(HOME_DAY, a.home_day)]]],
       ["Big electric users", "big", [["Has", a.big_users.length ? a.big_users.map((v) => label(BIG_USERS, v)).join(", ") : "None"]]],
@@ -134,7 +134,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
         ...(REPLACEABLE.includes(a.heating ?? "") ? [["Heat pump", yes(a.wants_hp, "Interested", "Not interested")], [a.heating === "Oil" ? "Oil" : a.heating === "Electric" ? "Its electricity" : "Gas", a.heating === "Oil" ? n(a.oil_l, "litres a year") : a.heating === "Gas" && a.gas_eur ? `€${Math.round(a.gas_eur).toLocaleString("en")} a year` : n(a.heat_kwh, "kWh a year")], ["Heats through", label(HEAT_DIST, a.heat_dist)], ...(FOSSIL.includes(a.heating ?? "") ? [["Boiler age", label(BOILER_AGE, a.boiler_age)]] : [])] as [string, string][] : [])]],
       ["Electric car", "car", a.ev ? [["Car", car], ["How many", a.ev_count ? String(a.ev_count) : no], ["Charged at home", n(a.ev_kwh_month, "kWh a month")], ["Driving", n(a.ev_km, "km a year")]] : [["Car", car]]],
       ...(a.ev ? [["Charging", "charge", [["Where", a.ev_charge_home === "most" ? "Mostly at home" : a.ev_charge_home === "half" ? "Half and half" : a.ev_charge_home === "little" ? "Mostly elsewhere" : no],
-        ["Home in the day", yes(a.ev_day, "Often", "Rarely")], ["Wallbox", yes(a.has_wallbox, "Already there", "Not yet")]]] as [string, Stage, [string, string][]]] : []),
+        ["Car home in the day", yes(a.ev_day, "Often", "Rarely")], ["Wallbox", yes(a.has_wallbox, "Already there", "Not yet")]]] as [string, Stage, [string, string][]]] : []),
       ["What matters most", "goal", [["Priority", GOALS.find((x) => x[0] === a.goal)?.[1] ?? no], ["Power in an outage", yes(a.backup, "Wanted", "Not needed")]]],
     ];
     if (!editable) groups.push(["Meter cabinet", "send", [["Photo", a.meter_photo ? "Added" : no]]]);
@@ -234,7 +234,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
 
       </>)}
 
-      {stage === "battery" && page(a.has_solar ? "Is there a home battery too?" : "Is there a home battery?", null, yesNo("has_storage", { battery_kwh: null }), a.has_storage && <>
+      {stage === "battery" && page(a.has_solar && a.solar_kind !== "thermal" ? "Is there a home battery too?" : "Is there a home battery?", null, yesNo("has_storage", { battery_kwh: null }), a.has_storage && <>
         {numberField(optional("How big is it? (kWh)"), a.battery_kwh, (battery_kwh) => setAnswers({ ...a, battery_kwh }))}
       </>)}
 

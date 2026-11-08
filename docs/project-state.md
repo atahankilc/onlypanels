@@ -17,7 +17,7 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - App restyled after Steward (D37)
 - Single buildings on the map, measured Bavarian roofs, address suggestions while typing (D39 to D41)
 - Map stays smooth on fast moves: buildings load off the page, per square, and unloaded places blink blue (D48)
-- Map starts at the browser location. A typed address selects its building by itself. Clicking works without a search. Hover shows what a click picks
+- Map starts at the browser location. A typed address only flies the map there; the homeowner then clicks the building. Clicking works without a search. Hover shows what a click picks
 
 - `/api/design` for the planner, with skipped homeowner answers allowed. PVGIS answers retry and stay on disk
 - Planner desk: request list, Design, Roof with fitted modules, Facts, Energy, Checks (`web/src/Planner.tsx`)
