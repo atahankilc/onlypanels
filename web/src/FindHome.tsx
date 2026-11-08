@@ -7,11 +7,12 @@ import HomeMap, { Face, Picked, Step, Tool, letter } from "./HomeMap";
 import { Close, Search, Undo } from "./icons";
 import Review, { Stage } from "./Review";
 import SunView from "./SunView";
+import { withTrees } from "./treeShade";
 import StartChoice, { Start } from "./Start";
 import { SHARE_ALL, Shared, forInstaller, roofNumbers, toldRoof } from "./share";
 import { Button, IconButton, Segmented } from "./ui";
 
-const PHOTO: View = { layer: "photo", moment: null }; // every page but the roof page shows the photo
+const PHOTO: View = { layer: "photo", moment: null }; // the questions show the photo only: sunlight waits for the offer
 const short = (label: string) => label.split(", ").slice(0, 2).join(", ");
 
 function toReal(answer: Awaited<ReturnType<typeof measured>>, origin: P2): Real {
@@ -68,7 +69,8 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const [face, setFace] = useState<Face | null>(null); // the roof surface under the pointer, on the map or in the list
   const [look, setLook] = useState<{ id: string } | null>(null);
   const [stage, setStage] = useState<Stage>(formFirst ? "where" : "roof");
-  const [view, setView] = useState<View>(PHOTO); // what the roof page paints on the surfaces: photo or sunlight
+  const [view, setView] = useState<View>(PHOTO); // what the offer page paints on the surfaces: photo or sunlight
+  const [shaded, setShaded] = useState<{ ref: string; buildings: Selected[] } | null>(null); // the home with trees on its sun, for the offer
   const [ref, setRef] = useState(newRef);
   const [fromList, setFromList] = useState(false); // the home on screen is a sent request opened from the list
   // Map or questions only: asked once, then kept in this browser. Nothing shows on the map until chosen.
@@ -146,6 +148,16 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
     placeAt(hit.at[1], hit.at[0]).then((p) => setBuildings((list) => list.map((b) => (b.home === home ? { ...b, label: short(p.label) } : b)))).catch(() => undefined);
   };
 
+  // Sunlight is no part of the questions. It shows with the offer, once the planner has put trees on it, and only when the home
+  // went to the installer: the trees are asked for by the home's 2 km square, which then says nothing the installer does not know.
+  const mine = requests.find((m) => m.ref === ref);
+  const sunShown = step === "review" && stage === "sent" && !!mine?.offer && buildings.length > 0 && (mine.handoff.shared?.home ?? true);
+  useEffect(() => {
+    if (!sunShown || shaded?.ref === ref) return;
+    const forRef = ref;
+    withTrees(buildings).then(({ buildings: b }) => setShaded((now) => (now?.ref === forRef ? now : { ref: forRef, buildings: b })));
+  }, [sunShown, ref]);
+  const sunHome = sunShown && shaded?.ref === ref ? shaded.buildings : null;
   // Move on as soon as the measured models are in.
   const measuring = buildings.some((b) => b.measuring || b.sun === undefined);
   useEffect(() => {
@@ -192,14 +204,14 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
     setMove(null);
     if (!clearAfter.current) return;
     clearAfter.current = false;
-    setStage("roof"); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef()); setFromList(false); setShared(SHARE_ALL);
+    setStage("roof"); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef()); setFromList(false); setShared(SHARE_ALL); setView(PHOTO);
     if (savedStart() === "form") swap(() => begin("form")); // the next request starts the way this browser chose
   };
 
   return (
     <main className={`stage ${step}${bare ? " bare" : ""}`}>
-      <HomeMap buildings={buildings} step={step} focus={focus} onPick={step === "pick" ? toggle : undefined}
-        open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={step === "review" && stage === "roof" ? view : PHOTO} chosen={step === "review" ? chosen : []} onToggle={() => undefined} editing={drawing && !!tool} installed={[]}
+      <HomeMap buildings={sunHome ?? buildings} step={step} focus={focus} onPick={step === "pick" ? toggle : undefined}
+        open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={sunHome ? view : PHOTO} chosen={step === "review" ? chosen : []} onToggle={() => undefined} editing={drawing && !!tool} installed={[]}
         marked={step === "review" ? marked : undefined} taken={step === "review" ? taken : undefined} editsOn={drawn === "panels" ? taken : marked} tool={drawing ? tool ?? undefined : undefined} onPaint={drawing ? paint : undefined}
         panels={step === "review" && stage === "sent" ? offerPanels ?? undefined : undefined} priority={step === "review" ? marked : undefined} />
       {step === "review" && drawing && !move && <div className="tools">
@@ -207,7 +219,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
         <Button variant="glass" size="lg" aria-pressed={tool === "draw"} onClick={() => setTool(tool === "draw" ? null : "draw")}>Draw</Button>
         <IconButton variant="glass" size="lg" label="Undo" disabled={!undo.length} onClick={stepBack}><Undo /></IconButton>
       </div>}
-      {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
+      {sunHome && !move && <SunView view={view} setView={setView} buildings={sunHome} />}
       {step === "pick" && !move && start === null && <StartChoice onChoose={(s) => swap(() => begin(s))} />}
       {listing && !move && <RequestPage list={requests} loading={loading} onNew={() => { setFormView("form"); setStage("where"); }}
         onOpen={(m) => { if (!m.handoff.buildings.length) { openRequest(m); return; } setStep("pick"); setTimeout(() => openRequest(m), 0); }} />}

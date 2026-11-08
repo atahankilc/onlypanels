@@ -113,7 +113,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
         {changed && <button type="button" className="textlink" onClick={reset}>Start over</button>}
       </>}
       <div className="stick"><Button size="lg" onClick={back}>Back</Button><Button variant="solid" size="lg" wide disabled={loading} onClick={next}>{nextLabel}</Button></div>
-      <p className="source small muted">Bayerische Vermessungsverwaltung, PVGIS (European Commission). Shadows from nearby buildings, without trees.</p>
+      <p className="source small muted">3D model: Bayerische Vermessungsverwaltung.</p>
     </aside>
   );
 

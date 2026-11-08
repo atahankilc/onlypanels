@@ -20,7 +20,7 @@ export default function App() {
       Promise.all(out.buildings.map((b) => (b.sun !== undefined ? b : sunOf(b.square, b.id).then((sun) => ({ ...b, sun })).catch(() => ({ ...b, sun: null })))))
         .then((buildings) => arrive({ ...out, buildings }));
     else arrive(out);
-    if (h.ref) setMine((l) => [{ ref: h.ref!, label: h.buildings[0]?.label ?? "Home", sentAt, handoff: h, opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? null }, ...l.filter((x) => x.ref !== h.ref)].sort((a, b) => b.sentAt - a.sentAt));
+    if (h.ref) setMine((l) => [{ ref: h.ref!, label: h.buildings[0]?.label ?? "Home", sentAt, handoff: { ...h, shared: out.shared ?? h.shared }, opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? null }, ...l.filter((x) => x.ref !== h.ref)].sort((a, b) => b.sentAt - a.sentAt));
   };
   // The demo starts with three requests on real homes, oldest first, as if their homeowners had sent them.
   const [loading, setLoading] = useState(DEMO_COUNT); // demo requests still on their way
