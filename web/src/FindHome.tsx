@@ -39,6 +39,7 @@ export default function FindHome({ dark, onSend, requests }: { dark: boolean; on
   const [stage, setStage] = useState<Stage>("roof");
   const [view, setView] = useState<View>(PHOTO); // what the roof page paints on the surfaces: photo or sunlight
   const [ref, setRef] = useState(newRef);
+  const [fromList, setFromList] = useState(false); // the home on screen is a sent request opened from the list
   useEffect(() => { if (stage === "sent" && !requests.some((m) => m.ref === ref)) onSend({ buildings, answers, choice, ref }); }, [stage]); // what the homeowner produced goes to the planner
   const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
   const [choice, setChoice] = useState<Choice>(NO_CHOICE);
@@ -123,12 +124,12 @@ export default function FindHome({ dark, onSend, requests }: { dark: boolean; on
   /** A sent request, opened from the start page: its home on the map and where it is, read only. */
   const openRequest = (m: Mine) => {
     const h = m.handoff;
-    setBuildings(h.buildings); setAnswers(h.answers); setChoice(h.choice); setRef(m.ref); setStage("sent"); setTool(null); setUndo([]);
+    setFromList(true); setBuildings(h.buildings); setAnswers(h.answers); setChoice(h.choice); setRef(m.ref); setStage("sent"); setTool(null); setUndo([]);
     setOpen(h.buildings[0]?.home ?? null); setStep("review"); setMove("in");
   };
   const newRequest = () => {
     setFace(null); setStep("pick"); setMove("out"); setStage("roof"); setTool(null); setUndo([]);
-    setBuildings([]); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef());
+    setBuildings([]); setAnswers(NO_ANSWERS); setChoice(NO_CHOICE); setRef(newRef()); setFromList(false);
   };
 
   return (
@@ -143,7 +144,6 @@ export default function FindHome({ dark, onSend, requests }: { dark: boolean; on
       </div>}
       {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
       {step === "pick" && <Button variant="glass" size="lg" className="map-aerial" aria-pressed={aerial} onClick={() => setAerial(!aerial)}><Photo />{aerial ? "Map" : "Aerial photo"}</Button>}
-      {step === "pick" && !buildings.length && requests.length > 0 && !move && <Requests list={requests} onOpen={openRequest} />}
       {step === "pick" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
       {(step === "pick" || move === "in") && <Curtain move={move} done={() => setMove(null)}>
@@ -164,7 +164,10 @@ export default function FindHome({ dark, onSend, requests }: { dark: boolean; on
         </div>}
       </div>
 
-      {buildings.length > 0 && <aside className={move === "in" ? "panel gone" : "panel"}>
+      {/* One panel at a time on the start page: the requests, or the buildings being picked. A request opened from the list keeps
+          the list on screen while the map's edge sweeps it away, instead of flashing that home's buildings as if just picked. */}
+      {(!buildings.length || fromList) && requests.length > 0 && <Requests list={requests} onOpen={openRequest} gone={move === "in"} />}
+      {buildings.length > 0 && !fromList && <aside className={move === "in" ? "panel gone" : "panel"}>
         <h2>Selected buildings</h2>
         <ul className="picked">{homesIn(buildings).map((b, i) => <li key={b.home} onMouseEnter={() => setNear(b.home)} onMouseLeave={() => setNear(null)}>
           <button type="button" className="row" onClick={() => goTo(b.home)}><span className="tag">{letter(i)}</span><span className="name">{b.label}</span></button>

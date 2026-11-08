@@ -5,9 +5,9 @@ export const stepOf = (m: Mine) => (m.offer ? 2 : m.opened ? 1 : 0);
 export const day = (t: number) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 
 /** The homeowner's requests on the start page. A click opens the home on the map, with where the request is. */
-export default function Requests({ list, onOpen }: { list: Mine[]; onOpen: (m: Mine) => void }) {
+export default function Requests({ list, onOpen, gone }: { list: Mine[]; onOpen: (m: Mine) => void; gone?: boolean }) {
   return (
-    <aside className="panel requests">
+    <aside className={gone ? "panel requests gone" : "panel requests"} inert={gone}>
       <h2>Your requests</h2>
       <ul>{list.map((m) => {
         const at = stepOf(m);
