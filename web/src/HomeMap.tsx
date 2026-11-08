@@ -1356,6 +1356,7 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
     if (!m || !ready.current) return;
     const to = step === "review" ? 1 : 0, from = shown.current;
     if (to === from) return;
+    if (to && !live.current.buildings.length) return; // questions only: no home to fly to, and the map is hidden
     const coverOutside = (t: number) => m.setPaintProperty(SITE, "fill-opacity", ["*", ["get", "o"], t]);
     // The models fade in, and the city fades out, over the last MOVE_MS of the flight: while the camera is still far they would only flicker.
     const flight = to ? travelTime() : MOVE_MS, wait = flight - MOVE_MS;

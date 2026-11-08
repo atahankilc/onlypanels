@@ -131,6 +131,9 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
     if (s === "map") setStage("roof");
     if (s === "form") { setBuildings([]); setStage("solar"); setOpen(null); setStep("review"); setMove("in"); }
   };
+  // Questions only: no map behind the questions. Its frame asks once more for the home, keeping every answer.
+  const bare = start === "form" && step === "review";
+  const addHome = () => { setStart("map"); setStage("roof"); setFace(null); setStep("pick"); setMove("out"); };
   /** Back from the first page: the map's picking step, or the start choice for questions only. */
   const backToPick = () => { setFace(null); setStep("pick"); setMove("out"); if (start === "form") setStart(null); };
 
@@ -156,7 +159,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   };
 
   return (
-    <main className={`stage ${step}`}>
+    <main className={`stage ${step}${bare ? " bare" : ""}`}>
       <HomeMap buildings={buildings} step={step} focus={focus} onPick={step === "pick" ? toggle : undefined}
         open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={step === "review" && stage === "roof" ? view : PHOTO} chosen={step === "review" ? chosen : []} onToggle={() => undefined} editing={drawing && !!tool} installed={[]}
         marked={step === "review" ? marked : undefined} taken={step === "review" ? taken : undefined} editsOn={drawn === "panels" ? taken : marked} tool={drawing ? tool ?? undefined : undefined} onPaint={drawing ? paint : undefined}
@@ -168,6 +171,15 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
       </div>}
       {step === "review" && stage === "roof" && !move && <SunView view={view} setView={setView} buildings={buildings} />}
       {step === "pick" && !move && start === null && <StartChoice onChoose={begin} />}
+      {bare && stage !== "sent" && <section className="bare-card" aria-label="Your roof">
+        <div>
+          <p className="eyebrow">Without your home</p>
+          <h2>We are guessing your roof.</h2>
+          <p>Its size, slope and sun decide most of your offer. Pick your building and we measure them, here in your browser.</p>
+          <Button variant="solid" size="lg" onClick={addHome}>Add my home on the map</Button>
+          <small>Your answers stay. Nothing is sent until you choose.</small>
+        </div>
+      </section>}
       {step === "pick" && start === "map" && !buildings.length && <div className="mapnote">Find your area, then click the buildings you want</div>}
 
       {(step === "pick" || move === "in") && <Curtain move={move} done={moved}>
