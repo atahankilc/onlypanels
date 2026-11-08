@@ -3,7 +3,7 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import * as THREE from "three";
 import { Poly, Selected, SunSurface, View, homesIn, polyOf, surfaceKey, Square, homesUrl, squareEdges, squaresIn } from "./api";
-import { fit } from "./panels";
+import { fit, ordered } from "./panels";
 import { TILT_PER_PX, TURN_PER_PX, leash } from "./camera";
 import { P2, P3, centre, inside, normal, toLngLat, toLocal } from "./geometry";
 import { Info, Locate, Minus, Needle, Plus } from "./icons";
@@ -116,7 +116,8 @@ type Props = {
   panels?: Record<string, number>; panelW?: number; turn?: number; onReady?: () => void; // the planner's desk
   // editsOn: the cells the tool changes now (priority or existing panels), to tell adding from taking out.
   // The homeowner's drawing: the cells marked on each surface, the tool in hand, and each stroke's cells. Without them a click toggles a whole surface.
-  marked?: Record<string, number[]>; taken?: Record<string, number[]>; editsOn?: Record<string, number[]>; tool?: Tool; onPaint?: (cells: Record<string, number[]>, on: boolean, start: boolean) => void;
+  marked?: Record<string, number[]>; taken?: Record<string, number[]>; editsOn?: Record<string, number[]>;
+  priority?: Record<string, number[]>; tool?: Tool; onPaint?: (cells: Record<string, number[]>, on: boolean, start: boolean) => void; // priority: the homeowner's marked cells, where modules are drawn first, as the design placed them
 };
 export type Tool = "surface" | "draw";
 const SNAP_PX = 10; // a click this close to a point, corner or edge lands on it
@@ -445,7 +446,7 @@ type Real = { mesh: THREE.Mesh; ids: string[]; starts: Uint32Array; shade: Float
 type OnMap = { scene: THREE.Scene; at: P2; done: boolean; real?: Real };
 type Spot = { id: string; square: string };
 
-export default function HomeMap({ buildings, step, focus, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, editing, installed, panels, panelW, turn, onReady, marked, taken, editsOn, tool, onPaint }: Props) {
+export default function HomeMap({ buildings, step, focus, onPick, open, near, face, look, onFace, onOpen, view, chosen, onToggle, editing, installed, panels, panelW, turn, onReady, marked, taken, editsOn, tool, onPaint, priority }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const models = useRef<{ scene: THREE.Scene; at: P2; id: string; polys: Poly[]; surfaces: { s: SunSurface; poly: number }[]; skins: ReturnType<typeof skinOf>[]; ghosts: THREE.Mesh }[]>([]); // one per building, each around its own origin
@@ -465,8 +466,8 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
   const [bearing, setBearing] = useState(0);
   const spot = useRef<maplibregl.Marker | null>(null);
   const pins = useRef<maplibregl.Marker[]>([]);
-  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint });
-  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint };
+  const live = useRef({ onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken });
+  live.current = { onPick, buildings, step, onFace, onOpen, onToggle, editing, panels, panelW, turn, onReady, marked: editsOn ?? marked, tool, onPaint, priority, taken };
   const clearDraft = useRef(() => {});
   const drawing = () => live.current.step === "review" && live.current.editing && !!live.current.onPaint && !!live.current.tool;
 
@@ -604,7 +605,8 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       for (const { s, poly } of x.surfaces) {
         const count = live.current.panels?.[surfaceKey(b, s)] ?? 0;
         if (!count || s.kind !== "roof") continue;
-        for (const q of fit(x.polys[poly], s.n).slice(0, count)) {
+        const key = surfaceKey(b, s);
+        for (const q of ordered(x.polys[poly], s, live.current.priority?.[key], live.current.taken?.[key]).rects.slice(0, count)) {
           const k = points.length; points.push(...q); faces.push(k, k + 1, k + 2, k, k + 2, k + 3);
           q.forEach((p, i) => edges.push(...p, ...q[(i + 1) % 4]));
           // The module image is upright: a module lying on its side turns it.

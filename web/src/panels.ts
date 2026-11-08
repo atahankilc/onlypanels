@@ -44,3 +44,40 @@ export function fit(poly: Poly, n: P3): P3[][] {
   const lift = 0.22, back = (p: V): P3 => [0, 1, 2].map((i) => o[i] + u[i] * p[0] + v[i] * p[1] + up[i] * lift) as P3;
   return best.sort((a, b) => a[0][1] - b[0][1] || a[0][0] - b[0][0]).map((c) => c.map(back));
 }
+
+/** The modules on a surface with those on the homeowner's marked cells first, and how many those are. A module counts as
+ *  marked when its middle lies on a marked cell and no point near its corners lies on a cell the homeowner left free. The cell grid
+ *  is laid onto the surface through its outline, the same way the map lays its colours: three outline corners fix the plane. */
+export function ordered(poly: Poly, s: SurfaceCells, marked?: number[], taken?: number[]): { rects: P3[][]; inside: number } {
+  let rects = fit(poly, s.n);
+  const total = s.cells.length / 2;
+  if (!taken?.length && (!marked || marked.length >= total)) return { rects, inside: rects.length }; // nothing drawn, or all of it marked
+  if (!taken?.length && !marked?.length) return { rects, inside: 0 };
+  const keep = new Set(marked ?? []), at = new Map<string, number>();
+  for (let n = 0; n < s.cells.length / 2; n++) at.set(`${s.cells[n * 2]},${s.cells[n * 2 + 1]}`, n);
+  const corners = [poly.ring, ...poly.holes].flat(), outline = [s.outline, ...s.holes].flat(), q0 = outline[0];
+  const far = outline.reduce((k, p, i) => (Math.hypot(p[0] - q0[0], p[1] - q0[1]) > Math.hypot(outline[k][0] - q0[0], outline[k][1] - q0[1]) ? i : k), 0);
+  const span = (i: number) => Math.abs((outline[far][0] - q0[0]) * (outline[i][1] - q0[1]) - (outline[far][1] - q0[1]) * (outline[i][0] - q0[0]));
+  const side = outline.reduce((k, _, i) => (span(i) > span(k) ? i : k), 0);
+  const P0 = corners[0], A: P3 = [0, 1, 2].map((i) => corners[far][i] - P0[i]) as P3, B: P3 = [0, 1, 2].map((i) => corners[side][i] - P0[i]) as P3;
+  const aa = dot(A, A), ab = dot(A, B), bb = dot(B, B), det = aa * bb - ab * ab || 1;
+  const cell = (X: P3) => {
+    const d: P3 = [X[0] - P0[0], X[1] - P0[1], X[2] - P0[2]], da = dot(d, A), db = dot(d, B);
+    const al = (da * bb - db * ab) / det, be = (db * aa - da * ab) / det;
+    const qi = q0[0] + al * (outline[far][0] - q0[0]) + be * (outline[side][0] - q0[0]), qj = q0[1] + al * (outline[far][1] - q0[1]) + be * (outline[side][1] - q0[1]);
+    return at.get(`${Math.round(qi)},${Math.round(qj)}`);
+  };
+  const mid = (r: P3[]): P3 => [0, 1, 2].map((i) => (r[0][i] + r[2][i]) / 2) as P3;
+  // Cells that already carry panels hold no new module at all.
+  if (taken?.length) { const old = new Set(taken); rects = rects.filter((r) => ![mid(r), ...r].some((p) => { const k = cell(p); return k !== undefined && old.has(k); })); }
+  if (!marked || marked.length >= total) return { rects, inside: rects.length };
+  // Corners are tested a little inside the module: cells are about a metre, and an edge on a cell boundary is not a module there.
+  const inner = (r: P3[]) => { const m = mid(r); return r.map((p) => [0, 1, 2].map((i) => m[i] + (p[i] - m[i]) * 0.6) as P3); };
+  const isMarked = (r: P3[]) => {
+    const c = cell(mid(r));
+    return c !== undefined && keep.has(c) && inner(r).every((p) => { const k = cell(p); return k === undefined || keep.has(k); });
+  };
+  const inside = rects.filter(isMarked), outside = rects.filter((r) => !isMarked(r));
+  return { rects: [...inside, ...outside], inside: inside.length };
+}
+export type SurfaceCells = { n: P3; cells: number[]; outline: [number, number][]; holes: [number, number][][] };

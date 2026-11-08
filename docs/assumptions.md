@@ -70,6 +70,8 @@ Code locations: engine `engine/src/reonic_engine/` (design.py, energy.py, models
 |---|---|---|---|
 | 0.45 kWp per module | Modules ↔ kWp | Median module power where the data lists modules | `data.py` ASSUMED_KWP_PER_MODULE |
 | 1.13 × 1.76 m module, 3 cm gap, 40 cm from each roof edge | How many modules fit a measured surface | Our assumption, a usual module and edge distance | `panels.ts` |
+| 75% of the roof's best yield | A surface the homeowner left out whole takes overflow modules only if it yields at least this share | The design needs more than the homeowner's marked area holds | Our assumption: a planner does not fill a north roof to reach a size | `plan.ts` OVERFLOW_SHARE |
+| Module counts as marked | Its middle on a marked cell, and points 60% of the way to its corners on no cell the homeowner left free | Homeowner drew part of a surface | Our choice; cells are about 1 m | `panels.ts` ordered |
 | 2,250 kWh of heat per kW | Heat pump size from heat use | Median of heat pumps sold here (`scripts/profile_hp_ev.py`), and use × 0.85 ÷ 1,900 h | `models.py` HP_KWH_PER_KW |
 | 5, 7, 10, 12 kW | Heat pump sizes offered | Our assumption | `models.py` HP_SIZES |
 | COP 3.5 | Heat → heat pump electricity | The data's own defaults (heat demand is 3.5 × heat pump electricity in 94% of heat pump homes, `scripts/profile_heating.py`) | `design.py` HEAT_PUMP_COP |

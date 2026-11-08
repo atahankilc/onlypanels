@@ -156,7 +156,7 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
       <HomeMap buildings={buildings} step={step} focus={focus} onPick={step === "pick" ? toggle : undefined}
         open={open} near={near} face={face} look={look} onFace={setFace} onOpen={goTo} view={step === "review" && stage === "roof" ? view : PHOTO} chosen={step === "review" ? chosen : []} onToggle={() => undefined} editing={drawing && !!tool} installed={[]}
         marked={step === "review" ? marked : undefined} taken={step === "review" ? taken : undefined} editsOn={drawn === "panels" ? taken : marked} tool={drawing ? tool ?? undefined : undefined} onPaint={drawing ? paint : undefined}
-        panels={step === "review" && stage === "sent" ? offerPanels ?? undefined : undefined} />
+        panels={step === "review" && stage === "sent" ? offerPanels ?? undefined : undefined} priority={step === "review" ? marked : undefined} />
       {step === "review" && drawing && !move && <div className="tools">
         <Button variant="glass" size="lg" aria-pressed={tool === "surface"} onClick={() => setTool(tool === "surface" ? null : "surface")}>Whole surface</Button>
         <Button variant="glass" size="lg" aria-pressed={tool === "draw"} onClick={() => setTool(tool === "draw" ? null : "draw")}>Draw</Button>

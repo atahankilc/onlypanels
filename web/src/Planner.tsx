@@ -4,12 +4,13 @@ import { Monument, monumentOf } from "./monument";
 import { HeatPlan, heatPlanOf } from "./heatPlan";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
-import { Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
+import { advise, Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
 import { Change, ChangeCard, Trace, touched } from "./Trace";
 import "./planner.css";
 import ProofPage from "./Proof";
 import Offer from "./Offer";
 import { Options } from "./Options";
+import { Advisor } from "./Advisor";
 import { BatteryCurve } from "./BatteryCurve";
 import { Button, Check, Field, IconButton, Input, Segmented, Select, Slider } from "./ui";
 
@@ -49,9 +50,9 @@ const useDesign = (r: Request, roof: Spot[]) => {
   useEffect(() => {
     if (!roof.length) return;
     let live = true;
-    const t = setTimeout(() => design(r.inputs, r.overrides, roof, r.off, r.existing).then((x) => live && setOut(x)).catch(() => undefined), 120);
+    const t = setTimeout(() => design(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).then((x) => live && setOut(x)).catch(() => undefined), 120);
     return () => { live = false; clearTimeout(t); };
-  }, [r.inputs, r.overrides, r.off, roof, r.existing]);
+  }, [r.inputs, r.overrides, r.off, roof, r.existing, r.strict]);
   return out;
 };
 
@@ -97,7 +98,7 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
 }
 
 function Line({ r, open }: { r: Request; open: () => void }) {
-  const [roof] = useState(() => roofOf(r.buildings, r.installed));
+  const [roof] = useState(() => roofOf(r.buildings, r.installed, r.priority, r.taken));
   const out = useDesign(r, roof);
   // The same count Checks shows: only facts this design uses.
   const assumed = out ? toConfirm(r, out.d).length : Object.values(r.sources).filter((s) => s === "assumed").length;
@@ -153,7 +154,7 @@ const SOURCE_LONG: Record<Source, string> = { customer: "from the customer", ass
 function Workspace({ r, update, back, scores }: { r: Request; update: (id: string, p: Partial<Request>) => void; back: () => void; scores: Scores | null }) {
   const [tab, setTab] = useState<Tab>("design");
   const [step, setStep] = useState<"pick" | "review">("pick");
-  const [roof] = useState(() => roofOf(r.buildings, r.installed));
+  const [roof] = useState(() => roofOf(r.buildings, r.installed, r.priority, r.taken));
   const [view, setView] = useState<View>({ layer: "photo", moment: null });
   const [face, setFace] = useState<Face | null>(null);
   const done = r.checked ?? [], setDone = (checked: string[]) => update(r.id, { checked });
@@ -199,7 +200,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const send = () => { update(r.id, { status: "sent", ...(d ? { offer: offerOf(d, r) } : {}) }); back(); };
 
   return <main className={`stage ${step} plan`} style={{ "--left": `${LEFT}px` } as React.CSSProperties}>
-    <HomeMap buildings={r.buildings} installed={r.installed} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
+    <HomeMap buildings={r.buildings} installed={r.installed} priority={r.priority} taken={r.taken} step={step} focus={null} open={null} near={null} face={face} look={null} onFace={setFace} onOpen={() => undefined} view={view} chosen={chosen} onToggle={toggle} editing={tab === "home"}
       panels={tab === "home" && view.layer === "sun" ? {} : out?.panels} panelW={LEFT} turn={turnTo(roof)} onReady={() => setStep("review")} />
     <aside className="panel tall desk">
       <header className="deskhead">
@@ -216,7 +217,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
       <div className="deskbody">
         {!d && <p className="muted">The engine is working…</p>}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
-        {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} /></>}
+        {d && tab === "design" && <><Brief r={r} d={d} assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><Advisor key={JSON.stringify([r.inputs, r.overrides, r.off, r.strict])} d={d} ask={() => advise(r.inputs, r.overrides, roof, r.off, r.existing, r.strict)} use={(o, label) => setO(o, label)} /><DesignTab d={d} first={first.current} r={r} setO={setO} apply={(label, x) => { mark(label); update(r.id, { inputs: { ...r.inputs, ...x.inputs }, overrides: { ...r.overrides, ...x.overrides }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(x.inputs).map((k) => [k, "planner"])) } }); }} lit={lit} scores={scores} /><Energy d={d} inputs={r.inputs} /></>}
         {tab === "home" && <><h3>Facts</h3><Facts r={r} d={d} setI={setI} />{d && <><h3>Roof</h3><RoofTab r={r} roof={roof} d={d} off={r.off} panels={out?.panels ?? {}} toggle={toggle} face={face} setFace={setFace} view={view} setView={setView} /></>}</>}
         {d && tab === "checks" && <>
           <h3>Confirm before sending</h3>
@@ -243,6 +244,23 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
       </div>
     </aside>
   </main>;
+}
+
+/** Where the modules sit against the area the homeowner marked as their priority. The marked area comes first; when the
+ * design needs more, the rest of the roof is used and the planner sees it, and can keep to the customer's area instead. */
+function PriorityNote({ r, d, roof, panels, set }: { r: Request; d: Design; roof: Spot[]; panels: Record<string, number>; set: (strict: boolean) => void }) {
+  if (!r.priority || !Object.keys(r.priority).length) return null;
+  const use = roof.filter((x) => !r.off.includes(x.key)), room = use.reduce((a, x) => a + x.inside, 0);
+  const outside = use.reduce((a, x) => a + Math.max(0, (panels[x.key] ?? 0) - x.inside), 0);
+  if (r.strict) return <div className="prio">
+    <p className="small muted">Kept to the area the customer marked: room for {room} {room === 1 ? "module" : "modules"}{d.pv.capped ? `, so the design stops at ${d.pv.modules}; the engine wanted more` : ""}.</p>
+    <Button variant="plain" onClick={() => set(false)}>Use the rest of the roof too</Button>
+  </div>;
+  if (!outside) return <p className="small muted">All {d.pv.modules} modules sit on the area the customer marked (room for {room}).</p>;
+  return <div className="prio">
+    <p className="flag">The customer marked room for {room} {room === 1 ? "module" : "modules"}. The design needs {d.pv.modules}, so {outside} {outside === 1 ? "goes" : "go"} on parts they did not mark. Tell the customer why, or keep to their area.</p>
+    <Button variant="plain" onClick={() => set(true)}>Keep to their area</Button>
+  </div>;
 }
 
 /** The first ten seconds: what is proposed, why in three lines, and what is still open. Written from the engine's numbers by template, no language model. */
@@ -281,6 +299,7 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
   if (i.solar_thermal) list.push({ id: "thermal", title: "Hot water collectors on the roof", why: "The customer has solar collectors for hot water. Their area is left out; check where they sit and whether they stay." + (i.has_solar ? " The marked area also holds solar panels, so a size from the area is too high." : "") });
   if (i.backup) list.push({ id: "backup", title: "Backup power wanted", why: "Pick an inverter and battery that can run the home in an outage, with a backup box. About 1 in 7 past projects had one." });
   list.push(monumentCheck(monument));
+  if (r.inputs.heating !== "Heatpump") list.push(heatPlanCheck(heatPlan, r.inputs.heating, d.heatpump.included));
   list.push({ id: "grid", title: "Check the grid connection and meter cabinet", why: r.meterPhoto ? "The customer sent a photo of the meter cabinet, below. The grid connection is not in our data." : "Not in our data. No photo of the meter cabinet was sent." });
   // KfW 458 speed bonus (secondary sources, November 2026): oil, coal and electric storage heating at any age, gas once 20 years
   // in use, for owners living in the home. Its rate falls every half year from July 2026, so no figure is shown.
@@ -294,11 +313,22 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
   return list;
 }
 
+/** What Munich's heat plan says at the home, worded as a check. Where a heat network is coming, a heat pump may be the wrong offer. */
+function heatPlanCheck(p: HeatPlan | null, heating: string | null, heatPump: boolean): { id: string; title: string; why: string } {
+  const more = p?.details.length ? `: ${p.details.join("; ")}` : "";
+  if (!p) return { id: "heatplan", title: "Check the city's heat plan", why: "Asking Munich's heat plan map…" };
+  if (p.area === "network") return { id: "heatplan", title: "Heat network area in the city's heat plan", why: `The city's heat plan puts this home in a heat network area${more}.` +
+    (heating === "District" ? " The home already has district heating." : heatPump ? " The design has a heat pump: compare it with a district heating connection before offering it." : " If a heat pump comes up, compare it with a district heating connection first.") };
+  if (p.area === "own") return { id: "heatplan", title: "Heat plan: homes here heat on their own", why: `The city's heat plan expects homes here to have their own heating, mostly heat pumps, and plans no heat network${more}.` };
+  if (p.area === "other") return { id: "heatplan", title: "Check the city's heat plan", why: /prüf/i.test(p.label ?? "") ? `The city's heat plan has not decided this area yet (Prüfgebiet)${more}. A heat network may still come: ask the city or SWM before offering a heat pump.` : `The city's heat plan marks this home as: ${p.label}${more}.` };
+  if (p.area === "none") return { id: "heatplan", title: "Check the city's heat plan", why: "No heat plan area found at this home. The plan covers the city of Munich only." };
+  return { id: "heatplan", title: "Check the city's heat plan", why: "Munich's heat plan map did not answer. Look the address up in the Geoportal München." };
+}
+
 /** What the Bavarian monument map says, worded as a check. Never a ruling: the lower monument authority decides. */
 function monumentCheck(m: Monument | null): { id: string; title: string; why: string } {
   const named = (h: { name: string | null; address: string | null; id: string | null }) => [h.name, h.address].filter(Boolean).join(", ") + (h.id ? ` (${h.id})` : "");
   const listed = m?.here.filter((h) => h.kind === "listed") ?? [], ensemble = m?.here.filter((h) => h.kind === "ensemble") ?? [];
-  if (r.inputs.heating !== "Heatpump") list.push(heatPlanCheck(heatPlan, r.inputs.heating, d.heatpump.included));
   const authority = "Ask the lower monument authority before planning further; panels usually need a permit and may have to stay out of sight.";
   if (!m) return { id: "monument", title: "Check monument status", why: "Asking the Bavarian monument map…" };
   if (m.status === "listed") return { id: "monument", title: "Listed building: permit needed", why: `The Bavarian monument list has this building: ${listed.map(named).join("; ")}.` + (ensemble.length ? ` It also lies in the ensemble ${ensemble.map(named).join("; ")}.` : "") + ` ${authority}` };
@@ -312,18 +342,6 @@ function DesignTab({ d, first, r, setO, apply, lit, scores }: { d: Design; first
   const [text, setText] = useState(""), [said, setSaid] = useState("");
   const o = r.overrides, kwp = d.pv.kwp, s = d.similar;
   const three = (v: boolean | null | undefined) => (v == null ? "auto" : v ? "yes" : "no");
-/** What Munich's heat plan says at the home, worded as a check. Where a heat network is coming, a heat pump may be the wrong offer. */
-function heatPlanCheck(p: HeatPlan | null, heating: string | null, heatPump: boolean): { id: string; title: string; why: string } {
-  const more = p?.details.length ? `: ${p.details.join("; ")}` : "";
-  if (!p) return { id: "heatplan", title: "Check the city's heat plan", why: "Asking Munich's heat plan map…" };
-  if (p.area === "network") return { id: "heatplan", title: "Heat network area in the city's heat plan", why: `The city's heat plan puts this home in a heat network area${more}.` +
-    (heating === "District" ? " The home already has district heating." : heatPump ? " The design has a heat pump: compare it with a district heating connection before offering it." : " If a heat pump comes up, compare it with a district heating connection first.") };
-  if (p.area === "own") return { id: "heatplan", title: "Heat plan: homes here heat on their own", why: `The city's heat plan expects homes here to have their own heating, mostly heat pumps, and plans no heat network${more}.` };
-  if (p.area === "other") return { id: "heatplan", title: "Check the city's heat plan", why: /prüf/i.test(p.label ?? "") ? `The city's heat plan has not decided this area yet (Prüfgebiet)${more}. A heat network may still come: ask the city or SWM before offering a heat pump.` : `The city's heat plan marks this home as: ${p.label}${more}.` };
-  if (p.area === "none") return { id: "heatplan", title: "Check the city's heat plan", why: "No heat plan area found at this home. The plan covers the city of Munich only." };
-  return { id: "heatplan", title: "Check the city's heat plan", why: "Munich's heat plan map did not answer. Look the address up in the Geoportal München." };
-}
-
   const from3 = (v: string) => (v === "auto" ? null : v === "yes");
   const ask = () => refine(text).then((x) => {
     if (!x.understood.length) { setSaid("Not understood. Try the car, battery, heat pump, wallbox or a module count."); return; }
@@ -376,9 +394,9 @@ function RoofTab({ r, roof, d, off, panels, toggle, face, setFace, view, setView
       <Field label="Month" value={MONTHS[at.month - 1]}><Slider min={1} max={12} value={at.month} onChange={(e) => { const m = Number(e.target.value), l = suns.filter((s) => s.month === m).map((s) => s.hour); setView({ layer: "sun", moment: { month: m, hour: Math.min(Math.max(at.hour, l[0]), l[l.length - 1]) } }); }} /></Field>
       <Field label="Solar time" value={`${at.hour}:00`}><Slider min={hours[0]} max={hours[hours.length - 1]} value={at.hour} onChange={(e) => setView({ layer: "sun", moment: { month: at.month, hour: Number(e.target.value) } })} /></Field></div>}
     {mode === "year" && <div className="legend" role="img" aria-label={`Sun on the surface from ${SUN_LOW} to ${SUN_HIGH} kWh per square metre a year`}><i /><span>{SUN_LOW} kWh/m²</span><span>{SUN_HIGH.toLocaleString("en")} kWh/m²</span></div>}
-    <table className="grid surfaces"><thead><tr><th /><th>Facing</th><th>Tilt</th><th>Area</th><th>Shade</th><th>kWh/kWp</th><th>Fits</th><th>Placed</th></tr></thead><tbody>
+    <table className="grid surfaces"><thead><tr><th /><th>Facing</th><th>Tilt</th><th>Area</th><th>Shade</th><th>kWh/kWp</th>{r.priority && Object.keys(r.priority).length > 0 && <th>Marked</th>}<th>Fits</th><th>Placed</th></tr></thead><tbody>
       {roof.map((x) => { const me = { building: x.b.id, poly: x.poly }; return <tr key={x.key} className={face?.building === me.building && face.poly === x.poly ? "on" : ""} onMouseEnter={() => setFace(me)} onMouseLeave={() => setFace(null)}>
-        <td><Check checked={!off.includes(x.key)} onChange={() => toggle(x.key)}>{""}</Check></td><td>{facing(x.s)}</td><td>{x.s.tilt}°</td><td>{Math.round(x.s.m2)} m²</td><td>{x.s.kwh_per_kwp == null ? "?" : `${Math.round(x.shade * 100)}%`}</td><td>{x.s.kwh_per_kwp == null ? `~${x.yield_}` : x.yield_}</td><td>{x.fits}</td><td><b>{panels[x.key] ?? 0}</b></td>
+        <td><Check checked={!off.includes(x.key)} onChange={() => toggle(x.key)}>{""}</Check></td><td>{facing(x.s)}</td><td>{x.s.tilt}°</td><td>{Math.round(x.s.m2)} m²</td><td>{x.s.kwh_per_kwp == null ? "?" : `${Math.round(x.shade * 100)}%`}</td><td>{x.s.kwh_per_kwp == null ? `~${x.yield_}` : x.yield_}</td>{r.priority && Object.keys(r.priority).length > 0 && <td>{x.inside}</td>}<td>{x.fits}</td><td><b>{panels[x.key] ?? 0}</b></td>
       </tr>; })}
     </tbody></table>
     <p className="small muted">{d.pv.modules} of {fits} modules used. Modules fill the best-yielding surfaces first, 40 cm from every edge. Click a roof on the model to take it out. Obstacles are not in the measured model, so look at the photo before you trust "Fits".</p>

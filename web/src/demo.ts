@@ -36,7 +36,7 @@ const SEEDS: Seed[] = [
       built: "1991to2000", living_m2: 140, heating: "Gas", heat_kwh: 18000, wants_hp: true,
       ev: true, ev_planned: false, ev_count: 1, ev_kwh_month: 220, ev_km: 15000, ev_charge_home: "most", ev_day: false, has_wallbox: false, goal: "independence",
     },
-    marks: (_, s) => (s.kind !== "roof" ? null : north(s) ? { cells: [] } : south(s) ? { cells: withHole(s) } : null),
+    marks: (_, s) => (s.kind !== "roof" ? null : north(s) ? { cells: [] } : south(s) ? { cells: withHole(s, 0) } : null),
   },
   {
     // 4.5 kWp from 2006 on the western half of the south roof, its feed-in tariff now over, and a 5 kWh battery added in 2019.
@@ -95,7 +95,7 @@ async function build(seed: Seed): Promise<Sent | null> {
     const h: Sent = { buildings, answers: { ...NO_ANSWERS, ...seed.answers, area }, choice, ref: seed.ref, sentAt: Date.now() - seed.hoursAgo * 3600000 };
     if (seed.state === "opened") h.seed = { opened: true };
     if (seed.state === "offer") {
-      const r = fromHomeowner(h), { d } = await design(r.inputs, r.overrides, roofOf(r.buildings, r.installed), r.off, r.existing);
+      const r = fromHomeowner(h), { d } = await design(r.inputs, r.overrides, roofOf(r.buildings, r.installed, r.priority, r.taken), r.off, r.existing, r.strict);
       h.seed = { opened: true, offer: offerOf(d, r) };
     }
     return h;

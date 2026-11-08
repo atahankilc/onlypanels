@@ -9,6 +9,7 @@ from concurrent.futures import ProcessPoolExecutor
 from functools import lru_cache
 from threading import Thread
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Path
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
@@ -17,8 +18,10 @@ from pydantic import BaseModel
 from reonic_engine import battery as batteries, lod2, sun
 from reonic_engine.data import load_dataset
 from reonic_engine.design import Engine, use_from_payment
+from reonic_engine.advise import advise
 from reonic_engine.refine import refine
 
+load_dotenv(FilePath(__file__).resolve().parent.parent / ".env")  # ANTHROPIC_API_KEY for the planner's sentences; without it, rules
 SQUARE = r"^\d{3}_\d{4}$"  # it becomes part of a download address
 app = FastAPI(title="Home energy design")
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)  # a square's measured roofs shrink from ~19 MB to ~2 MB
@@ -117,6 +120,13 @@ def design(req: DesignRequest):
     o = req.overrides.model_dump()
     d = engine().design(i, o)
     return {**d, "alternatives": engine().alternatives(i, o, d), "battery_curve": batteries.curve(i, d), "assumed": assumed}
+
+
+@app.post("/api/advise")
+def advise_design(req: DesignRequest):
+    """The advisor on the planner's current design: a pick among the engine's options, why, and what to ask first."""
+    d = design(req)
+    return advise({**req.inputs.model_dump(), "demand_kwh": req.inputs.demand_kwh or d["energy"]["base_mwh"] * 1000}, d)
 
 
 @app.get("/api/scores")

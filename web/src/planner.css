@@ -69,6 +69,10 @@
 .flag { position: relative; margin: 0; max-width: none; padding: 0 0 0 18px; color: var(--hud-warn); font-size: 13.5px; line-height: 1.45; }
 .flag::before { content: ""; position: absolute; left: 2px; top: 0.5em; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 
+/* The homeowner's marked area against the design. */
+.prio { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.prio .btn { margin-left: -12px; }
+
 /* What moved since the engine's first draft. */
 .delta { margin: 0; max-width: none; font: 12.5px/1.7 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--hud-ink); }
 .delta span { display: inline-block; width: 66px; color: var(--hud-ink-2); }
@@ -220,3 +224,12 @@
 .cabinet { margin: 12px 0 0; }
 .cabinet img { display: block; width: 100%; max-height: 360px; object-fit: contain; border-radius: 10px; background: rgba(0, 0, 0, 0.3); }
 .cabinet figcaption { margin-top: 6px; }
+
+/* The advisor: a second opinion on the engine's options, asked on demand. */
+.advisor { display: flex; flex-direction: column; gap: 10px; padding: 14px 0; border-block: 1px solid var(--hud-line); font-size: 13px; line-height: 1.5; }
+.advisor-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; } .advisor-head b { font-size: 14px; font-weight: 600; }
+.advisor-tag { flex: none; color: var(--hud-route); font-size: 12px; }
+.advisor small { color: var(--hud-ink-2); }
+.advisor ul, .advisor ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.advisor h4 { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--hud-ink-2); }
+.advisor-actions { display: flex; align-items: center; gap: 8px; }

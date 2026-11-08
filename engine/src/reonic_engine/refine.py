@@ -40,7 +40,7 @@ class Change(BaseModel):
     has_storage: bool | None = None
 
 
-NEGATIVE = r"(istemiyor|istemez|olmasın|olmadan|olmayacak|çıkar|kaldır|without|no |remove|don'?t want|do not|does not|doesn'?t|ohne|kein|nicht)"
+NEGATIVE = r"(istemiyor|istemez|olmasın|olmadan|olmayacak|çıkar|kaldır|yok|without|\bno\b|remove|drop|skip|not interested|won'?t|sold|don'?t want|do not|does not|doesn'?t|ohne|kein|nicht)"
 HAS = r"(zaten|mevcut|already|existing|bereits|vorhanden)"
 
 
@@ -49,7 +49,10 @@ def _fold(text):
 
 
 def _number(raw, thousand=False):
-    value = float(raw.replace(".", "").replace(",", "."))
+    raw = raw.strip(".,")
+    if re.fullmatch(r"\d{1,3}([.,]\d{3})+", raw):  # 15,000 or 15.000: thousands, in English and German alike
+        raw = re.sub(r"[.,]", "", raw)
+    value = float(raw.replace(",", "."))
     return value * 1000 if thousand else value
 
 
@@ -63,7 +66,7 @@ def rules(text):
     car = r"\b(araba|araç|arac|otomobil|car\b|ev\b|elektroauto|e-auto|tesla)"
     if re.search(car, t):
         c.ev = not near(car, NEGATIVE)
-        km = re.search(r"([\d.,]+)\s*(bin)?\s*(km|kilomet)", t)
+        km = re.search(r"([\d.,]+)\s*(bin|k)?\s*(km|kilomet)", t)
         if km and c.ev:
             c.ev_km = _number(km.group(1), bool(km.group(2)))
 
@@ -75,7 +78,7 @@ def rules(text):
     if re.search(box, t):
         c.wallbox = not near(box, NEGATIVE)
 
-    battery = r"(batarya|akü|battery|speicher)"
+    battery = r"(batarya|akü|battery|storage|speicher)"
     if re.search(battery, t):
         size = re.search(r"([\d.,]+)\s*kwh", t)
         if near(battery, HAS):
@@ -100,7 +103,7 @@ def rules(text):
         c.area_m2 = _number(area.group(1))
     panels = re.search(r"(\d+)\s*(panel|modül|module?|moduls?)", t)
     if panels:
-        limit = re.search(r"(sığ|fit|passen|en fazla|maks|max)", t)
+        limit = re.search(r"(sığ|fit|passen|en fazla|maks|max|at most|up to)", t)
         if limit:
             c.max_panels = int(panels.group(1))
         else:

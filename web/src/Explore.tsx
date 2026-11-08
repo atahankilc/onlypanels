@@ -9,14 +9,14 @@ const eur = (v: number) => `€${v.toLocaleString("en")}`;
 
 export default function Explore({ m, onPanels }: { m: Mine; onPanels?: (p: Record<string, number> | null) => void }) {
   const o = m.offer!, b = o.basis!, allowed = o.allowed ?? [];
-  const roof = useMemo(() => roofOf(m.handoff.buildings, b.installed), [m.ref]);
+  const roof = useMemo(() => roofOf(m.handoff.buildings, b.installed, b.priority, b.taken), [m.ref]);
   const [v, setV] = useState<Variant>({});
   const [out, setOut] = useState<{ d: Design; panels: Record<string, number> } | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let live = true;
     setBusy(true);
-    const t = setTimeout(() => design(b.inputs, { ...b.overrides, ...v } as Overrides, roof, b.off, b.existing)
+    const t = setTimeout(() => design(b.inputs, { ...b.overrides, ...v } as Overrides, roof, b.off, b.existing, b.strict)
       .then((x) => { if (live) { setOut(x); setBusy(false); } }).catch(() => live && setBusy(false)), 150);
     return () => { live = false; clearTimeout(t); };
   }, [v]);
