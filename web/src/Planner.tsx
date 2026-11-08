@@ -1,6 +1,7 @@
 import { isValidElement, useEffect, useRef, useState } from "react";
 import { GAS_CT, View, surfaceKey } from "./api";
 import { Monument, monumentOf } from "./monument";
+import { HeatPlan, heatPlanOf } from "./heatPlan";
 import HomeMap, { Face, SUN_HIGH, SUN_LOW } from "./HomeMap";
 import { Back } from "./icons";
 import { Design, Handoff, Inputs, Overrides, Progress, Request, Source, Spot, design, facing, fromHomeowner, offerOf, DEFAULT_ALLOWED, refine, roofOf, turnTo } from "./plan";
@@ -160,6 +161,9 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   // Monument status from the Bavarian monument map, asked once per request by the page itself, never through our server.
   const [monument, setMonument] = useState<Monument | null>(null);
   useEffect(() => { let live = true; setMonument(null); monumentOf(r.buildings).then((m) => live && setMonument(m)); return () => { live = false; }; }, [r.id]);
+  // Munich's heat plan at the home, asked the same way: by the page, from the city's map server.
+  const [heatPlan, setHeatPlan] = useState<HeatPlan | null>(null);
+  useEffect(() => { let live = true; setHeatPlan(null); heatPlanOf(r.buildings).then((p) => live && setHeatPlan(p)); return () => { live = false; }; }, [r.id]);
   const first = useRef<Design | null>(null);
   if (out && !first.current) first.current = out.d;
   const d = out?.d;
@@ -187,7 +191,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const toggle = (key: string) => { if (roof.some((x) => x.key === key)) mark(r.off.includes(key) ? "Roof surface added" : "Roof surface taken out"); if (roof.some((x) => x.key === key)) update(r.id, { off: r.off.includes(key) ? r.off.filter((k) => k !== key) : [...r.off, key] }); };
   const walls = r.buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => s.kind === "wall").map((s) => surfaceKey(b, s)));
   const chosen = [...walls, ...roof.filter((x) => !r.off.includes(x.key)).map((x) => x.key)];
-  const checks = d ? checkList(r, d, monument) : [];
+  const checks = d ? checkList(r, d, monument, heatPlan) : [];
   const confirm = d ? toConfirm(r, d) : [];
   const warns = d ? d.review.filter((n) => n.level === "warn") : [];
   const left = confirm.length + checks.filter((c) => !done.includes(c.id)).length;
@@ -257,7 +261,7 @@ function Brief({ r, d, assumed, points, site, open }: { r: Request; d: Design; a
   </section>;
 }
 
-function checkList(r: Request, d: Design, monument: Monument | null) {
+function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: HeatPlan | null) {
   const list: { id: string; title: string; why: string }[] = [];
   const dist = r.inputs.heat_dist;
   if (d.heatpump.included) list.push({ id: "flow", title: "Check radiators and flow temperature", why:
@@ -294,6 +298,7 @@ function checkList(r: Request, d: Design, monument: Monument | null) {
 function monumentCheck(m: Monument | null): { id: string; title: string; why: string } {
   const named = (h: { name: string | null; address: string | null; id: string | null }) => [h.name, h.address].filter(Boolean).join(", ") + (h.id ? ` (${h.id})` : "");
   const listed = m?.here.filter((h) => h.kind === "listed") ?? [], ensemble = m?.here.filter((h) => h.kind === "ensemble") ?? [];
+  if (r.inputs.heating !== "Heatpump") list.push(heatPlanCheck(heatPlan, r.inputs.heating, d.heatpump.included));
   const authority = "Ask the lower monument authority before planning further; panels usually need a permit and may have to stay out of sight.";
   if (!m) return { id: "monument", title: "Check monument status", why: "Asking the Bavarian monument map…" };
   if (m.status === "listed") return { id: "monument", title: "Listed building: permit needed", why: `The Bavarian monument list has this building: ${listed.map(named).join("; ")}.` + (ensemble.length ? ` It also lies in the ensemble ${ensemble.map(named).join("; ")}.` : "") + ` ${authority}` };
@@ -307,6 +312,18 @@ function DesignTab({ d, first, r, setO, apply, lit, scores }: { d: Design; first
   const [text, setText] = useState(""), [said, setSaid] = useState("");
   const o = r.overrides, kwp = d.pv.kwp, s = d.similar;
   const three = (v: boolean | null | undefined) => (v == null ? "auto" : v ? "yes" : "no");
+/** What Munich's heat plan says at the home, worded as a check. Where a heat network is coming, a heat pump may be the wrong offer. */
+function heatPlanCheck(p: HeatPlan | null, heating: string | null, heatPump: boolean): { id: string; title: string; why: string } {
+  const more = p?.details.length ? `: ${p.details.join("; ")}` : "";
+  if (!p) return { id: "heatplan", title: "Check the city's heat plan", why: "Asking Munich's heat plan map…" };
+  if (p.area === "network") return { id: "heatplan", title: "Heat network area in the city's heat plan", why: `The city's heat plan puts this home in a heat network area${more}.` +
+    (heating === "District" ? " The home already has district heating." : heatPump ? " The design has a heat pump: compare it with a district heating connection before offering it." : " If a heat pump comes up, compare it with a district heating connection first.") };
+  if (p.area === "own") return { id: "heatplan", title: "Heat plan: homes here heat on their own", why: `The city's heat plan expects homes here to have their own heating, mostly heat pumps, and plans no heat network${more}.` };
+  if (p.area === "other") return { id: "heatplan", title: "Check the city's heat plan", why: /prüf/i.test(p.label ?? "") ? `The city's heat plan has not decided this area yet (Prüfgebiet)${more}. A heat network may still come: ask the city or SWM before offering a heat pump.` : `The city's heat plan marks this home as: ${p.label}${more}.` };
+  if (p.area === "none") return { id: "heatplan", title: "Check the city's heat plan", why: "No heat plan area found at this home. The plan covers the city of Munich only." };
+  return { id: "heatplan", title: "Check the city's heat plan", why: "Munich's heat plan map did not answer. Look the address up in the Geoportal München." };
+}
+
   const from3 = (v: string) => (v === "auto" ? null : v === "yes");
   const ask = () => refine(text).then((x) => {
     if (!x.understood.length) { setSaid("Not understood. Try the car, battery, heat pump, wallbox or a module count."); return; }
