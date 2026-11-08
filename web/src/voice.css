@@ -1,9 +1,11 @@
 /* The voice, ported from Steward's Guide (frontend/src/building/hud.css): a column at the bottom left, on the same left
    edge and width as the panels above it (of the map, beside a side panel). Only the bubble, the chips and the dock's buttons have glass of
    their own. The map's With/Without switch sits at the bottom right, beside the map's buttons. Tokens from styles.css. */
-.guide { --btn-sm: 32px; position: fixed; z-index: 40; left: 12px; bottom: 28px; width: 400px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; pointer-events: none; animation: guide-in 0.32s var(--ease); }
+.guide { --btn-sm: 32px; position: fixed; z-index: 40; left: 12px; bottom: 28px; width: fit-content; max-width: 400px; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; animation: guide-in 0.32s var(--ease); }
 .guide > * { pointer-events: auto; width: 100%; max-width: 400px; }
-.guide > .guide-bubble, .guide > .voice-error { width: fit-content; text-align: left; } /* bubble and dock on the panels' left edge */
+.guide > .guide-bubble, .guide > .voice-error { width: fit-content; text-align: left; }
+/* the column is as wide as its bubble, on the panels' left edge; the dock centres under the bubble */
+.guide.type { width: 400px; }
 .guide.homeowner { z-index: 60; } /* also over the start dialog, so it can help choose how to begin */
 body:has(.stage.review:not(.bare)) .guide.homeowner { left: calc(424px + 12px); }
 body:has(main.plan) .guide.planner { left: calc(548px + 12px); }
