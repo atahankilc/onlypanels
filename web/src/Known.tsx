@@ -140,18 +140,17 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
   if (stage === "house") {
     if (a.built) add(known, <>Built {lower(label(BUILT, a.built))}: a house this age needs about <b>{HEAT_KWH_PER_M2[a.built]} kWh</b> of heat per m² a year</>, YOU);
     else if (a.area?.built) add(assumed, <>Built {lower(label(BUILT, a.area.built))}, like {Math.round((a.area.built_share ?? 0) * 100)}% of homes nearby</>, "Census 2022");
-    else add(assumed, "Build period not known");
     if (a.living_m2) add(known, <><b>{k(a.living_m2)} m²</b> to live in</>, YOU);
     else if (c.modelM2) add(assumed, <>About <b>{k(c.modelM2)} m²</b> to live in, from the 3D model's floors</>, "3D model");
-    else add(assumed, "Living area not known");
     if (a.cert_kwh_m2) add(known, <>Certificate: <b>{k(a.cert_kwh_m2)} kWh</b> per m², used instead of the build period{a.living_m2 || c.modelM2 ? "" : " once the living area is known"}</>, YOU);
     const heat = heatFromHouse(a, c.modelM2);
     if (heat) add(known, <>Heat your home needs: about <b>{r100(heat.kwh)} kWh</b> a year, from {heat.from}</>, MATH);
+    else add(assumed, <>Heat need: a typical <b>{k(TYPICAL_HEAT_KWH)} kWh</b> a year, unless you give your fuel use next</>);
     if (a.owner === "sole") add(known, "You or your family own it, so you can sign", YOU);
     else if (a.owner === "shared") add(known, "Shared with other owners: they must agree first", YOU);
     else if (a.owner === "tenant") add(known, "Rented: the landlord must agree first", YOU);
     else add(assumed, "Not given: we plan as if you own it");
-    add(later, "Checks who must agree before planning further");
+    if (a.owner === "shared" || a.owner === "tenant") add(later, a.owner === "tenant" ? "Plans once your landlord agrees" : "Plans once the other owners agree");
     add(later, "Sizes a heat pump from the heat need, if one is wanted");
   }
 
