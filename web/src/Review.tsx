@@ -327,7 +327,7 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
           </div>
         </>}
         {way === "people" && <>
-          <p className="muted">Then tell us how many people live here. We start from a typical value, and your installer checks it with you.</p>
+          <p className="muted">Then how many people live here? We start from a typical home of that size.</p>
           <div className="answers people">{BY_PEOPLE.map(([label, kwh]) => <Button key={label} size="lg" wide aria-pressed={a.use_source === "people" && a.demand_kwh === kwh} onClick={() => answer({ demand_kwh: kwh, use_source: "people", use_range: [null, null] })}>{label}</Button>)}</div>
           <div className="switches">
             <button type="button" className="textlink" onClick={() => switchWay("range")}>Back to ranges</button>

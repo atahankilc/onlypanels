@@ -123,8 +123,8 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
     else if (a.home_day === "rarely") add(known, "Mostly out: more of your power is used in the evening", YOU);
     else if (a.home_day === "some") add(known, "Home now and then: a usual day", YOU);
     else add(assumed, "A usual day: someone home now and then");
-    add(later, "Checks the use against your bill before the offer");
-    add(later, "Works out hour by hour how much solar power you use yourself");
+    add(later, "Sizes solar and battery to this use");
+    add(later, "Works out hour by hour how much solar you use yourself");
   }
 
   if (stage === "big") {
