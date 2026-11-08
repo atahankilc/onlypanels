@@ -448,3 +448,8 @@ html[data-vt="out"]::view-transition-new(root) { z-index: 1; animation-name: vt-
 .overview .assumed li, .sendview .assumed li { position: relative; padding-left: 14px; font-size: 12.5px; line-height: 1.45; color: var(--hud-ink-3); }
 .overview .assumed li::before, .sendview .assumed li::before { content: ""; position: absolute; left: 1px; top: 0.55em; width: 5px; height: 5px; border-radius: 50%; background: var(--hud-warn); }
 .overview .assumed b, .sendview .assumed b { color: var(--hud-ink-2); font-weight: 600; }
+/* The homeowner's offer reuses the planner's overview; nothing in it is a button. */
+.requests .home-sum { margin: 0 0 10px; }
+.requests .home-sum .sysum-tile, .requests .home-sum .sysum-money-figs { cursor: default; }
+.requests .home-sum .sysum-tile:hover { background: color-mix(in srgb, var(--tc) 9%, var(--hud-fill)); }
+.requests .home-sum .sysum-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }

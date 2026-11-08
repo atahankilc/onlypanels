@@ -1068,9 +1068,16 @@ export default function HomeMap({ buildings, step, focus, onPick, open, near, fa
       // Real roofs: the worker fetches and shapes them, the page only hands the result to the GPU.
       const shaping = new Set<string>(), noReal = new Set<string>();
       const pumpReal = () => {
-        const c = m.getCenter();
-        [...squares.current].filter(([name, s]) => !s.real && !shaping.has(name) && !noReal.has(name) && around.current.some((x) => x.name === name))
-          .sort(([, a], [, b]) => Math.hypot(a.at[0] - c.lng, a.at[1] - c.lat) - Math.hypot(b.at[0] - c.lng, b.at[1] - c.lat))
+        // Nearest by the square itself, not its corner (`at`): the square under the view comes first, so a searched home is
+        // drawn with its real roof first instead of waiting behind neighbours whose corner happens to be closer.
+        const c = m.getCenter(), rings = new Map(around.current.map((x) => [x.name, x.ring])), k = Math.cos((c.lat * Math.PI) / 180);
+        const away = (name: string) => {
+          const r = rings.get(name)!, lons = r.map((p) => p[0]), lats = r.map((p) => p[1]);
+          const dx = Math.max(Math.min(...lons) - c.lng, 0, c.lng - Math.max(...lons)), dy = Math.max(Math.min(...lats) - c.lat, 0, c.lat - Math.max(...lats));
+          return Math.hypot(dx * k, dy);
+        };
+        [...squares.current].filter(([name, s]) => !s.real && !shaping.has(name) && !noReal.has(name) && rings.has(name))
+          .sort(([a], [b]) => away(a) - away(b))
           .slice(0, MAX_DETAIL_LOADS - shaping.size)
           .forEach(([name, s]) => { shaping.add(name); shaper.postMessage({ name, at: s.at }); });
       };

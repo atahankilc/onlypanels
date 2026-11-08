@@ -1,6 +1,9 @@
 import Explore from "./Explore";
 import { Mine } from "./plan";
 import { Button } from "./ui";
+import { BatteryIcon, HeatIcon, SolarIcon, WallboxIcon } from "./techIcons";
+import "./planner.css";
+import "./money.css";
 
 const STEPS = ["Sent", "Being planned", "Offer ready"] as const;
 export const stepOf = (m: Mine) => (m.offer ? 2 : m.opened ? 1 : 0);
@@ -67,17 +70,31 @@ export function Status({ m, onPanels }: { m: Mine; onPanels?: (p: Record<string,
     <ol className="track">{STEPS.map((s, i) => <li key={s} className={stepClass(i, at)}>{s}</li>)}</ol>
     {o && <div className="offer">
       <h3>Your offer</h3>
-      <dl>
-        <div><dt>Solar</dt><dd>{o.kwp.toFixed(1)} kWp · {o.modules} modules</dd></div>
-        <div><dt>Battery</dt><dd>{o.battery_kwh ? `${o.battery_kwh} kWh` : "None"}</dd></div>
-        {o.wallbox && <div><dt>Wallbox</dt><dd>Included</dd></div>}
-        {o.heatpump_kw > 0 && <div><dt>Heat pump</dt><dd>{o.heatpump_kw} kW</dd></div>}
-        <div><dt>Makes</dt><dd>{o.production_mwh.toFixed(1)} MWh a year</dd></div>
-        <div><dt>Own power</dt><dd>About {o.self_sufficiency_pct}% of your use</dd></div>
-        {o.pays_eur != null && <div><dt>You pay</dt><dd>About €{o.pays_eur.toLocaleString("en")}, grants taken off</dd></div>}
-        <div><dt>Saves</dt><dd>About €{o.saving_eur.toLocaleString("en")} {o.pays_eur != null ? "in the first year, after upkeep" : "a year"}</dd></div>
-        {o.pays_eur != null && <div><dt>Pays back</dt><dd>{o.payback_years != null ? `After about ${o.payback_years.toLocaleString("en", { maximumFractionDigits: 0 })} years` : "Not within 20 years"}</dd></div>}
-      </dl>
+      {/* The planner's overview, read by the homeowner: the system as four parts, own power, and the money. */}
+      <div className="sysum home-sum">
+        <div className="sysum-tiles">{[
+          { t: "solar", Icon: SolarIcon, label: "Solar", on: o.modules > 0, value: o.kwp.toFixed(1), unit: "kWp", sub: `${o.modules} modules` },
+          { t: "battery", Icon: BatteryIcon, label: "Battery", on: !!o.battery_kwh, value: o.battery_kwh ? String(o.battery_kwh) : "None", unit: o.battery_kwh ? "kWh" : "", sub: o.battery_kwh ? "stores the day's sun" : "left out" },
+          { t: "wallbox", Icon: WallboxIcon, label: "Wallbox", on: o.wallbox, value: o.wallbox ? "Yes" : "None", unit: "", sub: o.wallbox ? "charges the car" : "not included" },
+          { t: "heatpump", Icon: HeatIcon, label: "Heat pump", on: o.heatpump_kw > 0, value: o.heatpump_kw > 0 ? String(o.heatpump_kw) : "None", unit: o.heatpump_kw > 0 ? "kW" : "", sub: o.heatpump_kw > 0 ? "heats the home" : "not included" },
+        ].map(({ t, Icon, label, on, value, unit, sub }) =>
+          <div key={t} className={`sysum-tile t-${t}${on ? "" : " off"}`}>
+            <span className="pb-ico"><Icon size={16} /></span>
+            <span className="sysum-label">{label}</span>
+            <b>{value}{unit && <small> {unit}</small>}</b>
+            <small>{sub}</small>
+          </div>)}</div>
+        <div className="sysum-energy">
+          <p className="sysum-energy-head"><span>Your home's power, a year</span><b>{o.self_sufficiency_pct}% from your own solar</b></p>
+          <div className="sysum-bar" role="img" aria-label={`About ${o.self_sufficiency_pct}% of your use comes from your own solar.`}><i className="own" style={{ width: `${o.self_sufficiency_pct}%` }} /></div>
+          <p className="sysum-energy-key"><span><i className="k own" />own solar</span><span><i className="k grid" />from the grid</span><span className="sysum-made">Makes {o.production_mwh.toFixed(1)} MWh a year</span></p>
+        </div>
+        <div className="sysum-money"><div className="sysum-money-figs">
+          {o.pays_eur != null && <span><small>You pay, after grants</small><b>€{o.pays_eur.toLocaleString("en")}</b></span>}
+          <span><small>{o.pays_eur != null ? "Saves, first year" : "Saves a year"}</small><b className="up">€{o.saving_eur.toLocaleString("en")}</b></span>
+          {o.pays_eur != null && <span><small>Pays back</small><b>{o.payback_years != null ? `${o.payback_years.toLocaleString("en", { maximumFractionDigits: 0 })} years` : "Not in 20 years"}</b></span>}
+        </div></div>
+      </div>
       <p className="small muted">Estimates from your planner's design. They go through it with you before anything is ordered.</p>
       {o.basis && <Explore m={m} onPanels={onPanels} />}
     </div>}
