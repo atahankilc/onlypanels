@@ -8,18 +8,22 @@ import type { Handoff } from "./plan";
 export type Shared = { home: boolean; marked: boolean; roof: boolean; photo: boolean; address: boolean };
 export const SHARE_ALL: Shared = { home: true, marked: true, roof: true, photo: true, address: true };
 /** A roof in three numbers: they fit thousands of Munich roofs, so they cannot be traced back to one address. */
-export type RoofNumbers = { m2: number; facing: string; tilt: number; told?: boolean }; // told: from the homeowner's words, not measured. facing "unknown" when not sure
+export type RoofNumbers = { m2: number | null; facing: string; tilt: number; told?: boolean }; // m2 null: described without a size // told: from the homeowner's words, not measured. facing "unknown" when not sure
 
 // Questions only: the homeowner's words as roof numbers. Sizes are the quartiles of measured roof area of Munich homes
 // (scripts/roof_size_bands.py: 81, 109, 162 m²); slopes are our assumption for gentle, steep and not sure.
 export const TOLD_M2 = { small: 80, medium: 110, large: 160 } as const;
 export const TOLD_TILT = { gentle: 25, steep: 45, unsure: 35 } as const;
+/** A roof's area in words: "110 m²", or "size not known" when it was described without one. */
+export const m2Words = (m2: number | null) => (m2 ? `${m2} m²` : "size not known");
 export function toldRoof(a: Answers): RoofNumbers | null {
   const m2 = a.roof_size === "known" ? a.roof_m2 : a.roof_size ? TOLD_M2[a.roof_size] : null;
   // A size without a direction still limits the system; the direction then counts as not known (a typical yield).
-  if (!m2) return null;
+  // A direction without a size still gives its sun yield, with no roof limit. Neither: nothing to send.
+  const facing = !a.roof_facing || a.roof_facing === "unsure" ? null : a.roof_facing;
+  if (!m2 && !facing) return null;
   const flat = a.roof_facing === "flat";
-  return { m2, facing: !a.roof_facing || a.roof_facing === "unsure" ? "unknown" : a.roof_facing, tilt: flat ? 0 : TOLD_TILT[a.roof_slope ?? "unsure"], told: true };
+  return { m2: m2 || null, facing: facing ?? "unknown", tilt: flat ? 0 : TOLD_TILT[a.roof_slope ?? "unsure"], told: true };
 }
 
 const COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];

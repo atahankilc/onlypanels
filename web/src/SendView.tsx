@@ -2,7 +2,7 @@
 // The list says what stays behind too, so switching something off visibly moves it there.
 import { useState } from "react";
 import type { Handoff } from "./plan";
-import { readable } from "./share";
+import { m2Words, readable } from "./share";
 import { Segmented } from "./ui";
 import "./share.css";
 
@@ -22,8 +22,8 @@ function placeRows(full: Handoff, out: Handoff, markedM2: number): { sent: Row[]
   put(!!out.answers.area, !!full.answers.area, ["Area around the home", "Census 2022: how old homes nearby are and how they heat"]);
   put(!!out.answers.address, !!full.answers.address, ["Address", full.answers.address ?? ""]);
   const roof = full.roof;
-  if (roof && !hadHome) put(!!out.roof, true, ["Roof", `${roof.m2} m² · ${roof.facing === "flat" ? "flat" : roof.facing === "unknown" ? "direction not known" : `facing ${roof.facing}, about ${roof.tilt}°`}${roof.told ? ", as you described it" : ""}`]);
-  if (roof && hadHome && !home) put(!!out.roof, true, ["Roof numbers", `${roof.m2} m² · ${roof.facing === "flat" ? "flat" : `facing ${roof.facing}, ${roof.tilt}°`}, rounded`]);
+  if (roof && !hadHome) put(!!out.roof, true, ["Roof", `${m2Words(roof.m2)} · ${roof.facing === "flat" ? "flat" : roof.facing === "unknown" ? "direction not known" : `facing ${roof.facing}, about ${roof.tilt}°`}${roof.told ? ", as you described it" : ""}`]);
+  if (roof && hadHome && !home) put(!!out.roof, true, ["Roof numbers", `${m2Words(roof.m2)} · ${roof.facing === "flat" ? "flat" : `facing ${roof.facing}, ${roof.tilt}°`}, rounded`]);
   put(!!out.answers.meter_photo, !!full.answers.meter_photo, ["Meter cabinet", "1 photo"]);
   return { sent, kept };
 }

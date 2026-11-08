@@ -13,14 +13,14 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Path
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from reonic_engine import battery as batteries, lod2, sun
 from reonic_engine.data import load_dataset
 from reonic_engine.design import Engine, use_from_payment
 from reonic_engine.advise import advise
 from reonic_engine.agent import agent_events, run_agent
-from reonic_engine import obstacles
+from reonic_engine import casework, obstacles
 from reonic_engine.refine import refine
 
 load_dotenv(FilePath(__file__).resolve().parent.parent / ".env")  # ANTHROPIC_API_KEY for the planner's sentences; without it, rules
@@ -59,19 +59,19 @@ class Inputs(BaseModel):
     # Where the modules go and the usable area there. With measured surfaces those decide; without (the home was not shared,
     # or the planner said "only 18 fit" or "use the garden"), the area limits the size.
     mount: str = "roof"
-    area_m2: float | None = None
+    area_m2: float | None = Field(None, ge=0, le=10_000)
     # A roof known only by its main side's direction (compass degrees, 180 south) and slope, when the home was not shared.
     roof_azimuth: float | None = None
     roof_tilt: float | None = None
-    demand_kwh: float | None = None
-    price_ct_kwh: float = 32
+    demand_kwh: float | None = Field(None, ge=0, le=100_000)
+    price_ct_kwh: float = Field(32, ge=5, le=80)
     heating: str | None = None
     heat_kwh: float | None = None
     hp_kwh: float | None = None  # what a heat pump already there uses a year, usually on its own meter
     has_solar: bool | None = False
     has_storage: bool | None = False
     ev: bool | None = False
-    ev_km: float = 15000
+    ev_km: float = Field(15000, ge=0, le=200_000)
     # What the customer can tell about the car beyond its driving: charged at home a month (wallbox), how much is charged at home,
     # whether it stands at home in the day, and a wallbox already there.
     ev_kwh_month: float | None = None
@@ -92,6 +92,21 @@ class Inputs(BaseModel):
     ev_day: bool | None = None
     home_day: str | None = None  # someone home in the day on weekdays: most, some, rarely
     has_wallbox: bool | None = None
+    ev_when: str | None = None  # a car that is planned: soon (within a year) or later
+    # How the home is heated and who decides: these move the heat pump's efficiency, the battery and the conditions (derive.py).
+    heat_dist: str | None = None  # floor, radiators, both
+    boiler_age: str | None = None  # under10, 10to20, over20
+    gas_eur: float | None = None  # gas a year in euros, already turned into heat_kwh by the page
+    solar_thermal: bool | None = None  # hot water collectors on the roof
+    backup: bool | None = None  # power in an outage wanted
+    owner: str | None = None  # sole, shared, tenant
+    electric_heat_meter: str | None = None  # electric heating on its own meter or the house's: own, house
+    wants_hp: bool | None = None  # the customer's own answer; the choice itself arrives as overrides.heatpump
+    demand_assumed: bool | None = None  # set here when nobody gave the yearly use
+    area_unknown: bool | None = None  # set here for a roof told by direction only
+    roof_told: bool | None = None  # set here when the one surface comes from the customer's words or rounded numbers, not a measurement
+    oil_l: float | None = None  # oil a year in litres, already turned into heat_kwh by the page; kept for the planner
+    use_range: list[float | None] | None = None  # the homeowner's own from–to, when the use was given as a range
     surfaces: list[Surface] | None = None
     # Solar already on the building: size and year if the customer knows them, else the area they marked, and its sun.
     existing_kwp: float | None = None
@@ -118,24 +133,43 @@ class RefineRequest(BaseModel):
     mount: str = "roof"
 
 
-@app.post("/api/design")
-def design(req: DesignRequest):
-    """The planner's design. Homeowner answers may be missing; what stood in for them is listed in the answer."""
+def prepared(req: DesignRequest):
+    """The request's facts as the engine takes them: stand-ins for what is missing, a described roof as one surface."""
     i = req.inputs.model_dump()
     assumed = [] if i["demand_kwh"] else ["demand_kwh"]
     if not i["demand_kwh"] and i.get("monthly_eur"):
         i["demand_kwh"], i["demand_source"] = use_from_payment(i["monthly_eur"], i["price_ct_kwh"]), "payment"
+    i["demand_assumed"] = not i["demand_kwh"]
     i["demand_kwh"] = i["demand_kwh"] or TYPICAL_USE_KWH
-    if not i.get("surfaces") and i.get("area_m2") and i.get("roof_tilt") is not None and i.get("roof_azimuth") is not None:
+    if not i.get("surfaces") and i.get("roof_tilt") is not None and i.get("roof_azimuth") is not None:
         # Only the roof's direction and slope: one surface of that area with the region's PVGIS yield, so the yield and
         # the hours of the day follow the direction. No shade is known.
         found = sun.typical_yield(i["roof_tilt"], i["roof_azimuth"])
         if found:
-            i["surfaces"] = [{"kind": "roof", "max_modules": int(i["area_m2"] // 2), "kwh_per_kwp": round(found),
+            i["surfaces"] = [{"kind": "roof", "max_modules": int(i["area_m2"] // 2) if i.get("area_m2") else 1000, "kwh_per_kwp": round(found),
                               "tilt": i["roof_tilt"], "azimuth": i["roof_azimuth"]}]
+            i["roof_told"] = True
+            i["area_unknown"] = not i.get("area_m2")  # direction and slope told, size not: the yield counts, nothing limits
+    return i, assumed
+
+
+@app.post("/api/design")
+def design(req: DesignRequest):
+    """The planner's design. Homeowner answers may be missing; what stood in for them is listed in the answer."""
+    i, assumed = prepared(req)
     o = req.overrides.model_dump()
     d = engine().design(i, o)
     return {**d, "alternatives": engine().alternatives(i, o, d), "battery_curve": batteries.curve(i, d), "assumed": assumed}
+
+
+@app.post("/api/review")
+def review_request(req: DesignRequest):
+    """The planner's review, by fixed rules over the engine: what follows from the answers, which unsure answers move the
+    design, and one change that fits the customer. No language model; the same request always gives the same review."""
+    as_request = lambda inputs, overrides: DesignRequest(inputs=Inputs(**inputs), overrides=Overrides(**overrides))
+    full = lambda inputs, overrides: design(as_request(inputs, overrides))
+    quick = lambda inputs, overrides: engine().design(prepared(as_request(inputs, overrides))[0], overrides)
+    return casework.review(full, prepared(req)[0], req.overrides.model_dump(), quick)  # with a payment already turned into kWh
 
 
 class ObstaclesRequest(BaseModel):

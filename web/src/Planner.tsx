@@ -32,7 +32,7 @@ const HEATS: [string, string][] = [["", "Unknown"], ["Gas", "Gas"], ["Oil", "Oil
 const summary = (d: Design) => `${d.pv.kwp.toFixed(1)} kWp · ${d.battery.kwh ? `${d.battery.kwh} kWh` : "no battery"}${d.wallbox.included ? " · wallbox" : ""}${d.heatpump.included ? ` · ${d.heatpump.kw} kW heat pump` : ""}`;
 const FACT: Record<string, string> = { demand_kwh: "Yearly electricity", price_ct_kwh: "Price", heating: "Heating", heat_kwh: "Yearly heat", ev: "Electric car", ev_km: "Driving", has_solar: "Existing solar", has_storage: "Existing battery", installer: "Catalog",
   ev_kwh_month: "Car charged at home", ev_charge_home: "Charging at home", ev_day: "Car charges in daytime", home_day: "Home in the day", heat_dist: "Heats through", boiler_age: "Boiler age", has_wallbox: "Wallbox already there", hp_kwh: "Heat pump use now", monthly_eur: "Monthly payment",
-  big_users: "Big users", living_m2: "Living area", cert_kwh_m2: "Energy certificate", built: "Built", goal: "Customer's priority" };
+  big_users: "Big users", living_m2: "Living area", existing_kwp: "Existing solar size", ev_when: "Car comes", owner: "Who owns the home", backup: "Backup power", wants_hp: "Heat pump wanted", electric_heat_meter: "Electric heating meter", cert_kwh_m2: "Energy certificate", built: "Built", goal: "Customer's priority" };
 const BUILT: [string, string][] = [["", "Not given"], ["before1979", "Before 1979"], ["1979to1990", "1979 – 1990"], ["1991to2000", "1991 – 2000"], ["2001to2010", "2001 – 2010"], ["since2011", "2011 or later"]];
 const HOME_SHARE: [string, string][] = [["", "Not given"], ["most", "Most"], ["half", "About half"], ["little", "Little"]];
 const BOILER_AGE: [string, string][] = [["", "Not given"], ["under10", "Under 10 years"], ["10to20", "10 – 20 years"], ["over20", "Over 20 years"]];
@@ -139,7 +139,7 @@ const fmt = (r: Request, k: string, d: Design): string => {
     const from = i.demand_source === "payment" ? "from the monthly payment" : i.demand_source === "range" ? "from a range the customer picked" : i.demand_source === "people" ? "from the household size" : "stand-in";
     return v == null ? `${(d.energy.base_mwh * 1000).toLocaleString("en")} kWh (${from})` : `${Number(v).toLocaleString("en")} kWh${i.demand_source && i.demand_source !== "bill" ? ` (${from})` : ""}`;
   }
-  if (k === "heat_kwh") return v != null ? `${Number(v).toLocaleString("en")} kWh` : `${Math.round(d.energy.hp_mwh * 3.5 * 1000 / 100) * 100 ? (Math.round(d.energy.hp_mwh * 3.5 * 1000 / 100) * 100).toLocaleString("en") : "15,000"} kWh (${i.living_m2 && (i.built || i.area_built || i.cert_kwh_m2) && !d.review.some((n) => n.code === "model_area_large") ? "estimated from the house" : "stand-in"})`;
+  if (k === "heat_kwh") return v != null ? `${Number(v).toLocaleString("en")} kWh` : `${(Math.round((d.energy.heat_mwh ?? 15) * 10) * 100).toLocaleString("en")} kWh (${i.living_m2 && (i.built || i.area_built || i.cert_kwh_m2) && !d.review.some((n) => n.code === "model_area_large") ? "estimated from the house" : "stand-in"})`;
   if (k === "installer") return INSTALLERS.find(([x]) => x === v)?.[1] ?? String(v);
   if (k === "ev_kwh_month") return `${v} kWh a month`;
   if (k === "hp_kwh") return `${Number(v).toLocaleString("en")} kWh a year`;
@@ -155,12 +155,17 @@ const fmt = (r: Request, k: string, d: Design): string => {
   if (k === "big_users") return (v as string[]).map((x) => BIG[x] ?? x).join(", ");
   if (k === "price_ct_kwh") return `${v} ct per kWh`;
   if (k === "ev_km") return `${Number(v).toLocaleString("en")} km a year`;
+  if (k === "ev") return v ? (i.ev_when === "later" ? "yes, coming later" : i.ev_when === "soon" ? "yes, coming within a year" : "yes") : "no";
+  if (k === "ev_when") return v === "later" ? "later" : v === "soon" ? "within a year" : "not said";
+  if (k === "existing_kwp") return v ? `${v} kWp` : "not known";
+  if (k === "owner") return v === "sole" ? "the customer or their family" : v === "shared" ? "shared with other owners" : v === "tenant" ? "rented: the landlord decides" : "not said";
+  if (k === "electric_heat_meter") return v === "own" ? "its own meter" : v === "house" ? "the house's meter" : "not said";
   if (k === "heating") return v == null ? "unknown" : v === "OtherNonRenewable" ? "other fossil" : v === "OtherRenewable" ? "wood or pellets" : v === "Heatpump" ? "heat pump" : String(v).toLowerCase();
   return v ? "yes" : "no";
 };
 /** Facts that matter for this design and were not given by anyone: they must be confirmed before the offer leaves. */
 const relevant = (r: Request, d: Design) => Object.keys(r.sources).filter((k) => (k !== "heat_kwh" || d.heatpump.included) && (k !== "ev_km" || r.inputs.ev));
-const EXTRA = ["home_day", "ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "hp_kwh", "heat_dist", "boiler_age", "big_users", "living_m2", "cert_kwh_m2", "built", "goal"];
+const EXTRA = ["owner", "backup", "wants_hp", "electric_heat_meter", "ev_when", "home_day", "ev_kwh_month", "ev_charge_home", "ev_day", "has_wallbox", "hp_kwh", "heat_dist", "boiler_age", "big_users", "living_m2", "cert_kwh_m2", "built", "goal"];
 /** What the planner must confirm before the offer leaves: assumed facts this design uses, and a living area guessed
  * from the 3D model when a heat pump is sized from it. The request list counts the same. */
 const toConfirm = (r: Request, d: Design) => [...relevant(r, d).filter((k) => r.sources[k] === "assumed"),
@@ -214,7 +219,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const mark = (label: string) => { pending.current = { label, was: { inputs: r.inputs, overrides: r.overrides, sources: r.sources, off: r.off } }; };
   useEffect(() => { if (tab !== "home") { setView({ layer: "photo", moment: null }); setFace(null); } }, [tab]);
 
-  const setI = (change: Partial<Inputs>, by: Source = "planner", label?: string) => { mark(label ?? `${Object.keys(change).map((k) => FACT[k] ?? k).join(", ")} changed`); update(r.id, { inputs: { ...r.inputs, ...change }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(change).map((k) => [k, by])) } }); };
+  const setI = (change: Partial<Inputs>, by: Source = "planner", label?: string) => { mark(label ?? `${Object.keys(change).map((k) => FACT[k] ?? k).join(", ")} changed`); update(r.id, { inputs: { ...r.inputs, ...change }, sources: { ...r.sources, ...Object.fromEntries(Object.keys(change).filter((k) => k in FACT).map((k) => [k, by])) } }); };
   const setO = (change: Overrides, label?: string) => { mark(label ?? describe(change)); update(r.id, { overrides: { ...r.overrides, ...change } }); };
   const toggle = (key: string) => { if (roof.some((x) => x.key === key)) mark(r.off.includes(key) ? "Roof surface added" : "Roof surface taken out"); if (roof.some((x) => x.key === key)) update(r.id, { off: r.off.includes(key) ? r.off.filter((k) => k !== key) : [...r.off, key] }); };
   const walls = r.buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => s.kind === "wall").map((s) => surfaceKey(b, s)));
@@ -298,7 +303,7 @@ function PriorityNote({ r, d, roof, panels, set }: { r: Request; d: Design; roof
 function Brief({ r, d, assumed, points, site, open }: { r: Request; d: Design; assumed: number; points: number; site: number; open: () => void }) {
   const s = d.similar, why: string[] = [];
   why.push(d.pv.locked ? `Solar is fixed by you at ${d.pv.modules} modules.` : d.pv.capped ? `The roof limits solar to ${d.pv.modules} modules; the engine wanted more.` : `Solar sized for ${d.energy.total_mwh.toFixed(1)} MWh a year. In ${s.n} similar homes, experts chose ${s.kwp_low}–${s.kwp_high} kWp.`);
-  if (d.pv.max_modules) why.push(`${d.pv.modules} of ${d.pv.max_modules} modules that fit on the measured roof, best sun first. Makes about ${d.energy.production_mwh.toFixed(1)} MWh a year.`);
+  if (d.pv.max_modules) why.push(`${d.pv.modules} of ${d.pv.max_modules} modules that fit on the ${r.buildings.length ? "measured roof, best sun first" : `described roof (about ${Math.round(r.inputs.area_m2 ?? d.pv.max_modules * 2)} m² on the main side)`}. Makes about ${d.energy.production_mwh.toFixed(1)} MWh a year.`);
   why.push(d.battery.locked ? (d.battery.kwh ? `Battery set by you at ${d.battery.kwh} kWh.` : "No battery, your choice.") : d.battery.kwh ? `${d.battery.kwh} kWh battery: ${s.battery_rate}% of similar homes bought one${d.battery.unsure ? ", but this call is open" : ""}.` : r.inputs.has_storage ? `The home already has a battery${r.existing.battery_kwh ? ` of ${r.existing.battery_kwh} kWh` : ""}, so none is added; the new system charges it too.` : `No battery proposed, though ${s.battery_rate}% of similar homes bought one.`);
   if (r.inputs.goal) why.push(`The customer puts ${label(GOAL, r.inputs.goal).toLowerCase()} first; the engine leans on it.`);
   const items = [assumed && `${assumed} assumed ${assumed === 1 ? "fact" : "facts"} to confirm`, points && `${points} review ${points === 1 ? "point" : "points"}`, site && `${site} site ${site === 1 ? "check" : "checks"}`].filter(Boolean);
@@ -310,7 +315,7 @@ function Brief({ r, d, assumed, points, site, open }: { r: Request; d: Design; a
   </section>;
 }
 
-const roofWords = (n: RoofNumbers) => `about ${n.m2} m² of roof, ${n.facing === "flat" ? "flat" : n.facing === "unknown" ? `direction not known, ${n.tilt}° steep` : `facing ${n.facing}, ${n.tilt}° steep`}`;
+const roofWords = (n: RoofNumbers) => `${n.m2 ? `about ${n.m2} m² of roof` : "roof size not known"}, ${n.facing === "flat" ? "flat" : n.facing === "unknown" ? `direction not known, ${n.tilt}° steep` : `facing ${n.facing}, ${n.tilt}° steep`}`;
 /** How the roof numbers came: the customer's own words, or rounded from the 3D home they kept. */
 const roofOrigin = (n: RoofNumbers) => (n.told ? "as the customer described it" : "rounded so it points to no address");
 const addressOf = (r: Request) => (r.buildings.length ? null : r.label !== "Home not shared" ? r.label : null);
@@ -322,8 +327,8 @@ function NoHomeStage({ r }: { r: Request }) {
 }
 function NoHomeRoof({ r }: { r: Request }) {
   return r.roofNumbers
-    ? <><dl className="nohome-roof"><div><dt>Area</dt><dd>~{r.roofNumbers.m2} m²</dd></div><div><dt>Facing</dt><dd>{r.roofNumbers.facing}</dd></div><div><dt>Tilt</dt><dd>{r.roofNumbers.facing === "flat" ? "flat" : `~${r.roofNumbers.tilt}°`}</dd></div></dl>
-      <p className="small muted">{r.roofNumbers.told ? "As the customer described it." : "Rounded by the customer's page."} The area limits the solar size. {r.roofNumbers.facing === "unknown" ? "The direction is not known, so the yield is a typical German 950 kWh per kWp" : "The yield is PVGIS's for this direction and slope in Munich, without shade,"} until the roof is confirmed.</p></>
+    ? <><dl className="nohome-roof"><div><dt>Area</dt><dd>{r.roofNumbers.m2 ? `~${r.roofNumbers.m2} m²` : "not known"}</dd></div><div><dt>Facing</dt><dd>{r.roofNumbers.facing}</dd></div><div><dt>Tilt</dt><dd>{r.roofNumbers.facing === "flat" ? "flat" : `~${r.roofNumbers.tilt}°`}</dd></div></dl>
+      <p className="small muted">{r.roofNumbers.told ? "As the customer described it." : "Rounded by the customer's page."} {r.roofNumbers.m2 ? (r.roofNumbers.facing === "flat" ? "The area limits the solar size." : `Half of it, about ${Math.round(r.roofNumbers.m2 / 2)} m² on the main side, limits the solar size.`) : "No size was given, so nothing limits the solar size yet."} {r.roofNumbers.facing === "unknown" ? "The direction is not known, so the yield is a typical German 950 kWh per kWp" : "The yield is PVGIS's for this direction and slope in Munich, without shade,"} until the roof is confirmed.</p></>
     : <p className="small muted">The customer shared no roof. The solar size follows the household's needs alone, with no roof limit and a typical yield.</p>;
 }
 
@@ -337,7 +342,7 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
     : "The customer did not say how the rooms are heated. Usually needs a site visit." });
   const home = r.buildings.length > 0;
   if (!home) list.unshift({ id: "noroof", title: r.roofNumbers ? (r.roofNumbers.told ? "Roof only described: confirm size and direction" : "Roof not shared: confirm size and direction") : "Home not shared: ask for the roof", why: r.roofNumbers
-    ? `${r.roofNumbers.told ? "The customer described the roof" : "The customer kept the home and sent only rounded roof numbers"}: ${roofWords(r.roofNumbers)}. The design takes the area as its limit and ${r.roofNumbers.facing === "unknown" ? "a typical yield, as the direction is not known" : "PVGIS's yield for that direction and slope, without shade"}. Confirm size, direction and shade with them${addressOf(r) ? "" : ", or ask for the address"}.`
+    ? `${r.roofNumbers.told ? "The customer described the roof" : "The customer kept the home and sent only rounded roof numbers"}: ${roofWords(r.roofNumbers)}. The design takes ${!r.roofNumbers.m2 ? "no area limit" : r.roofNumbers.facing === "flat" ? "the area as its limit" : `half the area, the main side, as its limit`} and ${r.roofNumbers.facing === "unknown" ? "a typical yield, as the direction is not known" : "PVGIS's yield for that direction and slope, without shade"}. Confirm size, direction and shade with them${addressOf(r) ? "" : ", or ask for the address"}.`
     : addressOf(r) ? "The customer gave the address but no building and no roof. The design has no roof limit and a typical yield. Ask for the roof's size and direction." : "The customer kept the home and the roof to themselves. The design has no roof limit and a typical yield. Ask for the roof's size and direction, or the address." });
   const blind = roofOf(r.buildings, r.installed).filter((x) => x.s.kwh_per_kwp == null).length;
   if (blind) list.unshift({ id: "sun", title: `Sun data is missing for ${blind} ${blind === 1 ? "surface" : "surfaces"}`, why: "PVGIS did not answer. A typical yield stands in, so production is less certain. Reopen the request to try again." });
@@ -511,7 +516,7 @@ function Facts({ r, d, setI }: { r: Request; d?: Design; setI: (c: Partial<Input
     <Tagged label="Driving (km a year)" source={s.ev_km}><Input type="number" step={1000} value={i.ev_km} onChange={(e) => setI({ ev_km: Number(e.target.value) })} /></Tagged>
     <Tagged label="Existing solar" source={s.has_solar}><Segmented wide label="Existing solar" value={i.has_solar ? "yes" : "no"} onChange={(v) => setI({ has_solar: v === "yes" })} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></Tagged>
     <Tagged label="Existing battery" source={s.has_storage}><Segmented wide label="Existing battery" value={i.has_storage ? "yes" : "no"} onChange={(v) => setI({ has_storage: v === "yes" })} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></Tagged>
-    {i.has_solar && (r.existing.kwp || r.existing.m2 || r.existing.year || r.existing.battery_kwh) && <p className="small muted span">On the building: {[r.existing.kwp ? `${r.existing.kwp} kWp` : r.existing.m2 && `${r.existing.m2} m² of panels marked, size estimated from it`, r.existing.year && `from ${r.existing.year}`, r.existing.battery_kwh && `${r.existing.battery_kwh} kWh battery`].filter(Boolean).join(", ")}. The engine sizes the new system for the need the old one leaves.</p>}
+    {(i.has_solar || i.has_storage) && (r.existing.kwp || r.existing.m2 || r.existing.year || r.existing.battery_kwh) && <p className="small muted span">On the building: {[r.existing.kwp ? `${r.existing.kwp} kWp` : r.existing.m2 && `${r.existing.m2} m² of panels marked, size estimated from it`, r.existing.year && `from ${r.existing.year}`, r.existing.battery_kwh && `${r.existing.battery_kwh} kWh battery`].filter(Boolean).join(", ")}. The engine sizes the new system for the need the old one leaves.</p>}
     <Tagged label="Catalog"><Select value={i.installer} onChange={(e) => setI({ installer: e.target.value })}>{INSTALLERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Tagged>
     {((i.demand_source && i.demand_source !== "bill") || !!i.big_users?.length) && <p className="small muted span">Yearly use {i.demand_source ? USE_FROM[i.demand_source] ?? i.demand_source : "not given"}{i.monthly_eur ? ` (€${i.monthly_eur} a month)` : ""}.{i.big_users?.length ? ` Big users: ${fmt(r, "big_users", d as Design)}${i.demand_source === "bill" ? ", already in the bill." : ", added on top by the engine."}` : ""}{i.demand_source !== "bill" ? " A bill would be better." : ""}</p>}
     <h3 className="span">More from the homeowner</h3>

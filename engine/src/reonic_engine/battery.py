@@ -14,10 +14,10 @@ def curve(i, d):
     # As the design does: a system already there, of known size, keeps its battery working, and the saving is only what
     # the new system adds to it. Without this the table and the design disagreed for the same home.
     known = e.get("existing_kwp") is not None
-    old_battery = float(i.get("existing_battery_kwh") or 0) if known else 0.0
+    old_battery = float(e.get("existing_battery_kwh") or 0)  # as the design counted it, a stand-in size included
     run = lambda solar_wh, battery: simulate(e["base_mwh"] * 1000, e["ev_mwh"] * 1000, (e["hp_mwh"] + (e.get("own_hp_mwh") or 0)) * 1000, solar_wh, battery, i.get("price_ct_kwh", 32.0),
                                              sun=sun, ev_day=bool(i.get("ev_day")), home_day=i.get("home_day"))
-    before = run((e.get("existing_mwh") or 0) * 1000, old_battery)["saving_eur"] if known else 0
+    before = run((e.get("existing_mwh") or 0) * 1000, old_battery)["saving_eur"] if known or old_battery else 0
     rows = []
     for kwh in sizes:
         r = run(production, kwh + old_battery)

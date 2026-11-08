@@ -25,6 +25,7 @@ def test_stand_ins_match_the_engine():
     assert ts_value("HOME_SHARE") == design.HOME_SHARE
     assert ts_value("KWP_PER_M2") == design.KWP_PER_M2
     assert ts_value("FEED_IN_YEARS") == design.FEED_IN_YEARS
+    assert ts_value("MODEL_M2_MAX") == design.MODEL_M2_MAX
     assert "heat_mwh or 15.0" in Path(design.__file__).read_text() and ts_value("TYPICAL_HEAT_KWH") == 15000
     api = (ROOT / "api" / "main.py").read_text()
     assert re.search(r"TYPICAL_USE_KWH = (\d+)", api).group(1) == str(ts_value("TYPICAL_USE_KWH"))

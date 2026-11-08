@@ -5,9 +5,9 @@ import { P2, P3, toLocal } from "./geometry";
 import type { RoofNumbers, Shared } from "./share";
 import { ordered } from "./panels";
 import type { Obstacle } from "./roofObstacles";
-import { TYPICAL_KM } from "./questions";
+import { BANDS, TYPICAL_KM } from "./questions";
 
-export type Inputs = { installer: string; demand_kwh: number | null; price_ct_kwh: number; heating: string | null; heat_kwh: number | null; hp_kwh?: number | null; has_solar: boolean; has_storage: boolean; ev: boolean; ev_km: number; ev_kwh_month?: number | null; ev_charge_home?: string | null; ev_day?: boolean | null; has_wallbox?: boolean | null;
+export type Inputs = { installer: string; demand_kwh: number | null; price_ct_kwh: number; heating: string | null; heat_kwh: number | null; hp_kwh?: number | null; has_solar: boolean; has_storage: boolean; ev: boolean; ev_km: number; ev_kwh_month?: number | null; ev_charge_home?: string | null; ev_day?: boolean | null; has_wallbox?: boolean | null; ev_when?: string | null; use_range?: [number, number] | null; wants_hp?: boolean | null; electric_heat_meter?: string | null; oil_l?: number | null;
   demand_source?: string | null; monthly_eur?: number | null; big_users?: string[]; living_m2?: number | null; living_from_model?: boolean; area_built?: string | null; area_built_share?: number | null; cert_kwh_m2?: number | null; built?: string | null; trees?: boolean | null; roof_renovation?: string | null; goal?: string | null;
   solar_thermal?: boolean; owner?: string | null; backup?: boolean | null; home_day?: string | null; heat_dist?: string | null; boiler_age?: string | null; gas_eur?: number | null;
   mount?: string; area_m2?: number | null; roof_tilt?: number | null; roof_azimuth?: number | null };
@@ -20,7 +20,7 @@ export type Design = {
   battery: { kwh: number; probability: number; choices: number[]; unsure: boolean; locked: boolean };
   wallbox: { included: boolean; locked: boolean }; heatpump: { included: boolean; kw: number; blocked: boolean; locked: boolean };
   trace: TraceStep[]; review: Note[];
-  energy: { base_mwh: number; ev_mwh: number; hp_mwh: number; total_mwh: number; production_mwh: number; self_sufficiency_pct: number; self_use_pct: number; saving_eur: number };
+  energy: { base_mwh: number; ev_mwh: number; hp_mwh: number; heat_mwh?: number | null; total_mwh: number; production_mwh: number; self_sufficiency_pct: number; self_use_pct: number; saving_eur: number };
   similar: { n: number; kwp_low: number; kwp_high: number; battery_rate: number; battery_common: number[]; wallbox_rate: number; battery_low: number | null; battery_high: number | null; learned_from: number };
   reasons: ({ code: string } & Record<string, unknown>)[]; warnings: ({ code: string } & Record<string, unknown>)[]; assumed: string[];
 };
@@ -59,7 +59,8 @@ export type Existing = { kwp: number | null; year: number | null; battery_kwh: n
 export type Handoff = { buildings: Selected[]; answers: Answers; choice: Choice; ref?: string; seed?: { opened?: boolean; offer?: Offer | null };
   shared?: Shared; roof?: RoofNumbers | null }; // shared: what the homeowner chose to send (share.ts); roof: a few roof numbers instead of the home // seed: demo requests that arrive already opened or offered
 
-const FOSSIL_HEAT = ["Gas", "Oil", "OtherNonRenewable"]; // heating with a boiler whose age the customer may give
+const FOSSIL_HEAT = ["Gas", "Oil", "OtherNonRenewable"];
+const REPLACEABLE_HEAT = [...FOSSIL_HEAT, "Electric"]; // heating the homeowner was asked to swap for a heat pump // heating with a boiler whose age the customer may give
 /** The marked area with panels and the sun it gets: measured yield after shade, weighted by area. */
 const existingArea = (buildings: Selected[], c: Choice) => {
   let m2 = 0, kwh = 0;
@@ -74,9 +75,16 @@ const existingArea = (buildings: Selected[], c: Choice) => {
 /** The cells the homeowner marked on each roof, kept only where they drew something other than the whole roof. */
 const drawnOf = (buildings: Selected[], c: Choice) => Object.fromEntries(buildings.flatMap((b) => (b.sun?.surfaces ?? []).filter((s) => s.kind === "roof")
   .map((s) => [surfaceKey(b, s), cellsOf(b, s, c), s.year.length] as const).filter(([, cells, all]) => cells.length < all).map(([k, cells]) => [k, cells])));
+/** The edges of the homeowner's electricity use when they gave a span: their own range, or a closed band. Open bands and a lone edge give none. */
+const rangeOf = (a: Answers): [number, number] | null => {
+  if (a.use_source === "range") { const [lo, hi] = a.use_range; return lo && hi ? [Math.min(lo, hi), Math.max(lo, hi)] : null; }
+  if (a.use_source === "band") { const b = BANDS.find((x) => x[1] === a.demand_kwh)?.[0].match(/^([\d,]+) – ([\d,]+)$/); return b ? [Number(b[1].replace(",", "")), Number(b[2].replace(",", ""))] : null; }
+  return null;
+};
 const source = (known: unknown): Source => (known === null || known === undefined ? "assumed" : "customer");
 
 /** What the homeowner produced becomes the planner's starting point. Skipped answers arrive marked, nothing is asked twice. */
+const MAIN_SIDE_SHARE = 0.5; // share of a pitched roof's total area on its main side, our assumption
 const COMPASS_DEG: Record<string, number> = { north: 0, "north-east": 45, east: 90, "south-east": 135, south: 180, "south-west": 225, west: 270, "north-west": 315 };
 export function fromHomeowner(h: Handoff): Request {
   const { buildings, answers: a, choice } = h;
@@ -87,16 +95,22 @@ export function fromHomeowner(h: Handoff): Request {
     meterPhoto: a.meter_photo ?? undefined,
     id: h.ref ? `homeowner-${h.ref}` : "homeowner", ref: h.ref, label: buildings[0]?.label ?? (buildings.length ? "Home" : a.address?.trim() || "Home not shared"),
     roofNumbers: buildings.length ? null : h.roof ?? null, from: "Homeowner", buildings, status: h.seed?.offer ? "sent" : "draft", opened: !!h.seed?.opened || !!h.seed?.offer, offer: h.seed?.offer ?? undefined,
-    inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating, heat_kwh: a.heat_kwh, hp_kwh: a.heating === "Heatpump" ? a.hp_kwh : null, has_solar: !!a.has_solar && !thermal, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM * (a.ev_count ?? 1),
-      ev_kwh_month: a.ev && !a.ev_planned ? a.ev_kwh_month : null, ev_charge_home: car ? a.ev_charge_home : null, ev_day: car ? a.ev_day : null, has_wallbox: car ? a.has_wallbox : null,
+    inputs: { installer: "2a8ba8e2", demand_kwh: a.demand_kwh, price_ct_kwh: a.price_ct_kwh, heating: a.heating === "unknown" ? null : a.heating, heat_kwh: a.heat_kwh, oil_l: a.heating === "Oil" ? a.oil_l ?? null : null, hp_kwh: a.heating === "Heatpump" ? a.hp_kwh : null, has_solar: !!a.has_solar && !thermal, has_storage: !!a.has_storage, ev: car, ev_km: a.ev_km ?? TYPICAL_KM * (a.ev_count ?? 1),
+      ev_kwh_month: a.ev && !a.ev_planned ? a.ev_kwh_month : null, ev_charge_home: car ? a.ev_charge_home : null, ev_day: car ? a.ev_day : null, has_wallbox: car ? a.has_wallbox : null, ev_when: a.ev_planned ? a.ev_when : null,
       demand_source: a.use_source === "exact" ? "bill" : a.use_source === "band" || a.use_source === "range" ? "range" : a.use_source, monthly_eur: a.use_source === "payment" ? a.monthly_eur : null,
+      use_range: rangeOf(a), wants_hp: REPLACEABLE_HEAT.includes(a.heating ?? "") ? a.wants_hp : null, electric_heat_meter: a.heating === "Electric" ? a.electric_heat_meter : null,
       big_users: a.big_users, living_m2: a.living_m2 ?? modelM2(buildings), living_from_model: !a.living_m2 && !!modelM2(buildings), cert_kwh_m2: a.cert_kwh_m2, built: a.built, area_built: a.area?.built ?? null, area_built_share: a.area?.built_share ?? null, goal: a.goal,
       solar_thermal: !!a.has_solar && (a.solar_kind === "thermal" || a.solar_kind === "both"), owner: a.owner ?? null, backup: a.backup ?? null, home_day: a.home_day ?? null, heat_dist: a.heat_dist ?? null, boiler_age: FOSSIL_HEAT.includes(a.heating ?? "") ? a.boiler_age ?? null : null, gas_eur: a.heating === "Gas" ? a.gas_eur ?? null : null,
-      area_m2: !buildings.length && h.roof ? h.roof.m2 : null,
+      // The roof's area counts every side, but the design puts it all on the main side: a pitched roof gives about half of it there.
+      // Our assumption (docs/assumptions.md); a flat roof keeps its whole area.
+      area_m2: !buildings.length && h.roof?.m2 ? Math.round(h.roof.m2 * (h.roof.facing === "flat" ? 1 : MAIN_SIDE_SHARE)) : null,
       // A direction the customer was not sure of gives no direction: the engine keeps the typical yield rather than guess south.
       ...(!buildings.length && h.roof && (h.roof.facing === "flat" || h.roof.facing in COMPASS_DEG) ? { roof_tilt: h.roof.facing === "flat" ? 0 : h.roof.tilt, roof_azimuth: COMPASS_DEG[h.roof.facing] ?? 180 } : {}) },
     // Without a car the driving is a stand-in: hidden until a car is added, then the planner confirms it before an offer leaves.
-    sources: { demand_kwh: a.use_source === "exact" ? "customer" : "assumed", price_ct_kwh: a.price_known ? "customer" : "assumed", heating: source(a.heating), heat_kwh: a.heating === "Gas" && a.gas_eur ? "assumed" : source(a.heat_kwh), ev: source(a.ev), ev_km: car ? source(a.ev_km) : "assumed", has_solar: source(a.has_solar), has_storage: source(a.has_storage) }, // a shared roof's area shows as the offer's Roof row, not as a fact of its own
+    sources: { demand_kwh: a.use_source === "exact" ? "customer" : "assumed", price_ct_kwh: a.price_known ? "customer" : "assumed", heating: source(a.heating === "unknown" ? null : a.heating), heat_kwh: (a.heating === "Gas" && a.gas_eur) || (a.heating === "Oil" && a.oil_l) ? "assumed" : source(a.heat_kwh), ev: source(a.ev), ev_km: car ? source(a.ev_km) : "assumed", has_solar: source(a.has_solar), has_storage: source(a.has_storage),
+      // Stand-ins that change the design, so the planner confirms them before an offer leaves (D70).
+      ...(car ? { has_wallbox: source(a.has_wallbox), ...(a.ev && !a.ev_planned && a.ev_kwh_month ? {} : { ev_charge_home: source(a.ev_charge_home) }) } : {}),
+      ...(a.has_solar && !thermal ? { existing_kwp: source(a.solar_kwp) } : {}) }, // a shared roof's area shows as the offer's Roof row, not as a fact of its own
     overrides: a.wants_hp === false ? { heatpump: false } : a.wants_hp ? { heatpump: true } : {},
     // The homeowner's marked area is a priority, not a limit: no roof is taken out for them, modules fill their cells first.
     priority: drawnOf(buildings, choice), taken: Object.fromEntries(Object.entries(choice.panels).filter(([, v]) => v.length)),

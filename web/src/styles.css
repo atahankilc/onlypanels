@@ -343,6 +343,12 @@ h1 { margin: 0 0 6px; font: 650 24px/1.15 var(--font-ui); letter-spacing: -0.015
 
 .startswitch { position: absolute; z-index: 1; left: 12px; bottom: 16px; }
 @media (max-width: 760px) { .stage:not(.bare) .startswitch { display: none; } .stage.bare .startswitch { left: 50%; transform: translateX(-50%); } .stage.bare .panel.quiz { padding-bottom: 84px; } }
+/* On a phone without the map there is nothing to leave room for: the questions take the screen under the switch, which moves to the top. */
+@media (max-width: 820px) {
+  .stage.bare .startswitch { top: 58px; bottom: auto; }
+  .panel.quiz .stick { position: sticky; bottom: 0; z-index: 1; margin: 12px -18px 0; padding: 12px 18px 12px; background: var(--hud-panel); border-top: 1px solid var(--hud-line); } /* Back and Next stay in reach on a long page */
+  .stage.bare .panel, .stage.bare .panel.quiz, .stage.bare .curtain.new .panel { top: 118px !important; bottom: 0 !important; left: 0 !important; right: 0 !important; width: auto; height: auto; max-height: none; transform: none; padding-bottom: 0; border-radius: 24px 24px 0 0; overflow-y: auto; }
+}
 .startswitch button { white-space: nowrap; }
 
 /* Without the map: the requests as a page of their own, one card each, with how far it got. */

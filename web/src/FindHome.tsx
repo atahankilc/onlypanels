@@ -10,6 +10,7 @@ import SunView from "./SunView";
 import { withTrees } from "./treeShade";
 import StartChoice, { Start } from "./Start";
 import { SHARE_ALL, Shared, forInstaller, roofNumbers, toldRoof } from "./share";
+import { clean } from "./questions";
 import { Button, IconButton, Segmented } from "./ui";
 
 const PHOTO: View = { layer: "photo", moment: null }; // the questions show the photo only: sunlight waits for the offer
@@ -79,7 +80,9 @@ export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h
   const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
   const [choice, setChoice] = useState<Choice>(NO_CHOICE);
   const [shared, setShared] = useState<Shared>(SHARE_ALL); // what the homeowner lets go to the installer
-  const request: Handoff = { buildings, answers, choice, ref, roof: buildings.length ? roofNumbers(buildings) : toldRoof(answers) };
+  // What goes is the answers as they count: a typed number outside its span is left out (questions.ts clean).
+  const counted = clean(answers);
+  const request: Handoff = { buildings, answers: counted, choice, ref, roof: buildings.length ? roofNumbers(buildings) : toldRoof(counted) };
   // The homeowner keeps the whole request; the installer gets only what was switched on.
   useEffect(() => { if (stage === "sent" && !requests.some((m) => m.ref === ref)) onSend(request, forInstaller(request, shared)); }, [stage]);
   const [tool, setTool] = useState<Tool | null>(null); // no tool: the mouse moves the map

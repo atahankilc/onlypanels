@@ -45,7 +45,7 @@ def brief(i, d):
     """What the advisor sees: this home and the engine's options for it. No past-project figures."""
     home = {k: i.get(k) for k in ("demand_kwh", "demand_source", "price_ct_kwh", "heating", "heat_kwh", "living_m2", "built",
                                   "ev", "ev_km", "ev_charge_home", "ev_day", "has_wallbox", "home_day", "goal", "big_users",
-                                  "has_solar", "has_storage", "trees", "roof_renovation", "area_m2", "roof_tilt", "roof_azimuth", "existing_kwp", "existing_year", "existing_battery_kwh") if i.get(k) not in (None, [], "")}
+                                  "has_solar", "has_storage", "trees", "roof_renovation", "heat_dist", "boiler_age", "backup", "owner", "ev_when", "solar_thermal", "area_m2", "roof_tilt", "roof_azimuth", "existing_kwp", "existing_year", "existing_battery_kwh") if i.get(k) not in (None, [], "")}
     if not i.get("ev"):
         home = {k: v for k, v in home.items() if not k.startswith("ev_")}  # the form's default driving is not a car
     if i.get("surfaces"):
@@ -63,7 +63,8 @@ def brief(i, d):
         options[a["id"]] = {"title": a["title"], "note": a["why"], **option(a["pv"], a["battery_kwh"], a["heatpump_kw"], a["wallbox"], a["energy"])}
     notes = [n["text"] for n in d.get("review") or [] if n.get("code") not in FROM_PAST and n.get("text")]
     batteries = [{k: b.get(k) for k in ("kwh", "own_pct", "saving_eur") if k in b} for b in d.get("battery_curve") or []]
-    return {"home": home, "options": options, "battery_sizes": batteries, "engine_notes": notes}
+    follows = [f["title"] + ": " + f["text"] for f in d.get("derived") or []]  # what the rules read from the answers (derive.py)
+    return {"home": home, "options": options, "battery_sizes": batteries, "engine_notes": notes, "read_from_answers": follows}
 
 
 # What each brief field is measured in, by its name. A number the advisor writes with a unit must equal a value of that unit.

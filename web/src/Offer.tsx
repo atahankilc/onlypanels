@@ -36,7 +36,7 @@ export default function Offer({ r, d, first, roof, panels, facts, conditions, to
       <header><small>{sent ? "Offer" : "Offer draft"}{r.ref ? ` · ${r.ref}` : ""} · {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</small><h2>{r.label}</h2></header>
 
       <section><h4>System</h4>
-        <table><tbody>{Object.entries(now).map(([k, v]) => <tr key={k}><th scope="row">{k}</th><td>{v}</td><td>{who[k] ? "set by the planner" : sent ? "engine proposal, approved by the planner" : "engine proposal"}</td></tr>)}</tbody></table>
+        <table><tbody>{Object.entries(now).map(([k, v]) => <tr key={k}><th scope="row">{k}</th><td>{v}</td><td>{k === "Heat pump" && who[k] && r.inputs.wants_hp != null && r.overrides.heatpump === r.inputs.wants_hp ? "as the customer asked" : who[k] ? "set by the planner" : sent ? "engine proposal, approved by the planner" : "engine proposal"}</td></tr>)}</tbody></table>
         <p className="fine">Modules counted at about 450 Wp each; the exact product is chosen at order.{d.heatpump.included ? " Heat pump size is preliminary: a room-by-room heat load calculation decides the final model." : ""}</p>
         {placed.length > 0 && <p className="fine">On the roof: {placed.map((x) => `${panels[x.key]} facing ${facing(x.s)} at ${x.s.tilt}°`).join(", ")}.</p>}
       </section>
