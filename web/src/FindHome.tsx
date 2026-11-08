@@ -1,5 +1,4 @@
-import { flushSync } from "react-dom";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Answers, NO_ANSWERS, Place, Poly, Real, Selected, View, measured, placeAt, searchPlace, chosenKeys, homeParts, homesIn, NO_CHOICE, Choice, sunOf, areaAt, markedOf, markedM2, paintChoice, panelsOf, panelsM2 } from "./api";
 import { P2, P3, toLocal } from "./geometry";
 import { Handoff, Mine } from "./plan";
@@ -27,7 +26,7 @@ const savedStart = (): Start | null => { try { const v = localStorage.getItem(ST
 /** Between the two ways of answering, where the browser can. Plain: the page cross-fades. "in" / "out": the map
  *  opens as a circle out of the With/Without switch, or closes back into it (see html[data-vt] in styles.css). */
 const swap = (fn: () => void, map?: "in" | "out") => {
-  const d = document as Document & { startViewTransition?: (f: () => void) => { finished: Promise<void> } };
+  const d = document as Document & { startViewTransition?: (f: () => Promise<void>) => { finished: Promise<void> } };
   // The map switch plays even with the system's reduced motion on: it is one short movement the person asked for.
   if (!d.startViewTransition || (!map && matchMedia("(prefers-reduced-motion: reduce)").matches)) { fn(); return; }
   const html = document.documentElement;
@@ -39,14 +38,20 @@ const swap = (fn: () => void, map?: "in" | "out") => {
     html.dataset.vt = map;
   } else delete html.dataset.vt;
   const mine = ++swaps;
-  d.startViewTransition(() => flushSync(fn)).finished.finally(() => { if (mine === swaps) delete html.dataset.vt; }); // a quicker second switch keeps its own circle
+  // The new picture is taken only once React has written the new page (see the layout effect in FindHome). flushSync
+  // does not flush inside the transition's callback, so the page changed a moment later and, when the browser was busy
+  // with the map, after the picture: the circle then showed the old page and the new one popped in without it.
+  const update = () => new Promise<void>((res) => { committed = res; fn(); setTimeout(res, 600); });
+  d.startViewTransition(update).finished.finally(() => { if (mine === swaps) delete html.dataset.vt; }); // a quicker second switch keeps its own circle
 };
 let swaps = 0;
+let committed: (() => void) | null = null; // resolves the running swap once its page is in the DOM
 const saveStart = (s: Start) => { try { localStorage.setItem(START_KEY, s); } catch { /* private mode: asked again next time */ } };
 
 const newRef = () => `R-${Math.random().toString(36).slice(2, 7).toUpperCase()}`; // a reference the homeowner can quote
 
 export default function FindHome({ onSend, requests, loading = 0 }: { onSend: (h: Handoff, out: Handoff) => void; requests: Mine[]; loading?: number }) {
+  useLayoutEffect(() => { committed?.(); committed = null; }); // after every commit: a waiting swap may take its picture
   const [q, setQ] = useState("");
   const [places, setPlaces] = useState<Place[] | null>(null);
   const [active, setActive] = useState(0);
