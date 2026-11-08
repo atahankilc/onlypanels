@@ -94,7 +94,7 @@ Without keys, everything runs on rules. `ANTHROPIC_API_KEY` adds:
 
 Tests: `uv run pytest`.
 
-Pitch slides: `docs/pitch/deck.html` is the source; `OnlyPanels-pitch.pdf` is printed from it in headless Chrome at 1920 × 1080 (screenshots in `docs/pitch/img/` are of the seeded demo requests).
+Pitch slides: `docs/pitch/deck.html` is the source; `OnlyPanels-pitch.pdf` is printed from it in headless Chrome at 1920 × 1080 (screenshots in `docs/pitch/img/` are of the seeded demo requests). Six slides: the same-request finding, the fused draft, the home staying in the browser, every data source we use, AI next to the deterministic engine, close.
 
 ## Known limitations
 
