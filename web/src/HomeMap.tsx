@@ -74,24 +74,44 @@ const seenBits = (s: SunSurface, suns: number) => { const raw = atob(s.seen), wi
 const MOVE_MS = 900; // the map rising into its window: --move in styles.css
 // Same curve as --glide, so camera, window and fade are one movement.
 const glide = (t: number) => (t < 0.5 ? 8 * t ** 4 : 1 - (-2 * t + 2) ** 4 / 2);
-// The roof's overlays: what is not chosen lies under a light shade and a fine hatch, so roofs and walls read the same way;
+// The roof's overlays: what is not chosen lies under a shade and a diagonal hatch, so roofs and walls read the same way;
 // panels already there keep their photo under amber; planned modules look like modules.
-const HATCH_M = 0.5; // metres between hatch lines
-const hatch = (veil: string, ink: string) => {
-  const c = document.createElement("canvas");
-  c.width = c.height = 32;
-  const x = c.getContext("2d") as CanvasRenderingContext2D;
-  x.fillStyle = veil; x.fillRect(0, 0, 32, 32);
-  x.strokeStyle = ink; x.lineWidth = 9;
-  for (const o of [-32, 0, 32]) { x.beginPath(); x.moveTo(o - 4, 36); x.lineTo(o + 36, -4); x.stroke(); }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-};
+// The hatch lies on the surface itself, in metres: every hatched part carries the same lines, and they stay put as the
+// view turns. Edges are smoothed per pixel, so the lines stay sharp instead of blurring into grey; only when they get
+// too fine to draw do they fade into an even shade.
+const HATCH_M = 0.6; // metres between hatch lines
+const HATCH_INK = 0.32; // share of each period that is line
+const hatchLook = (veil: string, veilA: number, ink: string, inkA: number) => ({ veil: new THREE.Vector4(...new THREE.Color(veil).toArray(), veilA), ink: new THREE.Vector4(...new THREE.Color(ink).toArray(), inkA) });
 const OVERLAY = {
-  dark: { hatch: hatch("rgba(14, 15, 19, 0.42)", "rgba(255, 255, 255, 0.45)"), has: "#FFB547" },
-  light: { hatch: hatch("rgba(241, 240, 236, 0.32)", "rgba(17, 18, 21, 0.5)"), has: "#B85F00" },
+  dark: { hatch: hatchLook("#0E0F13", 0.55, "#FFFFFF", 0.7), has: "#FFB547" },
+  light: { hatch: hatchLook("#F1F0EC", 0.5, "#111215", 0.65), has: "#B85F00" },
 };
+/** The hatch material: uv carries metres on the surface; uv1 the cell mask, as for every overlay. */
+function hatchMaterial() {
+  const uniforms = { uVeil: { value: OVERLAY.dark.hatch.veil.clone() }, uInk: { value: OVERLAY.dark.hatch.ink.clone() } };
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, depthWrite: false });
+  material.userData.hatch = uniforms;
+  material.customProgramCacheKey = () => "hatch";
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying vec2 vHatch;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvHatch = uv;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>
+varying vec2 vHatch;
+uniform vec4 uVeil;
+uniform vec4 uInk;`)
+      .replace("#include <map_fragment>", `{
+  float d = (vHatch.x + vHatch.y) / (${HATCH_M.toFixed(2)} * 1.41421356);
+  float t = abs(fract(d) - 0.5);
+  float aa = fwidth(d);
+  float ink = smoothstep(0.5 - ${HATCH_INK.toFixed(2)} * 0.5 - aa, 0.5 - ${HATCH_INK.toFixed(2)} * 0.5 + aa, t);
+  ink = mix(ink, ${HATCH_INK.toFixed(2)}, smoothstep(0.25, 0.5, aa));
+  vec4 c = mix(uVeil, uInk, ink);
+  diffuseColor = vec4(c.rgb, c.a * diffuseColor.a);
+}`);
+  };
+  return material;
+}
 const HAS_TINT = 0.28; // how much amber lies over panels already there
 // Planned modules: dark cells under a thin frame, with a little sheen. Portrait: u across, v along.
 const moduleLook = (() => {
@@ -155,10 +175,10 @@ function skinOf(s: SunSurface, poly: Poly, step: number) {
   const cellMask = () => { const px = new Uint8Array(w * h * 4), t = new THREE.DataTexture(px, w, h, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.LinearFilter; t.channel = 1; return [px, t] as const; };
   // What is not chosen goes grey, only on the cells that are not marked: the mask follows the cells.
   const [holes, mask] = cellMask();
-  const hatched = new THREE.MeshBasicMaterial({ map: OVERLAY.dark.hatch, side: THREE.DoubleSide, transparent: true, depthWrite: false });
+  const hatched = hatchMaterial();
   hatched.userData.alpha = true;
   const cover = lifted(0.16, hatched);
-  cover.geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(outline.flatMap((p) => [(p[0] * step) / HATCH_M, (p[1] * step) / HATCH_M])), 2));
+  cover.geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(outline.flatMap((p) => [p[0] * step, p[1] * step])), 2));
   // Panels already there: their photo under a faint amber, on the cells that carry them.
   const [fitted, fit] = cellMask();
   const amber = new THREE.MeshBasicMaterial({ color: OVERLAY.dark.has, side: THREE.DoubleSide, transparent: true, depthWrite: false });
@@ -556,7 +576,7 @@ export default function HomeMap({ buildings, step, focus, aerial, onPick, open, 
         layer(cover, (n) => !has.has(n) && !on.has(n), holes, mask);
         (plate.material as THREE.MeshBasicMaterial).color.set(look.has);
         const veil = cover.material as THREE.MeshBasicMaterial;
-        if (veil.map !== look.hatch) { veil.map = look.hatch; veil.needsUpdate = true; }
+        veil.userData.hatch.uVeil.value.copy(look.hatch.veil); veil.userData.hatch.uInk.value.copy(look.hatch.ink);
         const over = hot?.building === b.id && hot.poly === polyOf(b, x), read = seenBits(x, suns.length);
         const rgba = x.year.map((value, i) => {
           let c = dim, alpha = 0;
