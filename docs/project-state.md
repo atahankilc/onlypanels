@@ -2,8 +2,8 @@
 
 Living document. Update it whenever the phase, blockers or next steps change.
 
-**Last updated:** 2026-11-07, evening
-**Phase:** Homeowner flow and planner desk work end to end in Munich. The homeowner only gives information, one topic per page, and sends it to an installer (D62). The planner opens that request, with every fact marked by source, and decides.
+**Last updated:** 2026-11-08, morning
+**Phase:** Feature work is wrapping up for the 15:00 deadline. Homeowner flow and planner desk work end to end in Munich, with or without the map. The homeowner only gives information and chooses what is sent (D62, D110). The planner opens the request, with every fact marked by source, checks it, can ask the advisor, and decides. Every decision in `docs/decisions.md` is agreed: none is left Proposed.
 **Deadline:** Sunday 8 November 2026, 15:00
 
 ## Done
@@ -35,23 +35,28 @@ Living document. Update it whenever the phase, blockers or next steps change.
 - A chosen home stays in the browser until the homeowner sends (D102): addresses, census area, monument status, parts, surfaces, shade and yearly sun are worked out in the page; the server only serves whole 2 km squares. Yearly sun comes from `web/public/sun-table.json`, built by `scripts/build_sun_table.py`; the census file by `scripts/build_zensus.py`
 - Planner advisor (D106): "Ask the advisor" on the Design tab picks among the engine's options for this customer, explains, and lists questions; numbers it did not get from the engine are dropped. The sentence box now uses Claude (the API reads `.env`). Check: `uv run python scripts/check_refine.py --claude`
 - Requests without a home reach the planner: listed by reference, no map, the design from the answers with the shared roof area as its limit, and checks that ask for the roof and the address. The API now takes `area_m2` and `mount`, so "only 18 panels fit" from the sentence box limits a design without measured surfaces
+- The planner can have roof obstacles found on the aerial photo by a vision model and confirm each one; kept ones block cells (D109)
+- Design validation (brief use case 2): the planner enters their own system and sees it against similar homes, the roof and the engine (D111)
+- The homeowner chooses what goes to the installer before sending, shown as a list and as the object (D110). Without the map they give the address and the roof in words (D104)
+- A homeowner who tried a variant can ask the installer about it; the planner sees the question and can try it (D113)
+- The roof's sun moves the module count: more modules on a weaker roof, fewer on a stronger one, a smaller system and a warning on a poor one (D112). Past-project scores do not change
+- Requests without a home: a roof shared or described as direction and slope takes its PVGIS yield from the sun table; an unknown direction keeps the typical 950 kWh per kWp. A shared address is found with Photon on the planner's page and the monument and heat plan checks run there (D114)
 - The light theme is removed: the app is dark only, map labels are white on a dark halo
 
 ## Not done
 
 - Pitch deck, demo recording, final test-set run: not started
-- Questions-only path (D104) shows no map: the questions sit in the middle, with a With map or Without map switch and the earlier requests on top; the choice is kept in the browser. It asks the address (text, never looked up) and the roof in words, sent as roof numbers. Open on the planner side: an unknown direction counts as south, and the planner does not yet show a sent address
-- Team decisions in `docs/decisions.md` marked Proposed are not yet agreed
 - Every assumed value and default, with its source, is in `docs/assumptions.md`. Keep it current when a constant changes
 
 ## Next steps
 
-1. User tries the full flow in the browser
+1. User tries the full flow in the browser, with and without the map
 2. Check the engine fixes in `reports/`: 2 m² per panel, price in sizing, roof area as limit. They change scored numbers
 3. Check the own-electricity share and saving before a planner quotes them
 4. Decide where expert comparison and results go
 5. Planner view plan proposed in `reports/Planner planı.md`, awaiting the user's answers to its five questions
-6. Pitch deck and demo recording, with `docs/demo-script.md` rewritten for this flow
+6. Pitch deck and demo recording, with `docs/demo-script.md` rewritten for this flow. Feature freeze at 12:00
+7. Final test-split run for the reported numbers
 
 ## Parked
 
