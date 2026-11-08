@@ -36,13 +36,17 @@ const pump = () => {
   while (running < LANES && waiting.length) { running += 1; waiting.shift()!().finally(() => { running -= 1; pump(); }); }
 };
 const asked = new Set<string>();
-/** Asks the API for this answer in the background unless it is kept or already on its way. */
-export const askAhead = (kind: string, url: string, body: unknown) => {
+const told = new Map<string, ((v: unknown) => void)[]>(); // who wants to hear when an answer on its way arrives
+/** Asks the API for this answer in the background unless it is kept or already on its way. `then` hears the answer, at once
+ *  when it is kept; the draft's chain uses it to show when the review and the price were in. */
+export const askAhead = (kind: string, url: string, body: unknown, then?: (v: unknown) => void) => {
   const key = askKey(kind, body);
-  if (store[key] || asked.has(key)) return;
+  if (store[key]) { then?.(store[key].v); return; }
+  if (then) told.set(key, [...(told.get(key) ?? []), then]);
+  if (asked.has(key)) return;
   asked.add(key);
   waiting.push(() => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
-    .then((r) => (r.ok ? r.json() : Promise.reject())).then((v) => keepAnswer(key, v))
-    .catch(() => undefined).finally(() => asked.delete(key)));
+    .then((r) => (r.ok ? r.json() : Promise.reject())).then((v) => { keepAnswer(key, v); told.get(key)?.forEach((f) => f(v)); })
+    .catch(() => undefined).finally(() => { asked.delete(key); told.delete(key); }));
   pump();
 };

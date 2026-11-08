@@ -29,6 +29,8 @@ import { Button, Check, Field, Fold, IconButton, Input, Segmented, Select, Slide
 import { setDeskContext, setOpenContext, useVoiceActions } from "./voiceBus";
 import VoiceDock from "./Voice";
 import { ago } from "./Requests";
+import { DraftChain, chainText } from "./DraftChain";
+import { arrived, finished } from "./draftLog";
 
 const LEFT = 548; // the desk's column: the homeowner's, widened for tables
 /** An address as the homeowner view writes it: the street large, the town under it. */
@@ -99,12 +101,14 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
   useEffect(() => { fetch("/api/scores").then((r) => r.json()).then(setScores).catch(() => undefined); }, []);
   // Every homeowner request reaches the desk once, newest on top. One already on the desk keeps the planner's work.
   useEffect(() => { setRequests((l) => handoffs.filter((h) => h.buildings.length || h.shared?.home === false).map(fromHomeowner).reduce((acc, r) => (acc.some((x) => x.id === r.id) ? acc : [r, ...acc]), l)); }, [handoffs]);
+  // The draft's chain starts when a request reaches the desk (draftLog.ts).
+  useEffect(() => { for (const r of requests) arrived(r.id, r.buildings.length ? `${r.buildings.length} ${r.buildings.length === 1 ? "building" : "buildings"} and the answers` : "The answers, without the home"); }, [requests]);
   // Once a request is on the desk, trees from Bavaria's tree map go onto its sun, once: the yield, the design and the checks then carry them.
   const shading = useRef(new Set<string>());
   useEffect(() => {
     for (const r of requests) if (!r.shade && !shading.current.has(r.id)) {
       shading.current.add(r.id);
-      withTrees(r.buildings).then(({ buildings, shade }) => update(r.id, { shaded: buildings, shade }));
+      withTrees(r.buildings).then(({ buildings, shade }) => { update(r.id, { shaded: buildings, shade }); finished(r.id, "trees", chainText.trees(r.buildings.length > 0, shade)); });
     }
   }, [requests]);
   // The homeowner follows their request: opened by a planner, then the offer once it is sent.
@@ -145,11 +149,23 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
 /** The planner's queue: requests waiting for an offer first, the longest waiting on top; sent offers below, the latest first. */
 const byTurn = (l: Request[]) => [...l].sort((a, b) => (a.status === "sent" ? 1 : 0) - (b.status === "sent" ? 1 : 0)
   || (a.status === "sent" ? (b.receivedAt ?? 0) - (a.receivedAt ?? 0) : (a.receivedAt ?? 0) - (b.receivedAt ?? 0)));
+/** The roof and the engine's steps of the draft's chain, logged from whichever view runs them: the list or the open request. */
+const useDraftSteps = (r: Request, roof: Spot[], out: { d: Design } | null) => {
+  useEffect(() => { if (!r.buildings.length || roof.length) finished(r.id, "roof", chainText.roof(r.buildings.length > 0, roof)); }, [r.id, r.buildings.length, roof]);
+  useEffect(() => { if (out) finished(r.id, "engine", `${summary(out.d, r)} · ${out.d.energy.self_sufficiency_pct}% own power`); }, [r, out]);
+};
+
 function Line({ r, open }: { r: Request; open: () => void }) {
   const roof = useMemo(() => roofOf(r.shaded ?? r.buildings, r.installed, r.priority, mergeCells(r.taken, blockedOf(r.shaded ?? r.buildings, r.obstacles))), [r.shaded, r.buildings, r.installed, r.priority, r.taken, r.obstacles]); // trees reach the sun after arrival; kept obstacles block cells
   const out = useDesign(r, roof);
+  useDraftSteps(r, roof, out);
   // Once the draft is in, the review and the price are asked ahead, so the request opens on them without waiting.
-  useEffect(() => { if (!out) return; const ask = moneyAsk(r, roof); askAhead("review", "/api/review", ask); askAhead("costs", "/api/costs", ask); }, [out, r, roof]);
+  useEffect(() => {
+    if (!out) return;
+    const ask = moneyAsk(r, roof);
+    askAhead("review", "/api/review", ask, (v) => finished(r.id, "review", chainText.review(v)));
+    askAhead("costs", "/api/costs", ask, (v) => finished(r.id, "costs", chainText.costs(v)));
+  }, [out, r, roof]);
   // The same count Checks shows: only facts this design uses.
   const assumed = out ? toConfirm(r, out.d).length : null; // counted once the draft is in, so the number never jumps
   const [street, town] = splitLabel(r.label), sent = r.status === "sent";
@@ -161,6 +177,7 @@ function Line({ r, open }: { r: Request; open: () => void }) {
       <span className={`reqrow-todo${!sent && assumed ? " open" : ""}`}>{sent || assumed === null ? "" : assumed ? `${assumed} to confirm` : "Ready to send"}</span>
       <span className={`reqstate ${sent ? "is-sent" : r.opened ? "is-open" : "is-new"}`}>{sent ? "Offer sent" : r.opened ? "In progress" : "New"}</span>
     </button>
+    <DraftChain id={r.id} />
   </li>;
 }
 
@@ -234,7 +251,9 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const [hotObs, setHotObs] = useState<number | null>(null); // the obstacle under the pointer in the list, lit on the model
   const done = r.checked ?? [], setDone = (checked: string[]) => update(r.id, { checked });
   const out = useDesign(r, roof);
+  useDraftSteps(r, roof, out);
   const { costs, failed: costsFailed } = useCosts(r, roof); // what the design costs and pays back, from the price book
+  useEffect(() => { if (costs) finished(r.id, "costs", chainText.costs(costs)); }, [r.id, costs]);
   const [pricing, setPricing] = useState(false); // the price book open inside the Cost tab
   // Monument status from the Bavarian monument map, asked once per request by the page itself, never through our server.
   const [monument, setMonument] = useState<Monument | null>(null);
@@ -338,7 +357,7 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
       {d && <DeskSummary r={r} d={d} costs={costs} go={setTab} />}
       <div className="desktabs"><Segmented wide label="Sections" value={tab} onChange={setTab} options={[{ value: "home", label: "Home" }, { value: "design", label: "Design" }, { value: "cost", label: "Cost" }, { value: "checks", label: left ? `Checks ${left}` : "Checks" }, { value: "offer", label: "Offer" }]} /></div>
       <div className="deskbody">
-        {!d && <p className="muted">The engine is working…</p>}
+        {!d && <DraftChain id={r.id} full />}
         {asks.map((x) => <AskCard key={x.id} x={x} tried={() => tryAsk(x)} done={() => answer(r.ref ?? "-", x.id)} />)}
         {change && <ChangeCard c={change} close={() => setChange(null)} />}
         {d && tab === "design" && <><Brief assumed={confirm.length} points={warns.length} site={checks.filter((c) => !done.includes(c.id)).length} open={() => setTab("checks")} /><PriorityNote r={r} d={d} roof={roof} panels={out?.panels ?? {}} set={(strict) => { mark(strict ? "Kept to the customer's area" : "Rest of the roof allowed"); update(r.id, { strict }); }} /><DesignTab d={d} first={first.current} r={r} setO={setO} review={<AgentPanel key={r.id} r={r} d={d} roof={roof} use={(o, label) => setO(o, label)} />}
