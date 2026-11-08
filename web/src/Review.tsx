@@ -6,8 +6,8 @@ import { Shared, forInstaller, m2Words } from "./share";
 import SendView from "./SendView";
 import { Ctx, Known, factsFor } from "./Known";
 import { Status, day, stepOf } from "./Requests";
-import { Amount, Button, Check, Field, Input, Tile } from "./ui";
-import { Bolt, Close, Drop, Info, Layers, Lock, Pencil, Skip, Spark, SunIcon, Tick } from "./icons";
+import { Button, Check, Field, Input } from "./ui";
+import { Info, Layers, Lock, Pencil, Skip, Spark } from "./icons";
 
 import { BANDS, BIG_USERS, BOILER_AGE, BUILT, BY_PEOPLE, FACING, FOSSIL, GOALS, HEAT_DIST, HEATING, HOME_DAY, KWH_PER_LITRE_OIL, OWNER, REPLACEABLE, SIZE, SLOPE, SOLAR_KIND, SPAN, TYPICAL_KM, clean, number } from "./questions";
 export type Stage = "intro" | "where" | "roofq" | "roof" | "solar" | "battery" | "use" | "big" | "house" | "heat" | "car" | "goal" | "send" | "share" | "sent";
@@ -71,18 +71,10 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   }, [stage]);
   const enter = (e: React.KeyboardEvent) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT" && (e.target as HTMLInputElement).type === "number") next(); };
 
-  const yesNo = (key: "has_solar" | "has_storage", none: Partial<Answers>) => <div className="tiles yn">
-    <Tile icon={<Tick />} label="Yes" color="var(--hud-live)" pressed={a[key] === true} onClick={() => answer({ [key]: true }, false)} />
-    <Tile icon={<Close />} label="No" color="var(--hud-ink-2)" pressed={a[key] === false} onClick={() => answer({ [key]: false, ...none })} />
+  const yesNo = (key: "has_solar" | "has_storage", none: Partial<Answers>) => <div className="answers">
+    <Button size="lg" wide aria-pressed={a[key] === true} onClick={() => answer({ [key]: true }, false)}>Yes</Button>
+    <Button size="lg" wide aria-pressed={a[key] === false} onClick={() => answer({ [key]: false, ...none })}>No</Button>
   </div>;
-  /** Common sizes in one tap, and a field for any other. Tapping a chosen size again clears it. */
-  const quick = (values: number[], value: number | null, set: (v: number | null) => void, unit: string, span: readonly [number, number]) => <>
-    <div className="quick">
-      {values.map((v) => <Button key={v} aria-pressed={value === v} onClick={() => set(value === v ? null : v)}>{v.toLocaleString("en")}</Button>)}
-      <Amount aria-label={`Another size, ${unit}`} placeholder="Other" suffix={unit} value={value != null && !values.includes(value) ? value : ""} onChange={(e) => set(number(e.target.value))} />
-    </div>
-    {warn(value, span)}
-  </>;
   /** A page: the question, its answers, and what an answer opened. Next shows once something is open. */
   const page = (title: string, line: string | null, body: React.ReactNode, more: React.ReactNode = null) => <>
     <p className="count">Question {at_ + 1} of {total}</p>
@@ -270,26 +262,22 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
   return (
     <aside className="panel tall quiz" key={stage} ref={panel} onKeyDown={enter}>
       {stage === "solar" && page("Is there solar here already?", null, yesNo("has_solar", { solar_kind: null, solar_kwp: null, solar_year: null }), a.has_solar && <>
-        <h2>What do they make?</h2>
-        <div className="tiles">
-          {SOLAR_KIND.map(([v, label]) => <Tile key={v} label={label} icon={v === "pv" ? <Bolt /> : v === "thermal" ? <Drop /> : <SunIcon />} color={v === "pv" ? "var(--hud-sun)" : v === "thermal" ? "var(--hud-route)" : "var(--hud-live)"}
-            pressed={a.solar_kind === v} onClick={() => setAnswers({ ...a, solar_kind: v, ...(v === "thermal" ? { solar_kwp: null, solar_year: null } : {}) })} />)}
+        <h2>What do the panels make?</h2>
+        <div className="answers">
+          {SOLAR_KIND.map(([v, label]) => <Button key={v} size="lg" wide aria-pressed={a.solar_kind === v} onClick={() => setAnswers({ ...a, solar_kind: v, ...(v === "thermal" ? { solar_kwp: null, solar_year: null } : {}) })}>{label}</Button>)}
         </div>
         {mapped && <><h2>Where are they?</h2>
         <p className="small muted">Mark them on the map, or skip: we find them on the aerial photo.</p>
         {panelM2 > 0 && <p className="marked"><b>{Math.round(panelM2)} m²</b> with panels</p>}</>}
-        {a.solar_kind !== "thermal" && <>
-          <h2>How big? <span className="unit">kWp</span></h2>
-          {quick([3, 5, 8, 10], a.solar_kwp, (solar_kwp) => setAnswers({ ...a, solar_kwp }), "kWp", SPAN.solar_kwp)}
-          <h2>Since when?</h2>
-          <div className="field"><Input type="number" aria-label="Year installed" min={1990} max={new Date().getFullYear()} placeholder="Year installed, e.g. 2012" value={a.solar_year ?? ""} onChange={(e) => setAnswers({ ...a, solar_year: number(e.target.value) })} />{warn(a.solar_year, SPAN.solar_year)}</div>
-        </>}
+        {a.solar_kind !== "thermal" && <div className="pair">
+          <Field label={optional("Size (kWp, peak power)")}><Input type="number" min={0} max={100} step={0.1} value={a.solar_kwp ?? ""} onChange={(e) => setAnswers({ ...a, solar_kwp: number(e.target.value) })} />{warn(a.solar_kwp, SPAN.solar_kwp)}</Field>
+          <Field label={optional("Year installed")}><Input type="number" min={1990} max={new Date().getFullYear()} value={a.solar_year ?? ""} onChange={(e) => setAnswers({ ...a, solar_year: number(e.target.value) })} />{warn(a.solar_year, SPAN.solar_year)}</Field>
+        </div>}
 
       </>)}
 
       {stage === "battery" && page(a.has_solar && a.solar_kind !== "thermal" ? "Is there a home battery too?" : "Is there a home battery?", null, yesNo("has_storage", { battery_kwh: null }), a.has_storage && <>
-        <h2>How big? <span className="unit">kWh</span></h2>
-        {quick([5, 7.5, 10, 15], a.battery_kwh, (battery_kwh) => setAnswers({ ...a, battery_kwh }), "kWh", SPAN.battery_kwh)}
+        {numberField(optional("How big is it? (kWh)"), a.battery_kwh, (battery_kwh) => setAnswers({ ...a, battery_kwh }), undefined, SPAN.battery_kwh)}
       </>)}
 
       {stage === "use" && <>

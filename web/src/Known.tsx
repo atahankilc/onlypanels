@@ -1,6 +1,7 @@
 // Under each question: what we know so far, what stands in for an answer left open, and what the installer does with it later.
 // Every line follows the engine and the planner's checks as they are (docs/assumptions.md): nothing here is a design result.
 import { ReactNode } from "react";
+import { Ahead, Spark, Tick } from "./icons";
 import { Answers, GAS_CT, PRICE_CT, SunSurface } from "./api";
 import { BANDS, BASE_FEE_EUR_YEAR, BIG_USERS, BIG_USERS_KWH, BUILT, BY_PEOPLE, EV_KWH_PER_KM, FEED_IN_YEARS, FOSSIL, HEATING, HEAT_KWH_PER_M2, HOME_SHARE, KWH_PER_LITRE_OIL, KWP_PER_M2, MODEL_M2_MAX, REPLACEABLE, SIZE, TYPICAL_HEAT_KWH, TYPICAL_KM, TYPICAL_USE_KWH } from "./questions";
 import { TOLD_M2, TOLD_TILT } from "./share";
@@ -40,8 +41,8 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
     }
     if (c.drawn) add(known, <><b>{k(c.m2)} m²</b> marked: panels go there first</>, YOU);
     else add(assumed, "Nothing marked: the whole roof counts, sunniest sides first");
-    add(later, "Works out the sun on each side, with shade from buildings and trees");  // no sun here before the planner adds trees (D116)
-    add(later, "Looks for roof windows and chimneys on the aerial photo");
+    add(later, "Measures sun and shade, trees included, on each side");  // no sun here before the planner adds trees (D116)
+    add(later, "Finds roof windows and chimneys on the aerial photo");
     add(later, "Checks monument rules for your building");
   }
 
@@ -85,7 +86,7 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
           const end = a.solar_year + FEED_IN_YEARS, now = new Date().getFullYear();
           add(known, end < now ? <>From {a.solar_year}: its fixed feed-in payment <b>has ended</b></> : end === now ? <>From {a.solar_year}: its fixed feed-in payment <b>ends this December</b></> : <>From {a.solar_year}: its fixed feed-in payment runs to the end of <b>{end}</b></>, MATH);
         } else add(assumed, "No year: the old panels count as new");
-        add(later, "Sees when the feed-in payment ends, and using its power yourself pays more");
+        add(later, "Checks when its feed-in payment ends");
       }
       add(later, "Plans the new panels around the old ones");
     }
@@ -258,17 +259,18 @@ export function factsFor(stage: Stage, a: Answers, c: Ctx): Facts {
   return { known, assumed, later };
 }
 
-/** The card under a question. Groups with nothing in them stay away. */
+/** The card under a question: three stops on one line, as on the intro page. Groups with nothing in them stay away. */
 export function Known({ facts, title = "What this page gives us" }: { facts: Facts; title?: string }) {
-  const group = (cls: string, head: string, lines: Line[]) => lines.length > 0 && <div className={`known-group ${cls}`}>
+  const group = (cls: string, icon: ReactNode, head: string, lines: Line[]) => lines.length > 0 && <div className={`known-group ${cls}`}>
+    <i aria-hidden="true">{icon}</i>
     <h3>{head}</h3>
     <ul>{lines.map((l, i) => <li key={i}><span>{l.t}</span>{l.from && <em>{l.from}</em>}</li>)}</ul>
   </div>;
   return (
     <div className="known" role="group" aria-label={title}>
-      {group("is-known", "We know", facts.known)}
-      {group("is-assumed", "If left open", facts.assumed)}
-      {group("is-later", "Later, your installer", facts.later)}
+      {group("is-known", <Tick size={13} />, "We know", facts.known)}
+      {group("is-assumed", <Spark size={13} />, "If you skip it", facts.assumed)}
+      {group("is-later", <Ahead size={13} />, "Then your installer", facts.later)}
     </div>
   );
 }
