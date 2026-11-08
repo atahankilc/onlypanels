@@ -203,7 +203,9 @@ export default function Review({ refId, progress, done, onPanels, stage, setStag
         <p className="muted">Request {refId} · sent {day(progress?.sentAt ?? Date.now())}</p>
         {progress && <Status m={progress} onPanels={onPanels} />}
         {!progress?.offer && <ol className="next-steps">
-          <li><b>They look at your roof and your answers</b><span>On the same 3D model of your home, with its measured sun and shade.</span></li>
+          {buildings.length > 0 && shared.home
+            ? <li><b>They look at your roof and your answers</b><span>On the same 3D model of your home, with its measured sun and shade.</span></li>
+            : <li><b>They look at your answers</b><span>{buildings.length > 0 && shared.roof ? "With the roof numbers you sent. Your home stayed with you." : "Your home stayed with you, so they estimate the roof."}</span></li>}
           <li><b>{missing ? `They may ask about ${missing} ${missing === 1 ? "answer" : "answers"} you left open` : "They may call with a question or two"}</b><span>{missing ? "Have your electricity and heating bills at hand." : "You answered everything, so it should be quick."}</span></li>
           <li><b>You get an offer</b><span>Solar, battery and anything else that fits, with what it makes and saves.</span></li>
         </ol>}
