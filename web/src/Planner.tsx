@@ -22,7 +22,7 @@ import type { RoofNumbers } from "./share";
 import { BatteryCurve } from "./BatteryCurve";
 import { CostTab, PriceBook } from "./Costs";
 import { EvidenceCard } from "./Evidence";
-import { Money, moneyOf, useCosts } from "./money";
+import { Money, moneyOf, useCosts, usePriceVersion } from "./money";
 import { Button, Check, Field, IconButton, Input, Segmented, Select, Slider } from "./ui";
 import { setDeskContext, setOpenContext, useVoiceActions } from "./voiceBus";
 import VoiceDock from "./Voice";
@@ -59,6 +59,7 @@ const describe = (o: Overrides) => [
   o.heatpump !== undefined && (o.heatpump == null ? "Heat pump back to the engine" : o.heatpump ? "Heat pump added" : "Heat pump removed"),
 ].filter(Boolean).join(", ");
 const useDesign = (r: Request, roof: Spot[]) => {
+  const prices = usePriceVersion(); // a low-cost customer's sizes are chosen by price: a price change asks again
   const [out, setOut] = useState<{ d: Design; panels: Record<string, number> } | null>(null);
   useEffect(() => {
     if (!roof.length && r.buildings.length) return; // a shared home waits for its roof; without one the answers carry the design
@@ -69,7 +70,7 @@ const useDesign = (r: Request, roof: Spot[]) => {
       .catch(() => { if (live) go(Math.min(k + 1, WAIT.length - 1)); }), WAIT[k]); };
     go(0);
     return () => { live = false; clearTimeout(t); };
-  }, [r.inputs, r.overrides, r.off, roof, r.existing, r.strict, r.buildings.length]);
+  }, [r.inputs, r.overrides, r.off, roof, r.existing, r.strict, r.buildings.length, prices]);
   return out;
 };
 
@@ -83,7 +84,10 @@ export default function Planner({ handoffs, onProgress, loading = 0 }: { handoff
   const [requests, setRequests] = useState<Request[]>(() => kept);
   useEffect(() => { kept = requests; }, [requests]);
   const [scores, setScores] = useState<Scores | null>(null);
-  const update = (id: string, p: Partial<Request>) => setRequests((l) => l.map((r) => (r.id === id ? { ...r, ...p } : r)));
+  // A planner's change to a sent offer's design opens it again as a draft, so what the homeowner holds and the desk show never
+  // differ unseen. Updates the page makes by itself (trees, the photo check) and the send itself leave the status alone.
+  const update = (id: string, p: Partial<Request>) => setRequests((l) => l.map((r) => (r.id !== id ? r
+    : { ...r, ...p, ...(r.status === "sent" && !("status" in p) && !("obstacles" in p) && ["inputs", "overrides", "off", "strict", "priority"].some((k) => k in p) ? { status: "draft" as const } : {}) })));
   useEffect(() => { fetch("/api/scores").then((r) => r.json()).then(setScores).catch(() => undefined); }, []);
   // Every homeowner request reaches the desk once, newest on top. One already on the desk keeps the planner's work.
   useEffect(() => { setRequests((l) => handoffs.filter((h) => h.buildings.length || h.shared?.home === false).map(fromHomeowner).reduce((acc, r) => (acc.some((x) => x.id === r.id) ? acc : [r, ...acc]), l)); }, [handoffs]);
@@ -249,7 +253,12 @@ function Workspace({ r, update, back, scores }: { r: Request; update: (id: strin
   const left = confirm.length + checks.filter((c) => !done.includes(c.id)).length;
   const allowed = (r as Req).allowed ?? DEFAULT_ALLOWED; // the same default the sent offer carries
   const send = () => {
-    update(r.id, { status: "sent", ...(d ? { offer: offerOf(d, r) } : {}) }); answer(r.ref ?? "-"); // a new offer answers what the customer asked
+    // The sent design is frozen into the request's own choices, so reopening it shows what was sent even after prices,
+    // learning or the engine move; and the homeowner's saving is the Cost tab's first year when it prices this design.
+    const priced = d && costs && costs.design.modules === d.pv.modules && costs.design.battery_kwh === d.battery.kwh ? costs : null;
+    update(r.id, { status: "sent", ...(d ? { offer: { ...offerOf(d, r), ...(priced ? { saving_eur: priced.year1.total_eur, pays_eur: priced.pays_eur, payback_years: priced.payback_years } : {}) },
+      overrides: { ...r.overrides, modules: d.pv.modules, battery_kwh: d.battery.kwh, wallbox: d.wallbox.included, heatpump: d.heatpump.included } } : {}) });
+    answer(r.ref ?? "-"); // a new offer answers what the customer asked
     // The desk learns the planner's usual changes: the engine's first draft next to what was sent (learning.py, kept locally).
     const draft = first.current ?? d;
     if (d && draft) fetch("/api/approved", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...designBody(r.inputs, { ...r.overrides, modules: d.pv.modules, battery_kwh: d.battery.kwh }, roof, r.off, r.existing, r.strict).body, draft: { modules: draft.pv.modules, battery_kwh: draft.battery.kwh }, ref: r.ref ?? r.id }) }).catch(() => undefined);
@@ -418,7 +427,9 @@ function checkList(r: Request, d: Design, monument: Monument | null, heatPlan: H
     : heat === "Gas" && age ? "The customer says the gas boiler is under 20 years old: no speed bonus until it is."
     : heat === "Gas" ? "The speed bonus needs a gas boiler 20 years in use; ask for the year on its type plate." : "";
   list.push({ id: "grants", title: "Check grants", why: (speed ? `${speed} Only for owners living in the home; its rate falls every half year, check KfW 458. ` : "") + "Other grants depend on the customer." });
-  list.push({ id: "meter", title: "Smart meter and grid feed limit", why: "Without a smart meter, a new system may feed at most 60% of its power to the grid." });
+  list.push(d.pv.kwp > 7
+    ? { id: "meter", title: "Order the smart meter and control box", why: "Required above 7 kWp (about €100 a year, counted in the Cost tab). Until they are fitted, the system may feed at most 60% of its power to the grid." }
+    : { id: "meter", title: "Smart meter and grid feed limit", why: "Up to 7 kWp no smart meter is required, but without one the system may feed at most 60% of its power to the grid for good. The Cost tab counts what that loses." });
   return list;
 }
 
@@ -482,9 +493,9 @@ function DesignTab({ d, first, r, setO, apply, lit, scores }: { d: Design; first
     {!r.inputs.has_storage && <BatteryCurve d={d} pick={(kwh) => setO({ battery_kwh: kwh })} />}
     <table className="grid"><thead><tr><th /><th>Proposal</th><th>Similar homes</th><th>Your decision</th></tr></thead><tbody>
       <tr><th scope="row">Solar</th><td>{d.pv.modules} modules<small>{kwp.toFixed(1)} kWp{d.pv.capped ? " · roof limit" : ""}</small></td><td>{s.kwp_low}–{s.kwp_high} kWp<small>{s.n} homes</small></td>
-        <td><div className="lock"><Slider min={4} max={Math.max(d.pv.max_modules ?? 40, 4)} value={o.modules ?? d.pv.modules} onChange={(e) => setO({ modules: Number(e.target.value) })} /><Button disabled={o.modules == null} onClick={() => setO({ modules: null })}>Auto</Button></div></td></tr>
+        <td><div className="lock"><Slider min={Math.min(4, d.pv.modules)} max={Math.max(d.pv.max_modules ?? 40, 4)} value={o.modules ?? d.pv.modules} onChange={(e) => setO({ modules: Number(e.target.value) })} /><Button disabled={o.modules == null} onClick={() => setO({ modules: null })}>Auto</Button></div></td></tr>
       <tr><th scope="row">Battery</th><td>{r.inputs.has_storage ? "Already there" : d.battery.kwh ? `${d.battery.kwh} kWh` : "None"}{!r.inputs.has_storage && <small>{d.battery.locked ? `your choice · engine ${d.battery.probability}% for one` : `${d.battery.probability}% likely`}</small>}</td><td>{s.battery_rate}% have one<small>often {s.battery_common.join(", ")} kWh</small></td>
-        <td><Select aria-label="Battery" value={o.battery_kwh == null ? "auto" : String(o.battery_kwh)} onChange={(e) => setO({ battery_kwh: e.target.value === "auto" ? null : Number(e.target.value) })}><option value="auto">Auto</option><option value="0">None</option>{d.battery.choices.map((c) => <option key={c} value={c}>{c} kWh</option>)}</Select></td></tr>
+        <td><Select aria-label="Battery" value={o.battery_kwh == null ? "auto" : String(o.battery_kwh)} onChange={(e) => setO({ battery_kwh: e.target.value === "auto" ? null : Number(e.target.value) })}><option value="auto">Auto</option><option value="0">None</option>{[...d.battery.choices, ...(o.battery_kwh && !d.battery.choices.includes(o.battery_kwh) ? [o.battery_kwh] : [])].map((c) => <option key={c} value={c}>{c} kWh</option>)}</Select></td></tr>
       <tr><th scope="row">Wallbox</th><td>{d.wallbox.included ? "Included" : "None"}</td><td>{s.wallbox_rate}% have one</td>
         <td><Segmented wide label="Wallbox" value={three(o.wallbox)} onChange={(v) => setO({ wallbox: from3(v) })} options={[{ value: "auto", label: "Auto" }, { value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></td></tr>
       <tr><th scope="row">Heat pump</th><td>{d.heatpump.included ? `${d.heatpump.kw} kW` : "None"}<small>{d.heatpump.blocked ? "already there" : "by rule"}</small></td><td>Too few sold</td>
@@ -591,10 +602,10 @@ function Energy({ d, inputs, measured }: { d: Design; inputs: Inputs; measured: 
     <dl className="rows">
       <div><dt>Share of need met by own power</dt><dd>{e.self_sufficiency_pct}%</dd></div>
       <div><dt>Share of production used at home</dt><dd>{e.self_use_pct}%</dd></div>
-      <div><dt>Saving a year at {inputs.price_ct_kwh} ct</dt><dd>€{e.saving_eur.toLocaleString("en")}</dd></div>
+      <div><dt>Electricity saving a year at {inputs.price_ct_kwh} ct</dt><dd>€{e.saving_eur.toLocaleString("en")}</dd></div>
     </dl>
     <p className="small muted">Estimates: real weather years for Munich, this roof's directions, an assumed household day, battery losses. Checked against HTW Berlin reference values (scripts/check_energy.py).{d.heatpump.included ? " The saving counts electricity only, not the fuel no longer bought." : ""}</p>
-    <p className="small muted">Production uses {measured ? "this roof's measured sun and shade" : inputs.roof_azimuth != null ? "PVGIS's yield for the roof's direction and slope, without shade, since the home was not shared" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}. There are no prices in our data, so no system cost or payback.</p>
+    <p className="small muted">Production uses {measured ? "this roof's measured sun and shade" : inputs.roof_azimuth != null ? "PVGIS's yield for the roof's direction and slope, without shade, since the home was not shared" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}. The electricity saving counts own power and the full feed-in tariff; the Cost tab counts the rest (price, grants, upkeep, smart meter, hours with negative prices, fuel) and the payback.</p>
   </>;
 }
 

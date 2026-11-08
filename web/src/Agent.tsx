@@ -5,13 +5,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Design, Overrides, Request, Spot, designBody } from "./plan";
 import { Button, Input } from "./ui";
+import { moneyOf, usePriceVersion } from "./money";
 
 type Result = { modules: number; kwp: number; battery_kwh: number; heatpump_kw: number; wallbox: boolean; production_mwh: number; own_power_pct: number; saving_eur_year: number; need_mwh?: number };
 type WhatIf = { demand_kwh?: number; ev?: boolean; ev_km?: number; heat_kwh?: number; heat_dist?: string; home_day?: string };
 type Step = { tool: "try_design" | "battery_sizes"; fixed: Partial<Overrides>; what_if: WhatIf; why?: string; result: Partial<Result> & { sizes?: number } };
 type Fact = { id: string; title: string; text: string; from: string[]; changes: string | null; level: "note" | "warn" };
 type Ask = { fact: string; question: string; why: string; low: Result; high: Result };
-type ReviewMoney = { pays_eur: number; gross_eur: number; payback_years: number | null; gain_eur: number; draft_2027_payback_years: number | null; grant: { eur: number; rate_pct: number; path: string } | null;
+type ReviewMoney = { years: number; pays_eur: number; gross_eur: number; payback_years: number | null; gain_eur: number; draft_2027_payback_years: number | null; grant: { eur: number; rate_pct: number; path: string } | null;
   counted: { title: string; effect: string; status: string }[]; todo: { title: string; action: string; status: string }[] };
 type Review = { headline: string; change: Overrides | null; after: Result | null; reasons: string[]; asks: Ask[]; steady: { fact: string; text: string }[]; conditions: { id: string; title: string; text: string }[]; facts: Fact[]; draft: Result; steps: Step[]; money?: ReviewMoney };
 const euro = (v: number) => `€${Math.round(v).toLocaleString("en")}`;
@@ -59,6 +60,7 @@ async function ask(body: unknown, onStep: (s: Step) => void): Promise<Answer> {
 
 export function AgentPanel({ r, roof, use }: { r: Request; d: Design; roof: Spot[]; use: (o: Overrides, label: string) => void }) {
   const [review, setReview] = useState<Review | null>(null), [failed, setFailed] = useState(false);
+  const money = moneyOf(r), prices = usePriceVersion(); // the review prices the draft as the Cost tab does
   const [turns, setTurns] = useState<Turn[]>(() => (kept.get(r.id) ?? []).filter((t) => t.answer || t.failed));
   const [busy, setBusy] = useState(false), [text, setText] = useState(""), [showSteps, setShowSteps] = useState(false);
   const live = useRef(true);
@@ -70,11 +72,11 @@ export function AgentPanel({ r, roof, use }: { r: Request; d: Design; roof: Spot
   useEffect(() => {
     if (!ready) return;
     let on = true;
-    const t = setTimeout(() => post("/api/review", designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).body)
+    const t = setTimeout(() => post("/api/review", { ...designBody(r.inputs, r.overrides, roof, r.off, r.existing, r.strict).body, money: { extras: money.extras ?? {}, qty: money.qty ?? {}, income: money.income ?? null, kids: !!money.kids } })
       .then((x) => { if (!x.ok) throw new Error(); return x.json(); }).then((x: Review) => { if (on) { setReview(x); setFailed(false); } })
       .catch(() => on && setFailed(true)), 200);
     return () => { on = false; clearTimeout(t); };
-  }, [r.inputs, r.overrides, r.off, r.existing, r.strict, roof, ready]);
+  }, [r.inputs, r.overrides, r.off, r.existing, r.strict, roof, ready, JSON.stringify(money), prices]);
 
   const question = (asked: string) => {
     if (busy || !ready) return;
@@ -105,7 +107,7 @@ export function AgentPanel({ r, roof, use }: { r: Request; d: Design; roof: Spot
       </div>}
       {review.asks.length > 0 && <><h4>Ask the customer: these move the design</h4><ol>{review.asks.map((a) => <li key={a.fact}><b>{a.question}</b><br /><small className="muted">{a.why}</small></li>)}</ol></>}
       {review.money && <><h4>Money and rules</h4>
-        <p className="small">The homeowner pays {euro(review.money.pays_eur)}{review.money.grant ? ` after ${euro(review.money.grant.eur)} in heat pump grants (${review.money.grant.path === "fkg" ? "KfW and Munich" : "KfW"})` : ""}; {review.money.payback_years != null ? `it pays back in about ${review.money.payback_years} years` : "it does not pay back within 20 years"} and leaves them {euro(Math.abs(review.money.gain_eur))} {review.money.gain_eur >= 0 ? "ahead" : "behind"} after 20 years.
+        <p className="small">The homeowner pays {euro(review.money.pays_eur)}{review.money.grant ? ` after ${euro(review.money.grant.eur)} in heat pump grants (${review.money.grant.path === "fkg" ? "KfW and Munich" : "KfW"})` : ""}; {review.money.payback_years != null ? `it pays back in about ${review.money.payback_years} years` : `it does not pay back within ${review.money.years} years`} and leaves them {euro(Math.abs(review.money.gain_eur))} {review.money.gain_eur >= 0 ? "ahead" : "behind"} after {review.money.years} years.
           {review.money.draft_2027_payback_years != null && review.money.draft_2027_payback_years !== review.money.payback_years ? ` Switched on in 2027 under the draft EEG: about ${review.money.draft_2027_payback_years} years.` : ""}</p>
         {review.money.counted.length > 0 && <ul className="small muted">{review.money.counted.map((c) => <li key={c.title}>{c.title}: {c.effect}{c.status === "draft" ? " (draft law)" : ""}</li>)}</ul>}
         {review.money.todo.length > 0 && <><h4>To do before the order</h4><ul>{review.money.todo.map((t) => <li key={t.title}><b>{t.title}.</b> {t.action}</li>)}</ul></>}</>}

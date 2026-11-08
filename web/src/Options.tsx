@@ -28,8 +28,9 @@ export function Options({ d, pick }: { d: Design; pick: (a: Alternative) => void
         <div className={differs(c, "battery") ? "moved" : ""}><dt>Battery</dt><dd>{c.battery ? `${c.battery} kWh` : "none"}</dd></div>
         {anyHp && <div className={differs(c, "hp") ? "moved" : ""}><dt>Heat pump</dt><dd>{c.hp ? `${c.hp} kW` : "none"}</dd></div>}
         <div className={differs(c, "own") ? "moved" : ""}><dt>Own power</dt><dd>~{c.own}%</dd></div>
-        <div className={differs(c, "saving") ? "moved" : ""}><dt>Saving</dt><dd>~€{c.saving.toLocaleString("en")}</dd></div>
-        {money && (() => { const m = c.id === "now" ? { pays_eur: money.pays_eur, payback_years: money.payback_years } : money.variants.find((v) => v.id === c.id); return m ? <>
+        {!money && <div className={differs(c, "saving") ? "moved" : ""}><dt>Saving</dt><dd>~€{c.saving.toLocaleString("en")}</dd></div>}
+        {money && (() => { const m = c.id === "now" ? { pays_eur: money.pays_eur, payback_years: money.payback_years, year1_eur: money.year1.total_eur } : money.variants.find((v) => v.id === c.id); return m ? <>
+          <div className={c.id !== "now" ? "moved" : ""}><dt>First year</dt><dd>{eur(m.year1_eur)}</dd></div>
           <div className={c.id !== "now" ? "moved" : ""}><dt>Pays</dt><dd>{eur(m.pays_eur)}</dd></div>
           <div className={c.id !== "now" ? "moved" : ""}><dt>Pays back</dt><dd>{m.payback_years != null ? `${m.payback_years} y` : "–"}</dd></div></> : null; })()}
       </dl>

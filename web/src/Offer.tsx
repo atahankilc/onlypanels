@@ -26,6 +26,7 @@ export default function Offer({ r, d, costs, first, roof, panels, facts, conditi
   const who = { Solar: d.pv.locked, Battery: d.battery.locked, Wallbox: d.wallbox.locked, "Heat pump": d.heatpump.locked } as Record<string, boolean>;
   const placed = roof.filter((x) => (panels[x.key] ?? 0) > 0);
   const e = d.energy, sent = r.status === "sent";
+  const money = costs && costs.design.modules === d.pv.modules && costs.design.battery_kwh === d.battery.kwh ? costs : null; // only while it prices this design
   return <>
     <div className="offer-actions">
       <Button onClick={() => window.print()}>Print or save as PDF</Button>
@@ -47,22 +48,23 @@ export default function Offer({ r, d, costs, first, roof, panels, facts, conditi
           <tr><th scope="row">Electricity made</th><td>about {kwh(Math.round(e.production_mwh * 1000 / 100) * 100)}</td></tr>
           <tr><th scope="row">Your use</th><td>about {kwh(Math.round(e.total_mwh * 1000 / 100) * 100)}{e.ev_mwh && e.hp_mwh ? ", with the car and heat pump" : e.ev_mwh ? ", with the car" : e.hp_mwh ? ", with the heat pump" : ""}</td></tr>
           <tr><th scope="row">Share of your use from your own panels</th><td>about {e.self_sufficiency_pct}%</td></tr>
-          <tr><th scope="row">Saving</th><td>about €{e.saving_eur.toLocaleString("en")} at {r.inputs.price_ct_kwh} ct per kWh</td></tr>
+          {money ? <tr><th scope="row">Saving in the first year</th><td>about {eur(money.year1.total_eur)}, after upkeep{money.year1.meter_eur ? ", the smart meter" : ""} and unpaid negative-price hours{money.fuel ? `, with the ${money.fuel.kind} no longer bought` : ""}</td></tr>
+            : <tr><th scope="row">Electricity saving</th><td>about €{e.saving_eur.toLocaleString("en")} at {r.inputs.price_ct_kwh} ct per kWh</td></tr>}
         </tbody></table>
-        <p className="fine">Estimates, not promises: {r.buildings.length ? "measured sun and shade for this roof" : r.inputs.roof_azimuth != null ? "PVGIS sun for a roof of this direction and slope, without shade, since the home was not shared" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}, assumed hourly use, {FEED} ct for electricity sold to the grid; the rate for systems switched on from 2027 is not settled yet. The home stays connected to the grid. Without a smart meter, the grid feed is limited to 60% of the system's power.{d.heatpump.included ? " The saving counts electricity only, not the gas or oil no longer bought." : ""}</p>
+        <p className="fine">Estimates, not promises: {r.buildings.length ? "measured sun and shade for this roof" : r.inputs.roof_azimuth != null ? "PVGIS sun for a roof of this direction and slope, without shade, since the home was not shared" : "a typical German yield of 950 kWh per kWp, since the home was not shared"}, assumed hourly use, {FEED} ct for electricity sold to the grid, none in hours when the exchange price is negative; the rate for systems switched on from 2027 is not settled yet. The home stays connected to the grid. {d.pv.kwp > 7 ? "A smart meter and control box are required; until they are fitted, the grid feed is limited to 60% of the system's power." : "Without a smart meter, the grid feed is limited to 60% of the system's power."}{d.heatpump.included && !money ? " The saving counts electricity only, not the gas or oil no longer bought." : ""}</p>
       </section>
 
-      {costs && costs.design.modules === d.pv.modules && costs.design.battery_kwh === d.battery.kwh && <section><h4>Price and payback</h4>
+      {money && <section><h4>Price and payback</h4>
         <table><tbody>
-          {Object.entries(costs.by_tech).map(([t, v]) => <tr key={t}><th scope="row">{({ solar: "Solar, installed", battery: "Battery, installed", wallbox: "Wallbox, installed", heatpump: "Heat pump, installed" } as Record<string, string>)[t] ?? t}</th><td>{eur(v)}</td></tr>)}
-          <tr><th scope="row">Total</th><td>{eur(costs.gross_eur)}{costs.vat_eur ? ` incl. ${eur(costs.vat_eur)} VAT` : ", no VAT on solar and battery"}</td></tr>
-          {costs.grant && <tr><th scope="row">{costs.grant.path === "fkg" ? "KfW and Munich heat pump grants" : "KfW heat pump grant"}</th><td>−{eur(costs.grant.eur)} ({costs.grant.rate_pct}%), applied for before ordering</td></tr>}
-          <tr><th scope="row">You pay</th><td><b>{eur(costs.pays_eur)}</b></td></tr>
-          <tr><th scope="row">Your costs a year</th><td>{eur(costs.bills.before.total_eur)} today, about {eur(costs.bills.after.total_eur)} with the system</td></tr>
-          <tr><th scope="row">Pays back</th><td>{costs.payback_years != null ? `after about ${costs.payback_years.toLocaleString("en", { maximumFractionDigits: 1 })} years` : `not within ${costs.assumptions.years} years`}; about {standing(costs.gain_eur)} after {costs.assumptions.years} years</td></tr>
+          {Object.entries(money.by_tech).map(([t, v]) => <tr key={t}><th scope="row">{({ solar: "Solar, installed", battery: "Battery, installed", wallbox: "Wallbox, installed", heatpump: "Heat pump, installed" } as Record<string, string>)[t] ?? t}</th><td>{eur(v)}</td></tr>)}
+          <tr><th scope="row">Total</th><td>{eur(money.gross_eur)}{money.vat_eur ? ` incl. ${eur(money.vat_eur)} VAT` : ", no VAT on solar and battery"}</td></tr>
+          {money.grant && <tr><th scope="row">{money.grant.path === "fkg" ? "KfW and Munich heat pump grants" : "KfW heat pump grant"}</th><td>−{eur(money.grant.eur)} ({money.grant.rate_pct}%), applied for before ordering</td></tr>}
+          <tr><th scope="row">You pay</th><td><b>{eur(money.pays_eur)}</b></td></tr>
+          <tr><th scope="row">Your costs a year</th><td>{eur(money.bills.before.total_eur)} today, about {eur(money.bills.after.total_eur)} with the system</td></tr>
+          <tr><th scope="row">Pays back</th><td>{money.payback_years != null ? `after about ${money.payback_years.toLocaleString("en", { maximumFractionDigits: 1 })} years` : `not within ${money.assumptions.years} years`}; about {standing(money.gain_eur)} after {money.assumptions.years} years</td></tr>
         </tbody></table>
-        {costs.rules.some((x) => x.applies && x.effect && x.id !== "vat0") && <><h4>Rules and grants counted</h4><ul>{costs.rules.filter((x) => x.applies && (x.effect || x.status === "draft") && x.id !== "vat0").map((x) => <li key={x.id}>{x.title}{x.effect ? `: ${x.effect}` : ""}{x.status === "draft" ? " (draft law, not decided)" : ""}{x.action ? `. ${x.action}` : ""}</li>)}</ul></>}
-        <p className="fine">Prices are typical and become binding with the order after a site visit. Payback assumes electricity {costs.assumptions.electricity_rise_pct}% dearer each year{costs.fuel ? `, ${costs.fuel.kind} ${costs.assumptions.fuel_rise_pct}% dearer` : ""}, panels losing {costs.assumptions.degradation_pct}% a year, one new inverter, upkeep and insurance included.{costs.grant ? " The grant needs an application at KfW before the order is signed." : ""}</p>
+        {money.rules.some((x) => x.applies && x.effect && x.id !== "vat0") && <><h4>Rules and grants counted</h4><ul>{money.rules.filter((x) => x.applies && (x.effect || x.status === "draft") && x.id !== "vat0").map((x) => <li key={x.id}>{x.title}{x.effect ? `: ${x.effect}` : ""}{x.status === "draft" ? " (draft law, not decided)" : ""}{x.action ? `. ${x.action}` : ""}</li>)}</ul></>}
+        <p className="fine">Prices are typical and become binding with the order after a site visit. Payback assumes electricity {money.assumptions.electricity_rise_pct}% dearer each year{money.fuel ? `, ${money.fuel.kind} ${money.assumptions.fuel_rise_pct}% dearer` : ""}, panels losing {money.assumptions.degradation_pct}% a year, one new inverter, upkeep and insurance included.{money.grant ? " The grant needs an application at KfW before the order is signed." : ""}</p>
       </section>}
 
       <section><h4>Based on</h4>

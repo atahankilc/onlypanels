@@ -78,7 +78,7 @@ def adjusted(d, change, o, i):
     """The overrides that apply the planner's usual change to draft d, leaving alone whatever the planner fixed here."""
     out = {}
     if change.get("modules") and o.get("modules") is None:
-        cap = d["pv"].get("max_modules") or 10_000
+        cap = d["pv"]["max_modules"] if d["pv"].get("max_modules") is not None else 10_000
         out["modules"] = int(min(cap, max(1, d["pv"]["modules"] + change["modules"])))
     if change.get("battery_kwh") and o.get("battery_kwh") is None and not i.get("has_storage"):
         target = d["battery"]["kwh"] + change["battery_kwh"]
